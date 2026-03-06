@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Finance - 가계부</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Scripts -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-apexcharts@1.4.1/dist/react-apexcharts.iife.min.js"></script>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+</head>
+
+<body>
+    <div id="root">
+        <div style="color: white; padding: 20px; font-family: sans-serif;">화면을 불러오는 중입니다... (잠시만 기다려 주세요)</div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useCallback } = React;
+
+        const STORAGE_KEY = 'INV_HOUSEHOLD_DATA';
+        const FIREBASE_CONFIG_KEY = 'INV_FIREBASE_CONFIG';
+
+        const initialData = {
+            owners: [{ id: 'o1', name: '홍길동' }],
+            assets: [{ id: 'a1', ownerId: 'o1', name: '현금', type: 'Cash', balance: 0 }],
+            categories: [
+                { id: 'c1', type: 'Income', name: '월급' },
+                { id: 'c2', type: 'Expense', name: '식비' },
+                { id: 'c3', type: 'Transfer', name: '이체' }
+            ],
+            transactions: []
+        };
+
+        const Icon = ({ name, size = 18 }) => {
+            useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
+            return <i data-lucide={name} style={{ width: size, height: size }}></i>;
+        };
+
+        function Dashboard({ data }) {
+            const stats = useMemo(() => {
+                const now = new Date();
+                const currentMonth = now.getMonth();
+                const income = data.transactions.filter(t => t.type === 'Income' && new Date(t.date).getMonth() === currentMonth).reduce((s, t) => s + Number(t.amount), 0);
+                const expense = data.transactions.filter(t => t.type === 'Expense' && new Date(t.date).getMonth() === currentMonth).reduce((s, t) => s + Number(t.amount), 0);
+                return { income, expense, balance: income - expense };
+            }, [data.transactions]);
+
+            const series = [{
+                name: '수입',
+                data: Array.from({ length: 12 }, (_, i) => data.transactions.filter(t => t.type === 'Income' && new Date(t.date).getMonth() === i).reduce((s, t) => s + Number(t.amount), 0))
+            }, {
+                name: '지출',
+                data: Array.from({ length: 12 }, (_, i) => data.transactions.filter(t => t.type === 'Expense' && new Date(t.date).getMonth() === i).reduce((s, t) => s + Number(t.amount), 0))
+            }];
+
+            const options = {
+                chart: { type: 'bar', toolbar: { show: false }, background: 'transparent' },
+                theme: { mode: 'dark' },
+                colors: ['#238636', '#da3633'],
+                xaxis: { categories: ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'] },
+                dataLabels: { enabled: false },
+                grid: { borderColor: '#30363d' }
+            };
+
+            return (
+                <div className="fade-in">
+                    <h1>대시보드</h1>
+                    <div className="dashboard-grid">
+                        <div className="card stat-card"><span className="stat-label">수입</span><span className="stat-value type-income">{stats.income.toLocaleString()}원</span></div>
+                        <div className="card stat-card"><span className="stat-label">지출</span><span className="stat-value type-expense">{stats.expense.toLocaleString()}원</span></div>
+                        <div className="card stat-card"><span className="stat-label">잔액</span><span className="stat-value">{stats.balance.toLocaleString()}원</span></div>
+                    </div>
+                    <div className="card">
+                        <h3>연간 흐름</h3>
+                        {window.ReactApexChart ? <window.ReactApexChart options={options} series={series} type="bar" height={300} /> : "차트를 로딩 중입니다..."}
+                    </div>
+                </div>
+            );
+        }
+
+        function TransactionPage({ data, setData, setEdit, setShowModal }) {
+            const del = (id) => { if (confirm('삭제하시겠습니까?')) setData(p => ({ ...p, transactions: p.transactions.filter(t => t.id !== id) })); };
+            return (
+                <div className="fade-in">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                        <h1>거래 내역</h1><button className="primary" onClick={() => setShowModal(true)}>+ 거래 추가</button>
+                    </div>
+                    <div className="card">
+                        <table>
+                            <thead><tr><th>날짜</th><th>구분</th><th>금액</th><th>메모</th><th>관리</th></tr></thead>
+                            <tbody>
+                                {data.transactions.map(t => (
+                                    <tr key={t.id}>
+                                        <td>{t.date}</td><td className={`type-${t.type.toLowerCase()}`}>{t.type}</td>
+                                        <td>{Number(t.amount).toLocaleString()}원</td><td>{t.memo}</td>
+                                        <td>
+                                            <button onClick={() => { setEdit(t); setShowModal(true); }}>편집</button>
+                                            <button onClick={() => del(t.id)}>삭제</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        }
+
+        function Settings({ fbConfig, setFbConfig }) {
+            const [val, setVal] = useState(fbConfig ? JSON.stringify(fbConfig, null, 2) : '');
+            const save = () => { try { const c = JSON.parse(val); localStorage.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(c)); setFbConfig(c); alert('저장됨'); location.reload(); } catch (e) { alert('JSON 오류'); } };
+            return (
+                <div className="card">
+                    <h1>서버 설정</h1>
+                    <textarea value={val} onChange={e => setVal(e.target.value)} rows="10" placeholder='{"apiKey": "..."}' style={{ width: '100%', marginBottom: '1rem', background: '#0d1117', color: 'white' }} />
+                    <button className="primary" onClick={save}>설정 저장</button>
+                </div>
+            );
+        }
+
+        function App() {
+            const [data, setData] = useState(() => {
+                const s = localStorage.getItem(STORAGE_KEY);
+                return s ? JSON.parse(s) : initialData;
+            });
+            const [user, setUser] = useState(null);
+            const [fbConfig, setFbConfig] = useState(() => JSON.parse(localStorage.getItem(FIREBASE_CONFIG_KEY) || 'null'));
+            const [tab, setTab] = useState('dashboard');
+            const [showModal, setShowModal] = useState(false);
+            const [edit, setEdit] = useState(null);
+
+            useEffect(() => {
+                if (!fbConfig || !window.firebase) return;
+                if (!firebase.apps.length) firebase.initializeApp(fbConfig);
+                return firebase.auth().onAuthStateChanged(u => {
+                    setUser(u);
+                    if (u) firebase.firestore().collection('users').doc(u.uid).get().then(d => d.exists && setData(d.data()));
+                });
+            }, [fbConfig]);
+
+            useEffect(() => {
+                if (!user) localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                else if (window.firebase && firebase.apps.length) firebase.firestore().collection('users').doc(user.uid).set(data);
+                if (window.lucide) window.lucide.createIcons();
+            }, [data, user]);
+
+            return (
+                <React.Fragment>
+                    <div className="sidebar">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2rem' }}>
+                            <Icon name="activity" size={24} /> <h2>Smart Finance</h2>
+                        </div>
+                        <div className={`nav-item ${tab === 'dashboard' ? 'active' : ''}`} onClick={() => setTab('dashboard')}><Icon name="layout-dashboard" /> 대시보드</div>
+                        <div className={`nav-item ${tab === 'transactions' ? 'active' : ''}`} onClick={() => setTab('transactions')}><Icon name="list" /> 거래 내역</div>
+                        <div className={`nav-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}><Icon name="settings" /> 서버 설정</div>
+                        <div className="user-profile">
+                            {user ? (
+                                <div>{user.displayName} <button onClick={() => firebase.auth().signOut()}>로그아웃</button></div>
+                            ) : (
+                                <button className="auth-btn login" onClick={() => { if (!fbConfig) setTab('settings'); else firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); }}>로그인</button>
+                            )}
+                        </div>
+                    </div>
+                    <div className="main-content">
+                        <div className="container">
+                            {tab === 'dashboard' && <Dashboard data={data} />}
+                            {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} />}
+                            {tab === 'settings' && <Settings fbConfig={fbConfig} setFbConfig={setFbConfig} />}
+                        </div>
+                    </div>
+                </React.Fragment>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
