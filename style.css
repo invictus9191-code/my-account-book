@@ -193,6 +193,11 @@ table {
   border-collapse: collapse;
 }
 
+.transaction-table td {
+  font-size: 1.15rem;
+  /* ~2pt larger than default */
+}
+
 th,
 td {
   padding: 1rem;
@@ -234,6 +239,20 @@ textarea {
   padding: 0.6rem;
   border-radius: 6px;
   width: 100%;
+  font-size: 1.15rem;
+  /* Increased for modal and forms */
+}
+
+.modal-content label {
+  font-size: 1.15rem;
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+}
+
+button.danger {
+  background: var(--expense-color);
+  color: white;
 }
 
 /* Transitions */
@@ -356,5 +375,10 @@ textarea {
   .modal-content {
     width: 90% !important;
     padding: 1.5rem !important;
+  }
+
+  /* Specific column hiding for Transaction Page */
+  .mobile-hide {
+    display: none !important;
   }
 }
