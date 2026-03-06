@@ -32,6 +32,8 @@
 
         const STORAGE_KEY = 'INV_HOUSEHOLD_DATA';
         const FIREBASE_CONFIG_KEY = 'INV_FIREBASE_CONFIG';
+        const PASSWORD_KEY = 'INV_APP_PASSWORD';
+        const DEFAULT_PASSWORD = '9999';
 
         const initialData = {
             owners: [{ id: 'o1', name: '홍길동' }],
@@ -324,18 +326,42 @@
 
         function Settings({ data, setData, fbConfig, setFbConfig }) {
             const [fbVal, setFbVal] = useState(fbConfig ? JSON.stringify(fbConfig, null, 2) : '');
-            const saveFb = () => { try { const c = JSON.parse(fbVal); localStorage.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(c)); setFbConfig(c); alert('Firebase 설정이 저장되었습니다.'); location.reload(); } catch (e) { alert('유효한 JSON이 아닙니다.'); } };
+            const [newPw, setNewPw] = useState('');
+
+            const saveFb = () => { try { const c = JSON.parse(fbVal); localStorage.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(c)); setFbConfig(c); alert('Firebase 설정이 저장되었습니다. 앱을 다시 시작합니다.'); location.reload(); } catch (e) { alert('유효한 JSON 형식이 아닙니다.'); } };
+            const resetFb = () => { if (confirm('서버 설정을 초기화하시겠습니까?')) { localStorage.removeItem(FIREBASE_CONFIG_KEY); setFbConfig(null); alert('설정이 초기화되었습니다.'); location.reload(); } };
+            const changePw = () => { if (newPw.length < 4) { alert('비밀번호는 4자리 이상이어야 합니다.'); return; } localStorage.setItem(PASSWORD_KEY, newPw); setNewPw(''); alert('비밀번호가 변경되었습니다.'); };
+
             const exportData = () => { const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `household_backup_${new Date().toISOString().split('T')[0]}.json`; a.click(); };
             const importData = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => { try { const d = JSON.parse(ev.target.result); if (confirm('데이터를 덮어쓰시겠습니까? 현재 데이터는 사라집니다.')) { setData(d); alert('데이터를 성공적으로 불러왔습니다.'); } } catch (err) { alert('잘못된 백업 파일입니다.'); } }; reader.readAsText(file); };
+
             return (
                 <div className="fade-in">
                     <h1 style={{ marginBottom: '1.5rem' }}>설정 및 데이터 관리</h1>
                     <div className="dashboard-grid">
-                        <div className="card"><h3>Firebase 서버 연동</h3><p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>프로젝트 설정의 SDK 설정을 JSON 형식으로 입력하세요.</p><textarea value={fbVal} onChange={e => setFbVal(e.target.value)} rows="8" style={{ width: '100%', marginBottom: '1rem', background: '#0d1117', color: '#8b949e', padding: '10px', fontSize: '13px' }} /><button className="primary" onClick={saveFb}>서버 설정 저장</button></div>
-                        <div className="card"><h3>데이터 백업 및 복구</h3><p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1.5rem' }}>현재 브라우저 및 서버에 저장된 모든 데이터를 내보내거나 가져옵니다.</p>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                <button onClick={exportData} style={{ background: '#30363d', color: 'white' }}><Icon name="download" size={16} /> JSON으로 내보내기</button>
-                                <label className="auth-btn login" style={{ textAlign: 'center', cursor: 'pointer' }}><Icon name="upload" size={16} /> 백업 파일 불러오기 <input type="file" accept=".json" onChange={importData} style={{ display: 'none' }} /></label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                            <div className="card">
+                                <h3>🔑 비밀번호 변경</h3>
+                                <div style={{ display: 'flex', gap: '8px', margin: '1rem 0' }}>
+                                    <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="새 비밀번호 입력" />
+                                    <button className="primary" onClick={changePw}>변경</button>
+                                </div>
+                            </div>
+                            <div className="card">
+                                <h3>💾 데이터 백업 및 복구</h3>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '1rem' }}>
+                                    <button onClick={exportData} style={{ background: '#30363d', color: 'white' }}><Icon name="download" size={16} /> JSON으로 내보내기</button>
+                                    <label className="auth-btn login" style={{ textAlign: 'center', cursor: 'pointer' }}><Icon name="upload" size={16} /> 백업 파일 불러오기 <input type="file" accept=".json" onChange={importData} style={{ display: 'none' }} /></label>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="card">
+                            <h3>☁️ 서버 연동 (Firebase)</h3>
+                            <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>Firebase 프로젝트 구성 JSON을 입력하세요.</p>
+                            <textarea value={fbVal} onChange={e => setFbVal(e.target.value)} rows="8" style={{ width: '100%', marginBottom: '1rem', background: '#0d1117', color: '#8b949e', padding: '10px', fontSize: '13px', fontFamily: 'monospace' }} />
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button className="primary" onClick={saveFb}>저장</button>
+                                <button onClick={resetFb} style={{ background: '#30363d', color: 'white' }}>기본값으로 초기화</button>
                             </div>
                         </div>
                     </div>
@@ -363,6 +389,39 @@
             const [showModal, setShowModal] = useState(false);
             const [edit, setEdit] = useState(null);
             const [sidebarOpen, setSidebarOpen] = useState(false);
+            const [pullDistance, setPullDistance] = useState(0);
+            const [startY, setStartY] = useState(0);
+            const [isRefreshing, setIsRefreshing] = useState(false);
+
+            useEffect(() => {
+                const handleStart = (e) => {
+                    if (window.scrollY === 0) setStartY(e.touches[0].pageY);
+                };
+                const handleMove = (e) => {
+                    if (startY === 0) return;
+                    const delta = e.touches[0].pageY - startY;
+                    if (delta > 0 && window.scrollY === 0) {
+                        setPullDistance(Math.min(delta * 0.4, 80));
+                        if (delta > 50) e.preventDefault();
+                    }
+                };
+                const handleEnd = () => {
+                    if (pullDistance > 60) {
+                        setIsRefreshing(true);
+                        setTimeout(() => location.reload(), 500);
+                    }
+                    setPullDistance(0);
+                    setStartY(0);
+                };
+                window.addEventListener('touchstart', handleStart, { passive: false });
+                window.addEventListener('touchmove', handleMove, { passive: false });
+                window.addEventListener('touchend', handleEnd);
+                return () => {
+                    window.removeEventListener('touchstart', handleStart);
+                    window.removeEventListener('touchmove', handleMove);
+                    window.removeEventListener('touchend', handleEnd);
+                };
+            }, [startY, pullDistance]);
 
             const syncToCloud = (newData) => {
                 if (user && window.firebase && firebase.apps.length) {
@@ -389,10 +448,21 @@
                 if (window.lucide) window.lucide.createIcons();
             }, [data]);
 
-            const menuClick = (t) => { setTab(t); setSidebarOpen(false); };
+            const menuClick = (t) => {
+                if (t === 'settings') {
+                    const pw = prompt('설정 페이지에 진입하려면 비밀번호를 입력하세요.');
+                    const storedPw = localStorage.getItem(PASSWORD_KEY) || DEFAULT_PASSWORD;
+                    if (pw !== storedPw) { alert('비밀번호가 올바르지 않습니다.'); return; }
+                }
+                setTab(t);
+                setSidebarOpen(false);
+            };
 
             return (
                 <React.Fragment>
+                    <div className="refresh-indicator" style={{ transform: `translateX(-50%) translateY(${pullDistance}px)`, opacity: pullDistance > 20 ? 1 : 0 }}>
+                        {isRefreshing ? <Icon name="loader" size={20} className="spinner" /> : <Icon name="arrow-down" size={20} style={{ transform: `rotate(${pullDistance * 3}deg)` }} />}
+                    </div>
                     <div className="mobile-header">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Icon name="activity" size={24} /><h2>Smart Finance</h2></div>
                         <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'white', padding: '0.5rem' }}><Icon name="menu" size={24} /></button>
