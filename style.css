@@ -194,8 +194,7 @@ table {
 }
 
 .transaction-table td {
-  font-size: 1.15rem;
-  /* ~2pt larger than default */
+  font-size: 1.08rem;
 }
 
 th,
@@ -326,9 +325,12 @@ button.danger {
   top: 0;
   width: 100%;
   background: #161b22;
-  padding: 1rem;
+  padding: 0.5rem 1rem;
+  /* Reduced for 3/4 height */
   border-bottom: 1px solid var(--border-color);
-  justify-content: space-between;
+  justify-content: flex-start;
+  /* For left-aligned menu button */
+  gap: 1rem;
   align-items: center;
   z-index: 1000;
   backdrop-filter: var(--glass-effect);
@@ -363,7 +365,7 @@ button.danger {
   }
 
   .mobile-header {
-    display: flex;
+    display: flex !important;
   }
 
   .main-content {

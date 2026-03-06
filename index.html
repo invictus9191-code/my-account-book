@@ -124,6 +124,18 @@
                     syncToCloud(newData);
                 }
             };
+
+            const grouped = data.transactions.sort((a, b) => new Date(b.date) - new Date(a.date)).reduce((acc, t) => {
+                const month = t.date.substring(0, 7); // YYYY-MM
+                if (!acc[month]) acc[month] = { transactions: [], income: 0, expense: 0 };
+                acc[month].transactions.push(t);
+                if (t.type === 'Income') acc[month].income += Number(t.amount);
+                else if (t.type === 'Expense') acc[month].expense += Number(t.amount);
+                return acc;
+            }, {});
+
+            const sortedMonths = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
             return (
                 <div className="fade-in">
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center' }}>
@@ -133,16 +145,32 @@
                         <table className="transaction-table">
                             <thead><tr><th>날짜</th><th className="mobile-hide">구분</th><th>카테고리</th><th>금액</th><th className="mobile-hide">자산</th><th>메모</th></tr></thead>
                             <tbody>
-                                {[...data.transactions].sort((a, b) => new Date(b.date) - new Date(a.date)).map(t => (
-                                    <tr key={t.id} onClick={() => { setEdit(t); setShowModal(true); }} style={{ cursor: 'pointer' }}>
-                                        <td>{t.date}</td>
-                                        <td className={`type-${t.type.toLowerCase()} mobile-hide`}>{t.type === 'Income' ? '수입' : t.type === 'Expense' ? '지출' : '이체'}</td>
-                                        <td>{data.categories.find(c => c.id === t.categoryId)?.name || '-'}</td>
-                                        <td style={{ fontWeight: '600' }} className={`type-${t.type.toLowerCase()}`}>{t.type === 'Expense' ? '-' : t.type === 'Income' ? '+' : ''}{Number(t.amount).toLocaleString()}원</td>
-                                        <td className="mobile-hide">{t.type === 'Transfer' ? <span>{data.assets.find(a => a.id === t.assetId)?.name} → {data.assets.find(a => a.id === t.toAssetId)?.name}</span> : <span>{data.assets.find(a => a.id === t.assetId)?.name}</span>}</td>
-                                        <td><div style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.memo}</div></td>
-                                    </tr>
-                                ))}
+                                {sortedMonths.map(month => {
+                                    const [y, m] = month.split('-');
+                                    const { transactions, income, expense } = grouped[month];
+                                    return (
+                                        <React.Fragment key={month}>
+                                            <tr style={{ background: 'rgba(56, 139, 253, 0.1)', fontWeight: 'bold' }}>
+                                                <td colSpan="6" style={{ padding: '0.5rem 1rem', fontSize: '1rem', color: '#58a6ff' }}>
+                                                    [{y}년 {m}월]
+                                                    <span style={{ marginLeft: '1rem', fontSize: '0.85rem' }}>
+                                                        (수입: {income.toLocaleString()} / 지출: {expense.toLocaleString()} / 합계: {(income - expense).toLocaleString()})
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                            {transactions.map(t => (
+                                                <tr key={t.id} onClick={() => { setEdit(t); setShowModal(true); }} style={{ cursor: 'pointer' }}>
+                                                    <td style={{ fontWeight: '500' }}>{new Date(t.date).getDate()}일</td>
+                                                    <td className={`type-${t.type.toLowerCase()} mobile-hide`}>{t.type === 'Income' ? '수입' : t.type === 'Expense' ? '지출' : '이체'}</td>
+                                                    <td>{data.categories.find(c => c.id === t.categoryId)?.name || '-'}</td>
+                                                    <td style={{ fontWeight: '600' }} className={`type-${t.type.toLowerCase()}`}>{t.type === 'Expense' ? '-' : t.type === 'Income' ? '+' : ''}{Number(t.amount).toLocaleString()}</td>
+                                                    <td className="mobile-hide">{t.type === 'Transfer' ? <span>{data.assets.find(a => a.id === t.assetId)?.name} → {data.assets.find(a => a.id === t.toAssetId)?.name}</span> : <span>{data.assets.find(a => a.id === t.assetId)?.name}</span>}</td>
+                                                    <td><div style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.memo}</div></td>
+                                                </tr>
+                                            ))}
+                                        </React.Fragment>
+                                    );
+                                })}
                                 {data.transactions.length === 0 && <tr><td colSpan="6" style={{ textAlign: 'center', padding: '2rem' }}>거래 내역이 없습니다.</td></tr>}
                             </tbody>
                         </table>
@@ -464,8 +492,8 @@
                         {isRefreshing ? <Icon name="loader" size={20} className="spinner" /> : <Icon name="arrow-down" size={20} style={{ transform: `rotate(${pullDistance * 3}deg)` }} />}
                     </div>
                     <div className="mobile-header">
+                        <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'white', padding: '0.4rem' }}><Icon name="menu" size={24} /></button>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Icon name="activity" size={24} /><h2>Smart Finance</h2></div>
-                        <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'white', padding: '0.5rem' }}><Icon name="menu" size={24} /></button>
                     </div>
                     <div className={`mobile-overlay ${sidebarOpen ? 'visible' : ''}`} onClick={() => setSidebarOpen(false)}></div>
                     <div className={`sidebar ${sidebarOpen ? 'mobile-open' : ''}`}>
