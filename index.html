@@ -320,17 +320,17 @@
 
                     <div className="dashboard-grid">
                         <div className="card stat-card interactive" onClick={() => setView('income_detail')}>
-                            <span className="stat-label">수입</span>
+                            <span className="stat-label stat-title-white">수입</span>
                             <span className="stat-value">{stats.income.toLocaleString()}원</span>
                             {renderDiff(stats.income, stats.prevIncome)}
                         </div>
                         <div className="card stat-card interactive" onClick={() => setView('expense_detail')}>
-                            <span className="stat-label">지출</span>
+                            <span className="stat-label stat-title-white">지출</span>
                             <span className="stat-value">{stats.expense.toLocaleString()}원</span>
                             {renderDiff(stats.expense, stats.prevExpense)}
                         </div>
                         <div className="card stat-card interactive" onClick={() => setView('savings_detail')}>
-                            <span className="stat-label">저축</span>
+                            <span className="stat-label stat-title-white">저축</span>
                             <span className="stat-value">{stats.savings.toLocaleString()}원</span>
                             {stats.prevSavings !== undefined && (
                                 <div className={`stat-change ${stats.savings >= stats.prevSavings ? 'plus' : 'minus'}`}>
@@ -803,39 +803,6 @@
             const [editAsset, setEditAsset] = useState(null);
 
             const [sidebarOpen, setSidebarOpen] = useState(false);
-            const [pullDistance, setPullDistance] = useState(0);
-            const [startY, setStartY] = useState(0);
-            const [isRefreshing, setIsRefreshing] = useState(false);
-
-            useEffect(() => {
-                const handleStart = (e) => {
-                    if (window.scrollY === 0) setStartY(e.touches[0].pageY);
-                };
-                const handleMove = (e) => {
-                    if (startY === 0) return;
-                    const delta = e.touches[0].pageY - startY;
-                    if (delta > 0 && window.scrollY === 0) {
-                        setPullDistance(Math.min(delta * 0.4, 80));
-                        if (delta > 50) e.preventDefault();
-                    }
-                };
-                const handleEnd = () => {
-                    if (pullDistance > 60) {
-                        setIsRefreshing(true);
-                        setTimeout(() => location.reload(), 500);
-                    }
-                    setPullDistance(0);
-                    setStartY(0);
-                };
-                window.addEventListener('touchstart', handleStart, { passive: false });
-                window.addEventListener('touchmove', handleMove, { passive: false });
-                window.addEventListener('touchend', handleEnd);
-                return () => {
-                    window.removeEventListener('touchstart', handleStart);
-                    window.removeEventListener('touchmove', handleMove);
-                    window.removeEventListener('touchend', handleEnd);
-                };
-            }, [startY, pullDistance]);
 
             const syncToCloud = (newData) => {
                 if (user && window.firebase && firebase.apps.length) {
@@ -874,9 +841,6 @@
 
             return (
                 <React.Fragment>
-                    <div className="refresh-indicator" style={{ transform: `translateX(-50%) translateY(${pullDistance}px)`, opacity: pullDistance > 20 ? 1 : 0 }}>
-                        {isRefreshing ? <Icon name="loader" size={20} className="spinner" /> : <Icon name="arrow-down" size={20} style={{ transform: `rotate(${pullDistance * 3}deg)` }} />}
-                    </div>
                     <div className="mobile-header">
                         <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'white', padding: '0.4rem' }}><Icon name="menu" size={24} /></button>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}><Icon name="activity" size={24} /><h2>Smart Finance</h2></div>
