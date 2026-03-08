@@ -61,14 +61,18 @@
             return <i data-lucide={name} style={{ width: size, height: size }}></i>;
         };
 
-        const calculateAssetBalance = (assetId, assets, transactions) => {
+        const calculateAssetBalance = (assetId, assets, transactions, upToDate) => {
             const asset = assets.find(a => a.id === assetId);
             if (!asset) return 0;
-            const history = transactions.filter(t => t.assetId === assetId || t.toAssetId === assetId);
+            const history = transactions.filter(t => {
+                const match = t.assetId === assetId || t.toAssetId === assetId;
+                if (upToDate) return match && t.date <= upToDate;
+                return match;
+            });
             return history.reduce((sum, t) => {
                 const amt = Number(t.amount || 0);
-                if (t.type === 'Income') return sum + amt;
-                if (t.type === 'Expense') return sum - amt;
+                if (t.type === 'Income' && t.assetId === assetId) return sum + amt;
+                if (t.type === 'Expense' && t.assetId === assetId) return sum - amt;
                 if (t.type === 'Transfer') {
                     if (t.assetId === assetId) return sum - amt;
                     if (t.toAssetId === assetId) return sum + amt;
@@ -84,6 +88,7 @@
             });
             const [view, setView] = useState('main'); // main, income_detail, expense_detail, asset_detail, category_list
             const [selectedId, setSelectedId] = useState(null); // categoryId or assetGroupId
+            const [chartType, setChartType] = useState('income_expense'); // income_expense or savings
 
             const availableMonths = useMemo(() => {
                 const months = new Set();
@@ -96,15 +101,23 @@
             const stats = useMemo(() => {
                 const [year, month] = selectedMonth.split('-').map(Number);
                 const currentMonthT = data.transactions.filter(t => t.date.startsWith(selectedMonth));
+
+                // Identify savings categories
+                const savingsCategories = data.categories.filter(c => c.name === '저축' || c.name.includes('저축')).map(c => c.id);
+
                 const income = currentMonthT.filter(t => t.type === 'Income').reduce((s, t) => s + Number(t.amount), 0);
-                const expense = currentMonthT.filter(t => t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0);
+                const rawExpense = currentMonthT.filter(t => t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0);
+                const savings = currentMonthT.filter(t => (t.type === 'Expense' || t.type === 'Transfer') && savingsCategories.includes(t.categoryId)).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+                const expense = rawExpense - currentMonthT.filter(t => t.type === 'Expense' && savingsCategories.includes(t.categoryId)).reduce((s, t) => s + Number(t.amount), 0);
 
                 // Previous month stats
                 const prevDate = new Date(year, month - 2, 1);
                 const prevMonthStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
                 const prevMonthT = data.transactions.filter(t => t.date.startsWith(prevMonthStr));
                 const prevIncome = prevMonthT.filter(t => t.type === 'Income').reduce((s, t) => s + Number(t.amount), 0);
-                const prevExpense = prevMonthT.filter(t => t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0);
+                const prevRawExpense = prevMonthT.filter(t => t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0);
+                const prevSavings = prevMonthT.filter(t => (t.type === 'Expense' || t.type === 'Transfer') && savingsCategories.includes(t.categoryId)).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+                const prevExpense = prevRawExpense - prevMonthT.filter(t => t.type === 'Expense' && savingsCategories.includes(t.categoryId)).reduce((s, t) => s + Number(t.amount), 0);
 
                 // Assets up to selected month
                 const totalAssets = data.assets.reduce((sum, a) => {
@@ -112,8 +125,8 @@
                     const history = data.transactions.filter(t => t.date <= `${selectedMonth}-31` && (t.assetId === a.id || t.toAssetId === a.id));
                     const balance = history.reduce((s, t) => {
                         const amt = Number(t.amount || 0);
-                        if (t.type === 'Income') return s + amt;
-                        if (t.type === 'Expense') return s - amt;
+                        if (t.type === 'Income' && t.assetId === a.id) return s + amt;
+                        if (t.type === 'Expense' && t.assetId === a.id) return s - amt;
                         if (t.type === 'Transfer') {
                             if (t.assetId === a.id) return s - amt;
                             if (t.toAssetId === a.id) return s + amt;
@@ -123,7 +136,7 @@
                     return sum + balance;
                 }, 0);
 
-                return { income, expense, totalAssets, prevIncome, prevExpense };
+                return { income, expense, savings, totalAssets, prevIncome, prevExpense };
             }, [selectedMonth, data.transactions, data.assets]);
 
             const annualData = useMemo(() => {
@@ -133,7 +146,16 @@
                     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
                 });
                 const incomeData = labels.map(m => data.transactions.filter(t => t.date.startsWith(m) && t.type === 'Income').reduce((s, t) => s + Number(t.amount), 0));
-                const expenseData = labels.map(m => data.transactions.filter(t => t.date.startsWith(m) && t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0));
+
+                const savingsCategories = data.categories.filter(c => c.name === '저축' || c.name.includes('저축')).map(c => c.id);
+
+                const savingsData = labels.map(m => data.transactions.filter(t => t.date.startsWith(m) && (t.type === 'Expense' || t.type === 'Transfer') && savingsCategories.includes(t.categoryId)).reduce((s, t) => s + Math.abs(Number(t.amount)), 0));
+
+                const expenseData = labels.map(m => {
+                    const rawExp = data.transactions.filter(t => t.date.startsWith(m) && t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0);
+                    const sav = data.transactions.filter(t => t.date.startsWith(m) && t.type === 'Expense' && savingsCategories.includes(t.categoryId)).reduce((s, t) => s + Number(t.amount), 0);
+                    return rawExp - sav;
+                });
 
                 const assetData = labels.map(m => {
                     return data.assets.reduce((sum, a) => {
@@ -152,16 +174,20 @@
                     }, 0);
                 });
 
-                return { labels: labels.map(m => `${m.substring(5)}월`), incomeData, expenseData, assetData };
+                return { labels: labels.map(m => `${m.substring(5)}월`), incomeData, expenseData, savingsData, assetData };
             }, [selectedMonth, data.transactions, data.assets]);
 
             const chartOptions = {
                 chart: { type: 'bar', toolbar: { show: false }, background: 'transparent' },
                 theme: { mode: 'dark' },
                 xaxis: { categories: annualData.labels },
+                yaxis: { labels: { formatter: (value) => value.toLocaleString() } },
                 dataLabels: { enabled: false },
                 grid: { borderColor: '#30363d' },
-                tooltip: { theme: 'dark' }
+                tooltip: {
+                    theme: 'dark',
+                    y: { formatter: (value) => value.toLocaleString() + '원' }
+                }
             };
 
             const renderDiff = (curr, prev) => {
@@ -175,10 +201,22 @@
                 );
             };
 
-            if (view === 'income_detail' || view === 'expense_detail') {
+            if (view === 'income_detail' || view === 'expense_detail' || view === 'savings_detail') {
                 const type = view === 'income_detail' ? 'Income' : 'Expense';
-                const monthT = data.transactions.filter(t => t.date.startsWith(selectedMonth) && t.type === type);
-                const catGrouped = data.categories.filter(c => c.type === type).map(c => ({
+                const savingsCategories = data.categories.filter(c => c.name === '저축' || c.name.includes('저축')).map(c => c.id);
+
+                const monthT = data.transactions.filter(t => {
+                    if (!t.date.startsWith(selectedMonth)) return false;
+                    if (view === 'savings_detail') return (t.type === 'Expense' || t.type === 'Transfer') && savingsCategories.includes(t.categoryId);
+                    if (view === 'expense_detail') return t.type === 'Expense' && !savingsCategories.includes(t.categoryId);
+                    return t.type === type;
+                });
+
+                const catGrouped = data.categories.filter(c => {
+                    if (view === 'savings_detail') return savingsCategories.includes(c.id);
+                    if (view === 'expense_detail') return c.type === 'Expense' && !savingsCategories.includes(c.id);
+                    return c.type === type;
+                }).map(c => ({
                     ...c,
                     amount: monthT.filter(t => t.categoryId === c.id).reduce((s, t) => s + Number(t.amount), 0)
                 })).filter(c => c.amount > 0).sort((a, b) => b.amount - a.amount);
@@ -187,7 +225,7 @@
                     <div className="fade-in">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
                             <button onClick={() => setView('main')} className="icon-btn"><Icon name="arrow-left" /></button>
-                            <h1>{selectedMonth} {type === 'Income' ? '수입' : '지출'} 카테고리별</h1>
+                            <h1>{selectedMonth} {view === 'income_detail' ? '수입' : view === 'expense_detail' ? '지출' : '저축'} 카테고리별</h1>
                         </div>
                         <div className="card">
                             {catGrouped.map(c => (
@@ -205,10 +243,12 @@
             if (view === 'category_list') {
                 const category = data.categories.find(c => c.id === selectedId);
                 const list = data.transactions.filter(t => t.date.startsWith(selectedMonth) && t.categoryId === selectedId).sort((a, b) => b.date.localeCompare(a.date));
+                const savingsCategories = data.categories.filter(c => c.name === '저축' || c.name.includes('저축')).map(c => c.id);
+                const backView = category.type === 'Income' ? 'income_detail' : savingsCategories.includes(category.id) ? 'savings_detail' : 'expense_detail';
                 return (
                     <div className="fade-in">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
-                            <button onClick={() => setView(category.type === 'Income' ? 'income_detail' : 'expense_detail')} className="icon-btn"><Icon name="arrow-left" /></button>
+                            <button onClick={() => setView(backView)} className="icon-btn"><Icon name="arrow-left" /></button>
                             <h1>{selectedMonth} {category.name} 내역</h1>
                         </div>
                         <div className="card" style={{ padding: 0 }}>
@@ -233,27 +273,15 @@
             if (view === 'asset_detail') {
                 const groupGrouped = (data.groups || []).map(g => {
                     const assets = data.assets.filter(a => a.groupId === g.id);
-                    const total = assets.reduce((sum, a) => {
-                        const history = data.transactions.filter(t => t.date <= `${selectedMonth}-31` && (t.assetId === a.id || t.toAssetId === a.id));
-                        return sum + history.reduce((s, t) => {
-                            const amt = Number(t.amount || 0);
-                            if (t.type === 'Income') return s + amt;
-                            if (t.type === 'Expense') return s - amt;
-                            if (t.type === 'Transfer') {
-                                if (t.assetId === a.id) return s - amt;
-                                if (t.toAssetId === a.id) return s + amt;
-                            }
-                            return s;
-                        }, Number(a.initialBalance || 0));
-                    }, 0);
+                    const total = assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions), 0);
                     return { ...g, total, assets };
-                }).filter(g => g.total !== 0);
+                }).filter(g => g.total !== 0 || g.assets.length > 0);
 
                 return (
                     <div className="fade-in">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
                             <button onClick={() => setView('main')} className="icon-btn"><Icon name="arrow-left" /></button>
-                            <h1>{selectedMonth} 자산 현황</h1>
+                            <h1>자산 현황 (현재 잔액)</h1>
                         </div>
                         <div className="card">
                             {groupGrouped.map(g => (
@@ -262,16 +290,7 @@
                                         {g.name} <span>{g.total.toLocaleString()}원</span>
                                     </h3>
                                     {g.assets.map(a => {
-                                        const bal = data.transactions.filter(t => t.date <= `${selectedMonth}-31` && (t.assetId === a.id || t.toAssetId === a.id)).reduce((s, t) => {
-                                            const amt = Number(t.amount || 0);
-                                            if (t.type === 'Income') return s + amt;
-                                            if (t.type === 'Expense') return s - amt;
-                                            if (t.type === 'Transfer') {
-                                                if (t.assetId === a.id) return s - amt;
-                                                if (t.toAssetId === a.id) return s + amt;
-                                            }
-                                            return s;
-                                        }, Number(a.initialBalance || 0));
+                                        const bal = calculateAssetBalance(a.id, data.assets, data.transactions);
                                         return (
                                             <div key={a.id} onClick={() => { setEditAsset(a); setShowAssetModal(true); }} style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '1rem', paddingBottom: '0.3rem', color: '#8b949e', cursor: 'pointer' }} className="list-item">
                                                 <span>{a.name}</span>
@@ -308,6 +327,15 @@
                             <span className="stat-value type-expense">{stats.expense.toLocaleString()}원</span>
                             {renderDiff(stats.expense, stats.prevExpense)}
                         </div>
+                        <div className="card stat-card interactive" onClick={() => setView('savings_detail')}>
+                            <span className="stat-label">저축</span>
+                            <span className="stat-value" style={{ color: 'var(--income-color)' }}>{stats.savings.toLocaleString()}원</span>
+                            {stats.prevSavings !== undefined && (
+                                <div className={`stat-change ${stats.savings >= stats.prevSavings ? 'plus' : 'minus'}`}>
+                                    전월 대비 {Math.abs(stats.savings - stats.prevSavings).toLocaleString()}원 {stats.savings >= stats.prevSavings ? '증가' : '감소'}
+                                </div>
+                            )}
+                        </div>
                         <div className="card stat-card interactive" onClick={() => setView('asset_detail')}>
                             <span className="stat-label">자산 총액</span>
                             <span className="stat-value">{stats.totalAssets.toLocaleString()}원</span>
@@ -317,13 +345,37 @@
 
                     <div className="dashboard-grid" style={{ marginTop: '1.5rem' }}>
                         <div className="card">
-                            <h3>연간 수입/지출</h3>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                <h3>연간 흐름</h3>
+                                <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(22, 27, 34, 0.4)', padding: '4px', borderRadius: '8px' }}>
+                                    <button
+                                        onClick={() => setChartType('income_expense')}
+                                        style={{ background: chartType === 'income_expense' ? '#30363d' : 'transparent', color: chartType === 'income_expense' ? 'white' : '#8b949e', padding: '0.3rem 0.6rem', fontSize: '0.85rem' }}
+                                    >수입/지출</button>
+                                    <button
+                                        onClick={() => setChartType('savings')}
+                                        style={{ background: chartType === 'savings' ? '#30363d' : 'transparent', color: chartType === 'savings' ? 'white' : '#8b949e', padding: '0.3rem 0.6rem', fontSize: '0.85rem' }}
+                                    >저축</button>
+                                </div>
+                            </div>
+
                             {window.ReactApexChart ? (
-                                <window.ReactApexChart
-                                    options={{ ...chartOptions, colors: ['#238636', '#da3633'] }}
-                                    series={[{ name: '수입', data: annualData.incomeData }, { name: '지출', data: annualData.expenseData }]}
-                                    type="bar" height={280}
-                                />
+                                chartType === 'income_expense' ? (
+                                    <window.ReactApexChart
+                                        options={{ ...chartOptions, colors: ['#238636', '#da3633'] }}
+                                        series={[
+                                            { name: '수입', data: annualData.incomeData },
+                                            { name: '지출', data: annualData.expenseData }
+                                        ]}
+                                        type="bar" height={280}
+                                    />
+                                ) : (
+                                    <window.ReactApexChart
+                                        options={{ ...chartOptions, colors: ['#1f6feb'] }}
+                                        series={[{ name: '저축', data: annualData.savingsData }]}
+                                        type="bar" height={280}
+                                    />
+                                )
                             ) : "차트 로딩 중..."}
                         </div>
                         <div className="card">
@@ -352,10 +404,20 @@
 
             const grouped = data.transactions.sort((a, b) => new Date(b.date) - new Date(a.date)).reduce((acc, t) => {
                 const month = t.date.substring(0, 7); // YYYY-MM
-                if (!acc[month]) acc[month] = { transactions: [], income: 0, expense: 0 };
+                if (!acc[month]) acc[month] = { transactions: [], income: 0, expense: 0, savings: 0 };
                 acc[month].transactions.push(t);
+
+                const savingsCategories = data.categories.filter(c => c.name === '저축' || c.name.includes('저축')).map(c => c.id);
+
                 if (t.type === 'Income') acc[month].income += Number(t.amount);
-                else if (t.type === 'Expense') acc[month].expense += Number(t.amount);
+
+                if ((t.type === 'Expense' || t.type === 'Transfer') && savingsCategories.includes(t.categoryId)) {
+                    acc[month].savings += Math.abs(Number(t.amount));
+                }
+
+                if (t.type === 'Expense' && !savingsCategories.includes(t.categoryId)) {
+                    acc[month].expense += Number(t.amount);
+                }
                 return acc;
             }, {});
 
@@ -368,7 +430,7 @@
                     </div>
                     <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
                         <table className="transaction-table">
-                            <thead><tr><th>날짜</th><th className="mobile-hide">구분</th><th>카테고리</th><th>금액</th><th className="mobile-hide">자산</th><th>메모</th></tr></thead>
+                            <thead><tr><th>날짜</th><th className="mobile-hide">구분</th><th className="mobile-hide">카테고리</th><th>금액</th><th className="mobile-hide">자산</th><th>메모</th></tr></thead>
                             <tbody>
                                 {sortedMonths.map(month => {
                                     const [y, m] = month.split('-');
@@ -379,7 +441,7 @@
                                                 <td colSpan="6" style={{ padding: '0.5rem 1rem', fontSize: '1rem', color: '#58a6ff' }}>
                                                     <div>[{y}년 {m}월]</div>
                                                     <div style={{ fontSize: '0.85rem', marginTop: '0.2rem' }}>
-                                                        (수입: {income.toLocaleString()} / 지출: {expense.toLocaleString()})
+                                                        (수입: {income.toLocaleString()} / 지출: {expense.toLocaleString()} / 저축: {grouped[month].savings.toLocaleString()})
                                                     </div>
                                                 </td>
                                             </tr>
@@ -387,7 +449,7 @@
                                                 <tr key={t.id} onClick={() => { setEdit(t); setShowModal(true); }} style={{ cursor: 'pointer' }}>
                                                     <td style={{ fontWeight: '500' }}>{new Date(t.date).getDate()}일</td>
                                                     <td className={`type-${t.type.toLowerCase()} mobile-hide`}>{t.type === 'Income' ? '수입' : t.type === 'Expense' ? '지출' : '이체'}</td>
-                                                    <td>{data.categories.find(c => c.id === t.categoryId)?.name || '-'}</td>
+                                                    <td className="mobile-hide">{data.categories.find(c => c.id === t.categoryId)?.name || '-'}</td>
                                                     <td style={{ fontWeight: '600' }} className={`type-${t.type.toLowerCase()}`}>{t.type === 'Expense' ? '-' : t.type === 'Income' ? '+' : ''}{Number(t.amount).toLocaleString()}</td>
                                                     <td className="mobile-hide">{t.type === 'Transfer' ? <span>{data.assets.find(a => a.id === t.assetId)?.name} → {data.assets.find(a => a.id === t.toAssetId)?.name}</span> : <span>{data.assets.find(a => a.id === t.assetId)?.name}</span>}</td>
                                                     <td><div style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.memo}</div></td>
@@ -490,13 +552,31 @@
         }
 
         function TransactionModal({ data, setData, onClose, editItem, syncToCloud }) {
-            const [form, setForm] = useState(editItem || { date: new Date().toISOString().split('T')[0], type: 'Expense', amount: '', categoryId: '', ownerId: data.owners[0]?.id || '', assetId: data.assets[0]?.id || '', toAssetId: '', memo: '' });
-            const filteredAssets = data.assets.filter(a => a.ownerId === form.ownerId);
+            const [form, setForm] = useState(() => {
+                const groups = data.groups || [];
+                const firstGroup = groups.length > 0 ? groups[0].id : '';
+                const initial = editItem || { date: new Date().toISOString().split('T')[0], type: 'Expense', amount: '', categoryId: '', groupId: firstGroup, assetId: data.assets[0]?.id || '', toGroupId: firstGroup, toAssetId: '', memo: '' };
+
+                // For editing existing records, determine group from asset
+                if (editItem) {
+                    const fromAsset = data.assets.find(a => a.id === editItem.assetId);
+                    if (fromAsset) initial.groupId = fromAsset.groupId || '';
+                    if (editItem.type === 'Transfer') {
+                        const toAsset = data.assets.find(a => a.id === editItem.toAssetId);
+                        if (toAsset) initial.toGroupId = toAsset.groupId || '';
+                    }
+                }
+                return { ...initial, groupId: initial.groupId || firstGroup, toGroupId: initial.toGroupId || firstGroup };
+            });
+            const filteredAssets = data.assets.filter(a => form.groupId ? a.groupId === form.groupId : true);
+            const filteredToAssets = data.assets.filter(a => (form.toGroupId ? a.groupId === form.toGroupId : true) && a.id !== form.assetId);
             const filteredCategories = data.categories.filter(c => c.type === form.type);
             useEffect(() => {
                 if (filteredAssets.length > 0 && !filteredAssets.find(a => a.id === form.assetId)) setForm(f => ({ ...f, assetId: filteredAssets[0].id }));
-                if (form.type === 'Transfer' && !form.toAssetId && data.assets.length > 1) { const other = data.assets.find(a => a.id !== form.assetId); if (other) setForm(f => ({ ...f, toAssetId: other.id })); }
-            }, [form.ownerId, form.type]);
+                if (form.type === 'Transfer' && filteredToAssets.length > 0 && !filteredToAssets.find(a => a.id === form.toAssetId)) {
+                    setForm(f => ({ ...f, toAssetId: filteredToAssets[0].id }));
+                }
+            }, [form.groupId, form.type, form.toGroupId]);
             const handleSubmit = (e) => {
                 if (e) e.preventDefault();
                 if (form.type === 'Transfer' && form.assetId === form.toAssetId) { alert('동일 자산 간 이체는 불가합니다.'); return; }
@@ -522,9 +602,14 @@
                             <div style={{ marginBottom: '1.2rem' }}><label>구분</label><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}><option value="Income">수입</option><option value="Expense">지출</option><option value="Transfer">이체</option></select></div>
                             <div style={{ marginBottom: '1.2rem' }}><label>카테고리</label><select value={form.categoryId} onChange={e => setForm({ ...form, categoryId: e.target.value })} required><option value="">선택하세요</option>{filteredCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
                             <div style={{ marginBottom: '1.2rem' }}><label>금액</label><input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="금액 입력" required /></div>
-                            <div style={{ marginBottom: '1.2rem' }}><label>소유자</label><select value={form.ownerId} onChange={e => setForm({ ...form, ownerId: e.target.value })}>{data.owners.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>
+                            <div style={{ marginBottom: '1.2rem' }}><label>그룹 (출금)</label><select value={form.groupId} onChange={e => setForm({ ...form, groupId: e.target.value })}><option value="">전체/미지정</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
                             <div style={{ marginBottom: '1.2rem' }}><label>{form.type === 'Transfer' ? '출금 자산' : '자산'}</label><select value={form.assetId} onChange={e => setForm({ ...form, assetId: e.target.value })}>{filteredAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
-                            {form.type === 'Transfer' && <div style={{ marginBottom: '1.2rem' }}><label>입금 자산</label><select value={form.toAssetId} onChange={e => setForm({ ...form, toAssetId: e.target.value })}>{data.assets.filter(a => a.id !== form.assetId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>}
+                            {form.type === 'Transfer' && (
+                                <React.Fragment>
+                                    <div style={{ marginBottom: '1.2rem' }}><label>그룹 (입금)</label><select value={form.toGroupId} onChange={e => setForm({ ...form, toGroupId: e.target.value })}><option value="">전체/미지정</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+                                    <div style={{ marginBottom: '1.2rem' }}><label>입금 자산</label><select value={form.toAssetId} onChange={e => setForm({ ...form, toAssetId: e.target.value })}>{filteredToAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+                                </React.Fragment>
+                            )}
                             <div style={{ marginBottom: '1.5rem' }}><label>메모</label><input value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} placeholder="메모" /></div>
                             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                                 <button type="button" onClick={onClose} style={{ background: '#30363d', color: 'white' }}>취소</button>
@@ -651,21 +736,34 @@
                                     </div>
                                     <div style={{ overflowX: 'auto' }}>
                                         <table>
-                                            <thead><tr><th>자산명</th><th>소유자</th><th>그룹</th><th>유형</th><th>초기금액</th><th>관리</th></tr></thead>
+                                            <thead><tr><th>자산명</th><th>소유자</th><th>그룹</th><th>유형</th><th>초기금액</th><th>현재금액</th><th>관리</th></tr></thead>
                                             <tbody>
-                                                {data.assets.map(a => (
-                                                    <tr key={a.id}>
-                                                        <td style={{ fontWeight: 500 }}>{a.name}</td>
-                                                        <td>{data.owners.find(o => o.id === a.ownerId)?.name}</td>
-                                                        <td>{data.groups?.find(g => g.id === a.groupId)?.name || '-'}</td>
-                                                        <td>{a.type === 'Cash' ? '현금' : a.type === 'Bank' ? '은행' : '카드'}</td>
-                                                        <td style={{ color: '#8b949e' }}>{Number(a.initialBalance || 0).toLocaleString()}</td>
-                                                        <td>
-                                                            <button onClick={() => { setEditingAsset(a); setShowAssetModal(true); }} style={{ background: 'transparent', color: '#58a6ff', padding: '0.3rem' }}>수정</button>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                                {data.assets.length === 0 && <tr><td colSpan="6" style={{ textAlign: 'center', padding: '2rem' }}>등록된 자산이 없습니다.</td></tr>}
+                                                {data.assets.map(a => {
+                                                    const bal = data.transactions.reduce((s, t) => {
+                                                        const amt = Number(t.amount || 0);
+                                                        if (t.type === 'Income' && t.assetId === a.id) return s + amt;
+                                                        if (t.type === 'Expense' && t.assetId === a.id) return s - amt;
+                                                        if (t.type === 'Transfer') {
+                                                            if (t.assetId === a.id) return s - amt;
+                                                            if (t.toAssetId === a.id) return s + amt;
+                                                        }
+                                                        return s;
+                                                    }, Number(a.initialBalance || 0));
+                                                    return (
+                                                        <tr key={a.id}>
+                                                            <td style={{ fontWeight: 500 }}>{a.name}</td>
+                                                            <td>{data.owners.find(o => o.id === a.ownerId)?.name}</td>
+                                                            <td>{data.groups?.find(g => g.id === a.groupId)?.name || '-'}</td>
+                                                            <td>{a.type === 'Cash' ? '현금' : a.type === 'Bank' ? '은행' : '카드'}</td>
+                                                            <td style={{ color: '#8b949e' }}>{Number(a.initialBalance || 0).toLocaleString()}</td>
+                                                            <td style={{ fontWeight: 600, color: '#58a6ff' }}>{bal.toLocaleString()}</td>
+                                                            <td>
+                                                                <button onClick={() => { setEditingAsset(a); setShowAssetModal(true); }} style={{ background: 'transparent', color: '#58a6ff', padding: '0.3rem' }}>수정</button>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                                {data.assets.length === 0 && <tr><td colSpan="7" style={{ textAlign: 'center', padding: '2rem' }}>등록된 자산이 없습니다.</td></tr>}
                                             </tbody>
                                         </table>
                                     </div>
@@ -779,7 +877,8 @@
                     </div>
                     <div className="mobile-header">
                         <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'white', padding: '0.4rem' }}><Icon name="menu" size={24} /></button>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Icon name="activity" size={24} /><h2>Smart Finance</h2></div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}><Icon name="activity" size={24} /><h2>Smart Finance</h2></div>
+                        <button onClick={() => location.reload()} style={{ background: 'transparent', color: 'white', padding: '0.4rem' }}><Icon name="refresh-cw" size={24} /></button>
                     </div>
                     <div className={`mobile-overlay ${sidebarOpen ? 'visible' : ''}`} onClick={() => setSidebarOpen(false)}></div>
                     <div className={`sidebar ${sidebarOpen ? 'mobile-open' : ''}`}>
