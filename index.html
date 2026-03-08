@@ -161,16 +161,17 @@
                     return data.assets.reduce((sum, a) => {
                         const initial = Number(a.initialBalance || 0);
                         const history = data.transactions.filter(t => t.date <= `${m}-31` && (t.assetId === a.id || t.toAssetId === a.id));
-                        return sum + history.reduce((s, t) => {
+                        const balance = history.reduce((s, t) => {
                             const amt = Number(t.amount || 0);
-                            if (t.type === 'Income') return s + amt;
-                            if (t.type === 'Expense') return s - amt;
+                            if (t.type === 'Income' && t.assetId === a.id) return s + amt;
+                            if (t.type === 'Expense' && t.assetId === a.id) return s - amt;
                             if (t.type === 'Transfer') {
                                 if (t.assetId === a.id) return s - amt;
                                 if (t.toAssetId === a.id) return s + amt;
                             }
                             return s;
                         }, initial);
+                        return sum + balance;
                     }, 0);
                 });
 
@@ -193,10 +194,10 @@
             const renderDiff = (curr, prev) => {
                 const diff = curr - prev;
                 const icon = diff >= 0 ? 'trending-up' : 'trending-down';
-                const color = diff >= 0 ? '#238636' : '#da3633';
+                const color = diff >= 0 ? 'var(--income-color)' : 'var(--expense-color)';
                 return (
-                    <div style={{ fontSize: '0.8rem', color, display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
-                        <Icon name={icon} size={14} /> {Math.abs(diff).toLocaleString()} {diff >= 0 ? '증가' : '감소'} (전월 대비)
+                    <div style={{ fontSize: '0.75rem', color, display: 'flex', alignItems: 'center', gap: '3px', marginTop: '6px', opacity: 0.85 }}>
+                        <Icon name={icon} size={12} /> {Math.abs(diff).toLocaleString()} {diff >= 0 ? '▲' : '▼'} 전월 대비
                     </div>
                 );
             };
@@ -271,9 +272,10 @@
             }
 
             if (view === 'asset_detail') {
+                const upToDate = `${selectedMonth}-31`;
                 const groupGrouped = (data.groups || []).map(g => {
                     const assets = data.assets.filter(a => a.groupId === g.id);
-                    const total = assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions), 0);
+                    const total = assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions, upToDate), 0);
                     return { ...g, total, assets };
                 }).filter(g => g.total !== 0 || g.assets.length > 0);
 
@@ -281,7 +283,7 @@
                     <div className="fade-in">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
                             <button onClick={() => setView('main')} className="icon-btn"><Icon name="arrow-left" /></button>
-                            <h1>자산 현황 (현재 잔액)</h1>
+                            <h1>자산 현황 ({selectedMonth.split('-')[0]}년 {selectedMonth.split('-')[1]}월 말 기준)</h1>
                         </div>
                         <div className="card">
                             {groupGrouped.map(g => (
@@ -290,7 +292,7 @@
                                         {g.name} <span>{g.total.toLocaleString()}원</span>
                                     </h3>
                                     {g.assets.map(a => {
-                                        const bal = calculateAssetBalance(a.id, data.assets, data.transactions);
+                                        const bal = calculateAssetBalance(a.id, data.assets, data.transactions, upToDate);
                                         return (
                                             <div key={a.id} onClick={() => { setEditAsset(a); setShowAssetModal(true); }} style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '1rem', paddingBottom: '0.3rem', color: '#8b949e', cursor: 'pointer' }} className="list-item">
                                                 <span>{a.name}</span>
@@ -319,17 +321,17 @@
                     <div className="dashboard-grid">
                         <div className="card stat-card interactive" onClick={() => setView('income_detail')}>
                             <span className="stat-label">수입</span>
-                            <span className="stat-value type-income">{stats.income.toLocaleString()}원</span>
+                            <span className="stat-value">{stats.income.toLocaleString()}원</span>
                             {renderDiff(stats.income, stats.prevIncome)}
                         </div>
                         <div className="card stat-card interactive" onClick={() => setView('expense_detail')}>
                             <span className="stat-label">지출</span>
-                            <span className="stat-value type-expense">{stats.expense.toLocaleString()}원</span>
+                            <span className="stat-value">{stats.expense.toLocaleString()}원</span>
                             {renderDiff(stats.expense, stats.prevExpense)}
                         </div>
                         <div className="card stat-card interactive" onClick={() => setView('savings_detail')}>
                             <span className="stat-label">저축</span>
-                            <span className="stat-value" style={{ color: 'var(--income-color)' }}>{stats.savings.toLocaleString()}원</span>
+                            <span className="stat-value">{stats.savings.toLocaleString()}원</span>
                             {stats.prevSavings !== undefined && (
                                 <div className={`stat-change ${stats.savings >= stats.prevSavings ? 'plus' : 'minus'}`}>
                                     전월 대비 {Math.abs(stats.savings - stats.prevSavings).toLocaleString()}원 {stats.savings >= stats.prevSavings ? '증가' : '감소'}
@@ -339,7 +341,7 @@
                         <div className="card stat-card interactive" onClick={() => setView('asset_detail')}>
                             <span className="stat-label">자산 총액</span>
                             <span className="stat-value">{stats.totalAssets.toLocaleString()}원</span>
-                            <div style={{ fontSize: '0.8rem', color: '#8b949e', marginTop: '4px' }}>{selectedMonth.split('-')[1]}월 말 기준</div>
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{selectedMonth.split('-')[1]}월 말 기준</div>
                         </div>
                     </div>
 
@@ -488,7 +490,7 @@
                             <div key={g.id} style={{ marginBottom: '2rem' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.8rem', borderBottom: '2px solid #30363d', marginBottom: '1rem' }}>
                                     <h3 style={{ color: '#58a6ff' }}>{g.name}</h3>
-                                    <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>부분합: {g.total.toLocaleString()}원</span>
+                                    <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#58a6ff' }}>{g.total.toLocaleString()}원</span>
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                     {g.assets.map(a => {
@@ -594,8 +596,8 @@
                 }
             };
             return (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-                    <div className="card modal-content" style={{ maxWidth: '420px', width: '90%', padding: '2rem' }}>
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', overflowY: 'auto', zIndex: 1000, padding: '1rem 0' }}>
+                    <div className="card modal-content" style={{ maxWidth: '420px', width: '90%', padding: '2rem', margin: 'auto' }}>
                         <h2 style={{ marginBottom: '1.5rem', fontSize: '1.5rem' }}>거래 {editItem ? '수정' : '추가'}</h2>
                         <form onSubmit={handleSubmit}>
                             <div style={{ marginBottom: '1.2rem' }}><label>날짜</label><input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required /></div>
