@@ -187,6 +187,35 @@ body {
   color: var(--expense-color);
 }
 
+.interactive {
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.interactive:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.4);
+  border-color: var(--accent-color);
+}
+
+.icon-btn {
+  background: transparent;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  border-radius: 50%;
+}
+
+.icon-btn:hover {
+  background: var(--border-color);
+}
+
+.list-item:hover {
+  background: rgba(88, 166, 255, 0.05);
+}
+
 /* Table Styling */
 table {
   width: 100%;

@@ -11,6 +11,7 @@
     <!-- Scripts -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
@@ -76,42 +77,266 @@
             }, Number(asset.initialBalance || 0));
         };
 
-        function Dashboard({ data }) {
-            const stats = useMemo(() => {
+        function Dashboard({ data, setEdit, setShowModal, setEditAsset, setShowAssetModal }) {
+            const [selectedMonth, setSelectedMonth] = useState(() => {
                 const now = new Date();
-                const currentMonth = now.getMonth();
-                const income = data.transactions.filter(t => t.type === 'Income' && new Date(t.date).getMonth() === currentMonth).reduce((s, t) => s + Number(t.amount), 0);
-                const expense = data.transactions.filter(t => t.type === 'Expense' && new Date(t.date).getMonth() === currentMonth).reduce((s, t) => s + Number(t.amount), 0);
-                const totalBalance = data.assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions), 0);
-                return { income, expense, balance: totalBalance };
-            }, [data.transactions, data.assets]);
+                return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            });
+            const [view, setView] = useState('main'); // main, income_detail, expense_detail, asset_detail, category_list
+            const [selectedId, setSelectedId] = useState(null); // categoryId or assetGroupId
 
-            const series = [{
-                name: '수입',
-                data: Array.from({ length: 12 }, (_, i) => data.transactions.filter(t => t.type === 'Income' && new Date(t.date).getMonth() === i).reduce((s, t) => s + Number(t.amount), 0))
-            }, {
-                name: '지출',
-                data: Array.from({ length: 12 }, (_, i) => data.transactions.filter(t => t.type === 'Expense' && new Date(t.date).getMonth() === i).reduce((s, t) => s + Number(t.amount), 0))
-            }];
+            const availableMonths = useMemo(() => {
+                const months = new Set();
+                data.transactions.forEach(t => months.add(t.date.substring(0, 7)));
+                const now = new Date();
+                months.add(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+                return Array.from(months).sort((a, b) => b.localeCompare(a));
+            }, [data.transactions]);
 
-            const options = {
+            const stats = useMemo(() => {
+                const [year, month] = selectedMonth.split('-').map(Number);
+                const currentMonthT = data.transactions.filter(t => t.date.startsWith(selectedMonth));
+                const income = currentMonthT.filter(t => t.type === 'Income').reduce((s, t) => s + Number(t.amount), 0);
+                const expense = currentMonthT.filter(t => t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0);
+
+                // Previous month stats
+                const prevDate = new Date(year, month - 2, 1);
+                const prevMonthStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+                const prevMonthT = data.transactions.filter(t => t.date.startsWith(prevMonthStr));
+                const prevIncome = prevMonthT.filter(t => t.type === 'Income').reduce((s, t) => s + Number(t.amount), 0);
+                const prevExpense = prevMonthT.filter(t => t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0);
+
+                // Assets up to selected month
+                const totalAssets = data.assets.reduce((sum, a) => {
+                    const initial = Number(a.initialBalance || 0);
+                    const history = data.transactions.filter(t => t.date <= `${selectedMonth}-31` && (t.assetId === a.id || t.toAssetId === a.id));
+                    const balance = history.reduce((s, t) => {
+                        const amt = Number(t.amount || 0);
+                        if (t.type === 'Income') return s + amt;
+                        if (t.type === 'Expense') return s - amt;
+                        if (t.type === 'Transfer') {
+                            if (t.assetId === a.id) return s - amt;
+                            if (t.toAssetId === a.id) return s + amt;
+                        }
+                        return s;
+                    }, initial);
+                    return sum + balance;
+                }, 0);
+
+                return { income, expense, totalAssets, prevIncome, prevExpense };
+            }, [selectedMonth, data.transactions, data.assets]);
+
+            const annualData = useMemo(() => {
+                const [year, month] = selectedMonth.split('-').map(Number);
+                const labels = Array.from({ length: 12 }, (_, i) => {
+                    const d = new Date(year, month - 1 - (11 - i), 1);
+                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                });
+                const incomeData = labels.map(m => data.transactions.filter(t => t.date.startsWith(m) && t.type === 'Income').reduce((s, t) => s + Number(t.amount), 0));
+                const expenseData = labels.map(m => data.transactions.filter(t => t.date.startsWith(m) && t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0));
+
+                const assetData = labels.map(m => {
+                    return data.assets.reduce((sum, a) => {
+                        const initial = Number(a.initialBalance || 0);
+                        const history = data.transactions.filter(t => t.date <= `${m}-31` && (t.assetId === a.id || t.toAssetId === a.id));
+                        return sum + history.reduce((s, t) => {
+                            const amt = Number(t.amount || 0);
+                            if (t.type === 'Income') return s + amt;
+                            if (t.type === 'Expense') return s - amt;
+                            if (t.type === 'Transfer') {
+                                if (t.assetId === a.id) return s - amt;
+                                if (t.toAssetId === a.id) return s + amt;
+                            }
+                            return s;
+                        }, initial);
+                    }, 0);
+                });
+
+                return { labels: labels.map(m => `${m.substring(5)}월`), incomeData, expenseData, assetData };
+            }, [selectedMonth, data.transactions, data.assets]);
+
+            const chartOptions = {
                 chart: { type: 'bar', toolbar: { show: false }, background: 'transparent' },
                 theme: { mode: 'dark' },
-                colors: ['#238636', '#da3633'],
-                xaxis: { categories: ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'] },
+                xaxis: { categories: annualData.labels },
                 dataLabels: { enabled: false },
-                grid: { borderColor: '#30363d' }
+                grid: { borderColor: '#30363d' },
+                tooltip: { theme: 'dark' }
             };
+
+            const renderDiff = (curr, prev) => {
+                const diff = curr - prev;
+                const icon = diff >= 0 ? 'trending-up' : 'trending-down';
+                const color = diff >= 0 ? '#238636' : '#da3633';
+                return (
+                    <div style={{ fontSize: '0.8rem', color, display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                        <Icon name={icon} size={14} /> {Math.abs(diff).toLocaleString()} {diff >= 0 ? '증가' : '감소'} (전월 대비)
+                    </div>
+                );
+            };
+
+            if (view === 'income_detail' || view === 'expense_detail') {
+                const type = view === 'income_detail' ? 'Income' : 'Expense';
+                const monthT = data.transactions.filter(t => t.date.startsWith(selectedMonth) && t.type === type);
+                const catGrouped = data.categories.filter(c => c.type === type).map(c => ({
+                    ...c,
+                    amount: monthT.filter(t => t.categoryId === c.id).reduce((s, t) => s + Number(t.amount), 0)
+                })).filter(c => c.amount > 0).sort((a, b) => b.amount - a.amount);
+
+                return (
+                    <div className="fade-in">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
+                            <button onClick={() => setView('main')} className="icon-btn"><Icon name="arrow-left" /></button>
+                            <h1>{selectedMonth} {type === 'Income' ? '수입' : '지출'} 카테고리별</h1>
+                        </div>
+                        <div className="card">
+                            {catGrouped.map(c => (
+                                <div key={c.id} className="list-item" onClick={() => { setSelectedId(c.id); setView('category_list'); }} style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem', borderBottom: '1px solid #30363d', cursor: 'pointer' }}>
+                                    <span>{c.name}</span>
+                                    <span style={{ fontWeight: 600 }}>{c.amount.toLocaleString()}원 <Icon name="chevron-right" size={14} /></span>
+                                </div>
+                            ))}
+                            {catGrouped.length === 0 && <div style={{ padding: '2rem', textAlign: 'center' }}>데이터가 없습니다.</div>}
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'category_list') {
+                const category = data.categories.find(c => c.id === selectedId);
+                const list = data.transactions.filter(t => t.date.startsWith(selectedMonth) && t.categoryId === selectedId).sort((a, b) => b.date.localeCompare(a.date));
+                return (
+                    <div className="fade-in">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
+                            <button onClick={() => setView(category.type === 'Income' ? 'income_detail' : 'expense_detail')} className="icon-btn"><Icon name="arrow-left" /></button>
+                            <h1>{selectedMonth} {category.name} 내역</h1>
+                        </div>
+                        <div className="card" style={{ padding: 0 }}>
+                            <table className="transaction-table">
+                                <thead><tr><th>날짜</th><th>금액</th><th>자산</th><th>메모</th></tr></thead>
+                                <tbody>
+                                    {list.map(t => (
+                                        <tr key={t.id} onClick={() => { setEdit(t); setShowModal(true); }} style={{ cursor: 'pointer' }} className="list-item">
+                                            <td>{t.date.substring(8)}일</td>
+                                            <td style={{ fontWeight: 600 }}>{Number(t.amount).toLocaleString()}</td>
+                                            <td>{data.assets.find(a => a.id === t.assetId)?.name}</td>
+                                            <td>{t.memo}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'asset_detail') {
+                const groupGrouped = (data.groups || []).map(g => {
+                    const assets = data.assets.filter(a => a.groupId === g.id);
+                    const total = assets.reduce((sum, a) => {
+                        const history = data.transactions.filter(t => t.date <= `${selectedMonth}-31` && (t.assetId === a.id || t.toAssetId === a.id));
+                        return sum + history.reduce((s, t) => {
+                            const amt = Number(t.amount || 0);
+                            if (t.type === 'Income') return s + amt;
+                            if (t.type === 'Expense') return s - amt;
+                            if (t.type === 'Transfer') {
+                                if (t.assetId === a.id) return s - amt;
+                                if (t.toAssetId === a.id) return s + amt;
+                            }
+                            return s;
+                        }, Number(a.initialBalance || 0));
+                    }, 0);
+                    return { ...g, total, assets };
+                }).filter(g => g.total !== 0);
+
+                return (
+                    <div className="fade-in">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
+                            <button onClick={() => setView('main')} className="icon-btn"><Icon name="arrow-left" /></button>
+                            <h1>{selectedMonth} 자산 현황</h1>
+                        </div>
+                        <div className="card">
+                            {groupGrouped.map(g => (
+                                <div key={g.id} style={{ marginBottom: '1.5rem' }}>
+                                    <h3 style={{ borderBottom: '1px solid #30363d', paddingBottom: '0.5rem', marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between' }}>
+                                        {g.name} <span>{g.total.toLocaleString()}원</span>
+                                    </h3>
+                                    {g.assets.map(a => {
+                                        const bal = data.transactions.filter(t => t.date <= `${selectedMonth}-31` && (t.assetId === a.id || t.toAssetId === a.id)).reduce((s, t) => {
+                                            const amt = Number(t.amount || 0);
+                                            if (t.type === 'Income') return s + amt;
+                                            if (t.type === 'Expense') return s - amt;
+                                            if (t.type === 'Transfer') {
+                                                if (t.assetId === a.id) return s - amt;
+                                                if (t.toAssetId === a.id) return s + amt;
+                                            }
+                                            return s;
+                                        }, Number(a.initialBalance || 0));
+                                        return (
+                                            <div key={a.id} onClick={() => { setEditAsset(a); setShowAssetModal(true); }} style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '1rem', paddingBottom: '0.3rem', color: '#8b949e', cursor: 'pointer' }} className="list-item">
+                                                <span>{a.name}</span>
+                                                <span>{bal.toLocaleString()}원</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
 
             return (
                 <div className="fade-in">
-                    <h1 style={{ marginBottom: '1.5rem' }}>대시보드</h1>
-                    <div className="dashboard-grid">
-                        <div className="card stat-card"><span className="stat-label">이번 달 수입</span><span className="stat-value type-income">{stats.income.toLocaleString()}원</span></div>
-                        <div className="card stat-card"><span className="stat-label">이번 달 지출</span><span className="stat-value type-expense">{stats.expense.toLocaleString()}원</span></div>
-                        <div className="card stat-card"><span className="stat-label">전체 자산 총액</span><span className="stat-value">{stats.balance.toLocaleString()}원</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1.5rem' }}>
+                        <select className="month-select" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} style={{ padding: '0.5rem', borderRadius: '6px', background: '#21262d', color: 'white', border: '1px solid #30363d' }}>
+                            {availableMonths.map(m => {
+                                const [y, mon] = m.split('-');
+                                return <option key={m} value={m}>{y}년 {mon}월</option>;
+                            })}
+                        </select>
                     </div>
-                    <div className="card"><h3>연간 흐름</h3>{window.ReactApexChart ? <window.ReactApexChart options={options} series={series} type="bar" height={300} /> : "차트를 로딩 중입니다..."}</div>
+
+                    <div className="dashboard-grid">
+                        <div className="card stat-card interactive" onClick={() => setView('income_detail')}>
+                            <span className="stat-label">수입</span>
+                            <span className="stat-value type-income">{stats.income.toLocaleString()}원</span>
+                            {renderDiff(stats.income, stats.prevIncome)}
+                        </div>
+                        <div className="card stat-card interactive" onClick={() => setView('expense_detail')}>
+                            <span className="stat-label">지출</span>
+                            <span className="stat-value type-expense">{stats.expense.toLocaleString()}원</span>
+                            {renderDiff(stats.expense, stats.prevExpense)}
+                        </div>
+                        <div className="card stat-card interactive" onClick={() => setView('asset_detail')}>
+                            <span className="stat-label">자산 총액</span>
+                            <span className="stat-value">{stats.totalAssets.toLocaleString()}원</span>
+                            <div style={{ fontSize: '0.8rem', color: '#8b949e', marginTop: '4px' }}>{selectedMonth.split('-')[1]}월 말 기준</div>
+                        </div>
+                    </div>
+
+                    <div className="dashboard-grid" style={{ marginTop: '1.5rem' }}>
+                        <div className="card">
+                            <h3>연간 수입/지출</h3>
+                            {window.ReactApexChart ? (
+                                <window.ReactApexChart
+                                    options={{ ...chartOptions, colors: ['#238636', '#da3633'] }}
+                                    series={[{ name: '수입', data: annualData.incomeData }, { name: '지출', data: annualData.expenseData }]}
+                                    type="bar" height={280}
+                                />
+                            ) : "차트 로딩 중..."}
+                        </div>
+                        <div className="card">
+                            <h3>연간 자산 흐름</h3>
+                            {window.ReactApexChart ? (
+                                <window.ReactApexChart
+                                    options={{ ...chartOptions, colors: ['#58a6ff'] }}
+                                    series={[{ name: '자산액', data: annualData.assetData }]}
+                                    type="bar" height={280}
+                                />
+                            ) : "차트 로딩 중..."}
+                        </div>
+                    </div>
                 </div>
             );
         }
@@ -152,10 +377,10 @@
                                         <React.Fragment key={month}>
                                             <tr style={{ background: 'rgba(56, 139, 253, 0.1)', fontWeight: 'bold' }}>
                                                 <td colSpan="6" style={{ padding: '0.5rem 1rem', fontSize: '1rem', color: '#58a6ff' }}>
-                                                    [{y}년 {m}월]
-                                                    <span style={{ marginLeft: '1rem', fontSize: '0.85rem' }}>
-                                                        (수입: {income.toLocaleString()} / 지출: {expense.toLocaleString()} / 합계: {(income - expense).toLocaleString()})
-                                                    </span>
+                                                    <div>[{y}년 {m}월]</div>
+                                                    <div style={{ fontSize: '0.85rem', marginTop: '0.2rem' }}>
+                                                        (수입: {income.toLocaleString()} / 지출: {expense.toLocaleString()})
+                                                    </div>
                                                 </td>
                                             </tr>
                                             {transactions.map(t => (
@@ -179,129 +404,89 @@
             );
         }
 
-        function AssetManagementPage({ data, setData, syncToCloud }) {
-            const [newOwner, setNewOwner] = useState('');
-            const [newGroup, setNewGroup] = useState('');
-            const [newAsset, setNewAsset] = useState({ name: '', ownerId: '', groupId: '', type: 'Bank', initialBalance: '' });
-            const [editingAsset, setEditingAsset] = useState(null);
+        function AssetManagementPage({ data }) {
+            const groupGrouped = (data.groups || []).map(g => {
+                const assets = data.assets.filter(a => a.groupId === g.id);
+                const total = assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions), 0);
+                return { ...g, total, assets };
+            }).filter(g => g.assets.length > 0);
 
-            const addOwner = () => {
-                if (!newOwner) return;
-                const newData = { ...data, owners: [...data.owners, { id: Date.now().toString(), name: newOwner }] };
-                setData(newData);
-                syncToCloud(newData);
-                setNewOwner('');
-            };
-            const addGroup = () => {
-                if (!newGroup) return;
-                const newData = { ...data, groups: [...(data.groups || []), { id: Date.now().toString(), name: newGroup }] };
-                setData(newData);
-                syncToCloud(newData);
-                setNewGroup('');
-            };
-            const addAsset = () => {
-                if (!newAsset.name || !newAsset.ownerId) return;
-                const newData = { ...data, assets: [...data.assets, { ...newAsset, id: Date.now().toString(), initialBalance: Number(newAsset.initialBalance || 0) }] };
-                setData(newData);
-                syncToCloud(newData);
-                setNewAsset({ name: '', ownerId: '', groupId: '', type: 'Bank', initialBalance: '' });
-            };
-            const updateAsset = () => {
-                if (!editingAsset.name || !editingAsset.ownerId) return;
-                const newData = { ...data, assets: data.assets.map(a => a.id === editingAsset.id ? { ...editingAsset, initialBalance: Number(editingAsset.initialBalance || 0) } : a) };
-                setData(newData);
-                syncToCloud(newData);
-                setEditingAsset(null);
-            };
+            const uncategorizedAssets = data.assets.filter(a => !a.groupId);
+            const uncategorizedTotal = uncategorizedAssets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions), 0);
 
-            const delOwner = (id) => {
-                if (confirm('소유자를 삭제하시겠습니까?')) {
-                    const newData = { ...data, owners: data.owners.filter(o => o.id !== id) };
-                    setData(newData);
-                    syncToCloud(newData);
-                }
-            };
-            const delGroup = (id) => {
-                if (confirm('그룹을 삭제하시겠습니까?')) {
-                    const newData = { ...data, groups: data.groups.filter(g => g.id !== id) };
-                    setData(newData);
-                    syncToCloud(newData);
-                }
-            };
-            const delAsset = (id) => {
-                if (confirm('자산을 삭제하시겠습니까?')) {
-                    const newData = { ...data, assets: data.assets.filter(a => a.id !== id) };
-                    setData(newData);
-                    syncToCloud(newData);
-                }
-            };
+            if (uncategorizedAssets.length > 0) {
+                groupGrouped.push({ id: 'uncategorized', name: '미지정 그룹', total: uncategorizedTotal, assets: uncategorizedAssets });
+            }
 
             return (
                 <div className="fade-in">
-                    <h1 style={{ marginBottom: '1.5rem' }}>자산 관리</h1>
-                    <div className="dashboard-grid">
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                            <div className="card">
-                                <h3>소유자 관리</h3>
-                                <div style={{ display: 'flex', gap: '8px', margin: '1rem 0' }}><input value={newOwner} onChange={e => setNewOwner(e.target.value)} placeholder="이름" /><button className="primary" onClick={addOwner}>추가</button></div>
-                                {data.owners.map(o => (<div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #30363d' }}>{o.name} <button onClick={() => delOwner(o.id)} style={{ background: 'transparent', color: '#da3633', fontSize: '0.8rem' }}>삭제</button></div>))}
+                    <h1 style={{ marginBottom: '1.5rem' }}>자산 현황</h1>
+                    <div className="card">
+                        {groupGrouped.map(g => (
+                            <div key={g.id} style={{ marginBottom: '2rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.8rem', borderBottom: '2px solid #30363d', marginBottom: '1rem' }}>
+                                    <h3 style={{ color: '#58a6ff' }}>{g.name}</h3>
+                                    <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>부분합: {g.total.toLocaleString()}원</span>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    {g.assets.map(a => {
+                                        const bal = calculateAssetBalance(a.id, data.assets, data.transactions);
+                                        return (
+                                            <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 1rem', background: 'rgba(22, 27, 34, 0.4)', borderRadius: '6px' }}>
+                                                <span>{a.name}</span>
+                                                <span style={{ fontWeight: 500 }}>{bal.toLocaleString()}원</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
-                            <div className="card">
-                                <h3>그룹 관리</h3>
-                                <div style={{ display: 'flex', gap: '8px', margin: '1rem 0' }}><input value={newGroup} onChange={e => setNewGroup(e.target.value)} placeholder="그룹명" /><button className="primary" onClick={addGroup}>추가</button></div>
-                                {(data.groups || []).map(g => (<div key={g.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #30363d' }}>{g.name} <button onClick={() => delGroup(g.id)} style={{ background: 'transparent', color: '#da3633', fontSize: '0.8rem' }}>삭제</button></div>))}
-                            </div>
-                        </div>
-                        <div className="card" style={{ gridColumn: 'span 2' }}>
-                            <h3>자산 목록 및 관리</h3>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr auto', gap: '8px', margin: '1rem 0', padding: '15px', background: '#0d1117', borderRadius: '8px', border: editingAsset ? '1px solid #58a6ff' : '1px solid #30363d' }}>
-                                <input value={editingAsset ? editingAsset.name : newAsset.name} onChange={e => editingAsset ? setEditingAsset({ ...editingAsset, name: e.target.value }) : setNewAsset({ ...newAsset, name: e.target.value })} placeholder="자산명" />
-                                <select value={editingAsset ? editingAsset.ownerId : newAsset.ownerId} onChange={e => editingAsset ? setEditingAsset({ ...editingAsset, ownerId: e.target.value }) : setNewAsset({ ...newAsset, ownerId: e.target.value })}><option value="">소유자 선택</option>{data.owners.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select>
-                                <select value={editingAsset ? editingAsset.groupId : newAsset.groupId} onChange={e => editingAsset ? setEditingAsset({ ...editingAsset, groupId: e.target.value }) : setNewAsset({ ...newAsset, groupId: e.target.value })}><option value="">그룹 선택</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
-                                <input type="number" value={editingAsset ? editingAsset.initialBalance : newAsset.initialBalance} onChange={e => editingAsset ? setEditingAsset({ ...editingAsset, initialBalance: e.target.value }) : setNewAsset({ ...newAsset, initialBalance: e.target.value })} placeholder="초기 잔액" />
-                                <select value={editingAsset ? editingAsset.type : newAsset.type} onChange={e => editingAsset ? setEditingAsset({ ...editingAsset, type: e.target.value }) : setNewAsset({ ...newAsset, type: e.target.value })}><option value="Cash">현금</option><option value="Bank">은행</option><option value="Card">카드</option></select>
-                                {editingAsset ? (
-                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                        <button className="primary" onClick={updateAsset}>저장</button>
-                                        <button onClick={() => setEditingAsset(null)} style={{ background: '#30363d', color: 'white' }}>취소</button>
-                                    </div>
-                                ) : (
-                                    <button className="primary" onClick={addAsset}>추가</button>
-                                )}
-                            </div>
-                            <table>
-                                <thead><tr><th>소유자</th><th>그룹명</th><th>자산명</th><th>유형</th><th>초기 금액</th><th>현재 잔액</th><th>관리</th></tr></thead>
-                                <tbody>{data.assets.map(a => {
-                                    const bal = calculateAssetBalance(a.id, data.assets, data.transactions);
-                                    return (<tr key={a.id}><td>{data.owners.find(o => o.id === a.ownerId)?.name}</td><td>{data.groups?.find(g => g.id === a.groupId)?.name || '-'}</td><td>{a.name}</td><td>{a.type === 'Cash' ? '현금' : a.type === 'Bank' ? '은행' : '카드'}</td><td style={{ color: '#8b949e' }}>{Number(a.initialBalance || 0).toLocaleString()}원</td><td style={{ fontWeight: '600' }}>{bal.toLocaleString()}원</td><td><button onClick={() => setEditingAsset(a)} style={{ background: 'transparent', color: '#58a6ff', marginRight: '8px' }}>수정</button><button onClick={() => delAsset(a.id)} style={{ background: 'transparent', color: '#da3633' }}>삭제</button></td></tr>)
-                                })}</tbody>
-                            </table>
-                        </div>
+                        ))}
+                        {groupGrouped.length === 0 && <div style={{ padding: '2rem', textAlign: 'center', color: '#8b949e' }}>등록된 자산이 없습니다. 설정에서 자산을 추가해주세요.</div>}
                     </div>
                 </div>
             );
         }
 
-        function CategoryManagementPage({ data, setData, syncToCloud }) {
-            const [newCat, setNewCat] = useState({ name: '', type: 'Expense' });
-            const addCat = () => {
-                if (!newCat.name) return;
-                const newData = { ...data, categories: [...data.categories, { ...newCat, id: Date.now().toString() }] };
+        function AssetModal({ data, setData, onClose, editItem, syncToCloud }) {
+            const [form, setForm] = useState(editItem || { name: '', ownerId: data.owners[0]?.id || '', groupId: data.groups?.[0]?.id || '', type: 'Bank', initialBalance: 0 });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!form.name || !form.ownerId) return;
+                const newData = { ...data, assets: editItem ? data.assets.map(a => a.id === editItem.id ? { ...form, initialBalance: Number(form.initialBalance || 0) } : a) : [...data.assets, { ...form, id: Date.now().toString(), initialBalance: Number(form.initialBalance || 0) }] };
                 setData(newData);
                 syncToCloud(newData);
-                setNewCat({ ...newCat, name: '' });
+                onClose();
             };
-            const delCat = (id) => {
-                if (confirm('카테고리를 삭제하시겠습니까?')) {
-                    const newData = { ...data, categories: data.categories.filter(c => c.id !== id) };
+
+            const handleDelete = () => {
+                if (confirm('이 자산을 삭제하시겠습니까? 관련된 거래 내역 표시에 문제가 생길 수 있습니다.')) {
+                    const newData = { ...data, assets: data.assets.filter(a => a.id !== editItem.id) };
                     setData(newData);
                     syncToCloud(newData);
+                    onClose();
                 }
             };
-            const renderList = (type) => (
-                <div className="card"><h3>{type === 'Income' ? '수입' : type === 'Expense' ? '지출' : '이체'}</h3><div style={{ display: 'flex', gap: '8px', margin: '1rem 0' }}><input value={newCat.type === type ? newCat.name : ''} onChange={e => setNewCat({ type, name: e.target.value })} placeholder="카테고리명" /><button className="primary" onClick={() => { if (newCat.type === type) addCat(); }}>추가</button></div>{data.categories.filter(c => c.type === type).map(c => (<div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #30363d' }}>{c.name} <button onClick={() => delCat(c.id)} style={{ background: 'transparent', color: '#da3633', fontSize: '0.8rem' }}>삭제</button></div>))}</div>
+
+            return (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+                    <div className="card modal-content" style={{ maxWidth: '420px', width: '90%', padding: '2rem' }}>
+                        <h2 style={{ marginBottom: '1.5rem', fontSize: '1.5rem' }}>자산 {editItem ? '수정' : '추가'}</h2>
+                        <form onSubmit={handleSubmit}>
+                            <div style={{ marginBottom: '1.2rem' }}><label>자산명</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required /></div>
+                            <div style={{ marginBottom: '1.2rem' }}><label>소유자</label><select value={form.ownerId} onChange={e => setForm({ ...form, ownerId: e.target.value })} required><option value="">선택</option>{data.owners.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>
+                            <div style={{ marginBottom: '1.2rem' }}><label>그룹</label><select value={form.groupId} onChange={e => setForm({ ...form, groupId: e.target.value })}><option value="">선택 (선택사항)</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+                            <div style={{ marginBottom: '1.2rem' }}><label>자산 유형</label><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}><option value="Cash">현금</option><option value="Bank">은행</option><option value="Card">카드</option></select></div>
+                            <div style={{ marginBottom: '1.2rem' }}><label>초기 잔액</label><input type="number" value={form.initialBalance} onChange={e => setForm({ ...form, initialBalance: e.target.value })} required /></div>
+                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+                                <button type="button" onClick={onClose} style={{ background: '#30363d', color: 'white' }}>취소</button>
+                                {editItem && <button type="button" className="danger" onClick={handleDelete}>삭제</button>}
+                                <button type="submit" className="primary">저장</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             );
-            return (<div className="fade-in"><h1 style={{ marginBottom: '1.5rem' }}>카테고리 관리</h1><div className="dashboard-grid">{renderList('Expense')}{renderList('Income')}{renderList('Transfer')}</div></div>);
         }
 
         function TransactionModal({ data, setData, onClose, editItem, syncToCloud }) {
@@ -341,7 +526,7 @@
                             <div style={{ marginBottom: '1.2rem' }}><label>{form.type === 'Transfer' ? '출금 자산' : '자산'}</label><select value={form.assetId} onChange={e => setForm({ ...form, assetId: e.target.value })}>{filteredAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
                             {form.type === 'Transfer' && <div style={{ marginBottom: '1.2rem' }}><label>입금 자산</label><select value={form.toAssetId} onChange={e => setForm({ ...form, toAssetId: e.target.value })}>{data.assets.filter(a => a.id !== form.assetId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>}
                             <div style={{ marginBottom: '1.5rem' }}><label>메모</label><input value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} placeholder="메모" /></div>
-                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                                 <button type="button" onClick={onClose} style={{ background: '#30363d', color: 'white' }}>취소</button>
                                 {editItem && <button type="button" className="danger" onClick={handleDelete}>삭제</button>}
                                 <button type="submit" className="primary">저장</button>
@@ -352,9 +537,17 @@
             );
         }
 
-        function Settings({ data, setData, fbConfig, setFbConfig }) {
+        function Settings({ data, setData, fbConfig, setFbConfig, syncToCloud }) {
             const [fbVal, setFbVal] = useState(fbConfig ? JSON.stringify(fbConfig, null, 2) : '');
             const [newPw, setNewPw] = useState('');
+            const [activeTab, setActiveTab] = useState('general'); // general, owners, groups, categories, assets
+
+            // State for management tabs
+            const [newOwner, setNewOwner] = useState('');
+            const [newGroup, setNewGroup] = useState('');
+            const [newCat, setNewCat] = useState({ name: '', type: 'Expense' });
+            const [editingAsset, setEditingAsset] = useState(null);
+            const [showAssetModal, setShowAssetModal] = useState(false);
 
             const saveFb = () => { try { const c = JSON.parse(fbVal); localStorage.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(c)); setFbConfig(c); alert('Firebase 설정이 저장되었습니다. 앱을 다시 시작합니다.'); location.reload(); } catch (e) { alert('유효한 JSON 형식이 아닙니다.'); } };
             const resetFb = () => { if (confirm('서버 설정을 초기화하시겠습니까?')) { localStorage.removeItem(FIREBASE_CONFIG_KEY); setFbConfig(null); alert('설정이 초기화되었습니다.'); location.reload(); } };
@@ -363,36 +556,124 @@
             const exportData = () => { const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `household_backup_${new Date().toISOString().split('T')[0]}.json`; a.click(); };
             const importData = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => { try { const d = JSON.parse(ev.target.result); if (confirm('데이터를 덮어쓰시겠습니까? 현재 데이터는 사라집니다.')) { setData(d); alert('데이터를 성공적으로 불러왔습니다.'); } } catch (err) { alert('잘못된 백업 파일입니다.'); } }; reader.readAsText(file); };
 
+            // Management Functions
+            const addOwner = () => { if (!newOwner) return; const newData = { ...data, owners: [...data.owners, { id: Date.now().toString(), name: newOwner }] }; setData(newData); syncToCloud(newData); setNewOwner(''); };
+            const delOwner = (id) => { if (confirm('삭제하시겠습니까?')) { const newData = { ...data, owners: data.owners.filter(o => o.id !== id) }; setData(newData); syncToCloud(newData); } };
+
+            const addGroup = () => { if (!newGroup) return; const newData = { ...data, groups: [...(data.groups || []), { id: Date.now().toString(), name: newGroup }] }; setData(newData); syncToCloud(newData); setNewGroup(''); };
+            const delGroup = (id) => { if (confirm('삭제하시겠습니까?')) { const newData = { ...data, groups: data.groups.filter(g => g.id !== id) }; setData(newData); syncToCloud(newData); } };
+
+            const addCat = () => { if (!newCat.name) return; const newData = { ...data, categories: [...data.categories, { ...newCat, id: Date.now().toString() }] }; setData(newData); syncToCloud(newData); setNewCat({ ...newCat, name: '' }); };
+            const delCat = (id) => { if (confirm('삭제하시겠습니까?')) { const newData = { ...data, categories: data.categories.filter(c => c.id !== id) }; setData(newData); syncToCloud(newData); } };
+
+            const renderCatList = (type) => (
+                <div style={{ marginBottom: '1.5rem' }}>
+                    <h4 style={{ marginBottom: '0.5rem', color: '#8b949e' }}>{type === 'Income' ? '수입' : type === 'Expense' ? '지출' : '이체'}</h4>
+                    <div style={{ display: 'flex', gap: '8px', margin: '0.5rem 0' }}><input value={newCat.type === type ? newCat.name : ''} onChange={e => setNewCat({ type, name: e.target.value })} placeholder="카테고리명" /><button className="primary" onClick={() => { if (newCat.type === type) addCat(); }}>추가</button></div>
+                    {data.categories.filter(c => c.type === type).map(c => (<div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #30363d' }}>{c.name} <button onClick={() => delCat(c.id)} style={{ background: 'transparent', color: '#da3633', fontSize: '0.8rem' }}>삭제</button></div>))}
+                </div>
+            );
+
             return (
                 <div className="fade-in">
-                    <h1 style={{ marginBottom: '1.5rem' }}>설정 및 데이터 관리</h1>
-                    <div className="dashboard-grid">
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                            <div className="card">
-                                <h3>🔑 비밀번호 변경</h3>
-                                <div style={{ display: 'flex', gap: '8px', margin: '1rem 0' }}>
-                                    <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="새 비밀번호 입력" />
-                                    <button className="primary" onClick={changePw}>변경</button>
-                                </div>
-                            </div>
-                            <div className="card">
-                                <h3>💾 데이터 백업 및 복구</h3>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '1rem' }}>
-                                    <button onClick={exportData} style={{ background: '#30363d', color: 'white' }}><Icon name="download" size={16} /> JSON으로 내보내기</button>
-                                    <label className="auth-btn login" style={{ textAlign: 'center', cursor: 'pointer' }}><Icon name="upload" size={16} /> 백업 파일 불러오기 <input type="file" accept=".json" onChange={importData} style={{ display: 'none' }} /></label>
-                                </div>
-                            </div>
+                    <h1 style={{ marginBottom: '1.5rem' }}>설정</h1>
+                    <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: '1.5rem' }}>
+                        <div style={{ display: 'flex', borderBottom: '1px solid #30363d', background: 'rgba(22, 27, 34, 0.5)', overflowX: 'auto' }}>
+                            {[{ id: 'general', label: '일반/백업' }, { id: 'owners', label: '소유자' }, { id: 'groups', label: '자산 그룹' }, { id: 'assets', label: '자산 목록' }, { id: 'categories', label: '카테고리' }].map(t => (
+                                <button key={t.id} onClick={() => setActiveTab(t.id)} style={{ padding: '1rem 1.5rem', background: 'transparent', color: activeTab === t.id ? '#58a6ff' : '#8b949e', borderBottom: activeTab === t.id ? '2px solid #58a6ff' : '2px solid transparent', borderRadius: 0, whiteSpace: 'nowrap' }}>
+                                    {t.label}
+                                </button>
+                            ))}
                         </div>
-                        <div className="card">
-                            <h3>☁️ 서버 연동 (Firebase)</h3>
-                            <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>Firebase 프로젝트 구성 JSON을 입력하세요.</p>
-                            <textarea value={fbVal} onChange={e => setFbVal(e.target.value)} rows="8" style={{ width: '100%', marginBottom: '1rem', background: '#0d1117', color: '#8b949e', padding: '10px', fontSize: '13px', fontFamily: 'monospace' }} />
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                <button className="primary" onClick={saveFb}>저장</button>
-                                <button onClick={resetFb} style={{ background: '#30363d', color: 'white' }}>기본값으로 초기화</button>
-                            </div>
+                        <div style={{ padding: '1.5rem' }}>
+                            {activeTab === 'general' && (
+                                <div className="dashboard-grid">
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                        <div>
+                                            <h3>🔑 비밀번호 변경</h3>
+                                            <div style={{ display: 'flex', gap: '8px', margin: '1rem 0' }}><input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="새 비밀번호 입력" /><button className="primary" onClick={changePw}>변경</button></div>
+                                        </div>
+                                        <div style={{ borderTop: '1px solid #30363d', paddingTop: '1.5rem' }}>
+                                            <h3>💾 데이터 백업 및 복구</h3>
+                                            <div style={{ display: 'flex', gap: '12px', marginTop: '1rem' }}>
+                                                <button onClick={exportData} style={{ background: '#30363d', color: 'white', flex: 1 }}><Icon name="download" size={16} /> JSON 저장</button>
+                                                <label className="auth-btn login" style={{ textAlign: 'center', cursor: 'pointer', margin: 0, flex: 1 }}><Icon name="upload" size={16} /> 복구 <input type="file" accept=".json" onChange={importData} style={{ display: 'none' }} /></label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h3>☁️ 서버 연동 (Firebase)</h3>
+                                        <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>Firebase 프로젝트 구성 JSON을 입력하세요.</p>
+                                        <textarea value={fbVal} onChange={e => setFbVal(e.target.value)} rows="8" style={{ width: '100%', marginBottom: '1rem', background: '#0d1117', color: '#8b949e', padding: '10px', fontSize: '13px', fontFamily: 'monospace' }} />
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <button className="primary" onClick={saveFb}>저장</button>
+                                            <button onClick={resetFb} style={{ background: '#30363d', color: 'white' }}>기본값으로 초기화</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'owners' && (
+                                <div>
+                                    <h3>소유자 관리</h3>
+                                    <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>자산을 소유하는 구성원을 등록합니다.</p>
+                                    <div style={{ display: 'flex', gap: '8px', margin: '1rem 0', maxWidth: '400px' }}><input value={newOwner} onChange={e => setNewOwner(e.target.value)} placeholder="이름" /><button className="primary" onClick={addOwner}>추가</button></div>
+                                    <div style={{ maxWidth: '400px' }}>
+                                        {data.owners.map(o => (<div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #30363d' }}>{o.name} <button onClick={() => delOwner(o.id)} style={{ background: 'transparent', color: '#da3633', fontSize: '0.85rem' }}>삭제</button></div>))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'groups' && (
+                                <div>
+                                    <h3>자산 그룹 관리</h3>
+                                    <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>자산을 논리적으로 묶어주는 그룹을 등록합니다.</p>
+                                    <div style={{ display: 'flex', gap: '8px', margin: '1rem 0', maxWidth: '400px' }}><input value={newGroup} onChange={e => setNewGroup(e.target.value)} placeholder="그룹명" /><button className="primary" onClick={addGroup}>추가</button></div>
+                                    <div style={{ maxWidth: '400px' }}>
+                                        {(data.groups || []).map(g => (<div key={g.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #30363d' }}>{g.name} <button onClick={() => delGroup(g.id)} style={{ background: 'transparent', color: '#da3633', fontSize: '0.85rem' }}>삭제</button></div>))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'categories' && (
+                                <div className="dashboard-grid">
+                                    <div>{renderCatList('Expense')}</div>
+                                    <div>{renderCatList('Income')}</div>
+                                    <div>{renderCatList('Transfer')}</div>
+                                </div>
+                            )}
+
+                            {activeTab === 'assets' && (
+                                <div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                        <h3>자산 목록 및 관리</h3>
+                                        <button className="primary" onClick={() => { setEditingAsset(null); setShowAssetModal(true); }}>+ 자산 추가</button>
+                                    </div>
+                                    <div style={{ overflowX: 'auto' }}>
+                                        <table>
+                                            <thead><tr><th>자산명</th><th>소유자</th><th>그룹</th><th>유형</th><th>초기금액</th><th>관리</th></tr></thead>
+                                            <tbody>
+                                                {data.assets.map(a => (
+                                                    <tr key={a.id}>
+                                                        <td style={{ fontWeight: 500 }}>{a.name}</td>
+                                                        <td>{data.owners.find(o => o.id === a.ownerId)?.name}</td>
+                                                        <td>{data.groups?.find(g => g.id === a.groupId)?.name || '-'}</td>
+                                                        <td>{a.type === 'Cash' ? '현금' : a.type === 'Bank' ? '은행' : '카드'}</td>
+                                                        <td style={{ color: '#8b949e' }}>{Number(a.initialBalance || 0).toLocaleString()}</td>
+                                                        <td>
+                                                            <button onClick={() => { setEditingAsset(a); setShowAssetModal(true); }} style={{ background: 'transparent', color: '#58a6ff', padding: '0.3rem' }}>수정</button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                                {data.assets.length === 0 && <tr><td colSpan="6" style={{ textAlign: 'center', padding: '2rem' }}>등록된 자산이 없습니다.</td></tr>}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
+                    {showAssetModal && <AssetModal data={data} setData={setData} onClose={() => setShowAssetModal(false)} editItem={editingAsset} syncToCloud={syncToCloud} />}
                 </div>
             );
         }
@@ -413,9 +694,14 @@
             });
             const [user, setUser] = useState(null);
             const [fbConfig, setFbConfig] = useState(() => JSON.parse(localStorage.getItem(FIREBASE_CONFIG_KEY) || 'null'));
-            const [tab, setTab] = useState('dashboard');
+            const [tab, setTab] = useState('transactions');
             const [showModal, setShowModal] = useState(false);
             const [edit, setEdit] = useState(null);
+
+            // For Dashboard Asset editing
+            const [showAssetModal, setShowAssetModal] = useState(false);
+            const [editAsset, setEditAsset] = useState(null);
+
             const [sidebarOpen, setSidebarOpen] = useState(false);
             const [pullDistance, setPullDistance] = useState(0);
             const [startY, setStartY] = useState(0);
@@ -503,19 +789,18 @@
                         </div>
                         <div className={`nav-item ${tab === 'dashboard' ? 'active' : ''}`} onClick={() => menuClick('dashboard')}><Icon name="layout-dashboard" /> 대시보드</div>
                         <div className={`nav-item ${tab === 'transactions' ? 'active' : ''}`} onClick={() => menuClick('transactions')}><Icon name="list" /> 거래 내역</div>
-                        <div className={`nav-item ${tab === 'assets' ? 'active' : ''}`} onClick={() => menuClick('assets')}><Icon name="wallet" /> 자산 관리</div>
-                        <div className={`nav-item ${tab === 'categories' ? 'active' : ''}`} onClick={() => menuClick('categories')}><Icon name="tags" /> 카테고리</div>
+                        <div className={`nav-item ${tab === 'assets' ? 'active' : ''}`} onClick={() => menuClick('assets')}><Icon name="wallet" /> 자산 현황</div>
                         <div className={`nav-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => menuClick('settings')}><Icon name="settings" /> 설정</div>
                         <div className="user-profile">{user ? <button onClick={() => firebase.auth().signOut()} className="auth-btn" style={{ background: 'transparent', color: '#8b949e' }}><Icon name="log-out" size={16} /> 로그아웃</button> : <button className="auth-btn login" onClick={() => { if (!fbConfig) setTab('settings'); else firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); }}><Icon name="log-in" size={16} /> 로그인</button>}</div>
                     </div>
                     <div className="main-content"><div className="container">
-                        {tab === 'dashboard' && <Dashboard data={data} />}
+                        {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} />}
                         {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} />}
-                        {tab === 'assets' && <AssetManagementPage data={data} setData={setData} syncToCloud={syncToCloud} />}
-                        {tab === 'categories' && <CategoryManagementPage data={data} setData={setData} syncToCloud={syncToCloud} />}
-                        {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} />}
+                        {tab === 'assets' && <AssetManagementPage data={data} />}
+                        {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} />}
                     </div></div>
                     {showModal && <TransactionModal data={data} setData={setData} onClose={() => { setShowModal(false); setEdit(null); }} editItem={edit} syncToCloud={syncToCloud} />}
+                    {showAssetModal && <AssetModal data={data} setData={setData} onClose={() => { setShowAssetModal(false); setEditAsset(null); }} editItem={editAsset} syncToCloud={syncToCloud} />}
                 </React.Fragment>
             );
         }
