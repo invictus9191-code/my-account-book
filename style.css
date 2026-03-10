@@ -308,8 +308,77 @@ input[type="date"],
 input[type="number"],
 input[type="text"],
 select {
-  height: 42px;
+  height: 42px !important;
   /* Set a standard height */
+  line-height: 1.2;
+}
+
+/* Button Group for Type Selection */
+.type-button-group {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+
+.type-button-group button {
+  flex: 1;
+  padding: 0.5rem;
+  background: var(--border-color);
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.type-button-group button.active[data-type="Income"] {
+  background: rgba(35, 134, 54, 0.2);
+  color: #3fb950;
+  border-color: #3fb950;
+}
+
+.type-button-group button.active[data-type="Expense"] {
+  background: rgba(218, 54, 51, 0.2);
+  color: #f85149;
+  border-color: #f85149;
+}
+
+.type-button-group button.active[data-type="Transfer"] {
+  background: rgba(137, 87, 229, 0.2);
+  color: #a371f7;
+  border-color: #a371f7;
+}
+
+/* Quick Amount Buttons */
+.quick-amount-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.quick-amount-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.quick-amount-buttons button {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  background: #21262d;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.quick-amount-buttons button:hover {
+  background: #30363d;
+  color: var(--text-primary);
+}
+
+.quick-amount-buttons button.clear-btn {
+  color: var(--expense-color);
 }
 
 button.danger {
@@ -461,7 +530,7 @@ button.danger {
   input[type="number"],
   input[type="text"],
   select {
-    height: 38px;
+    height: 38px !important;
     font-size: 1rem;
   }
 
