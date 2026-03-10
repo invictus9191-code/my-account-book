@@ -538,4 +538,35 @@ button.danger {
   .mobile-hide {
     display: none !important;
   }
+
+  /* Floating Action Button (FAB) */
+  .fab-add-transaction {
+    display: flex !important;
+    position: fixed;
+    right: 1.5rem;
+    bottom: 2rem;
+    width: 60px;
+    height: 60px;
+    background: var(--accent-color);
+    color: white;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    z-index: 90;
+    transition: transform 0.2s, background 0.2s;
+    border: none;
+    cursor: pointer;
+  }
+
+  .fab-add-transaction:active {
+    transform: scale(0.9) translateY(2px);
+    background: #4092ee;
+  }
+
+  .main-content {
+    padding-bottom: 6rem;
+    /* Space for FAB */
+  }
 }

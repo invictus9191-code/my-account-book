@@ -464,6 +464,9 @@
                             </tbody>
                         </table>
                     </div>
+                    <button className="fab-add-transaction" onClick={() => { setEdit(null); setShowModal(true); }} style={{ display: 'none' }}>
+                        <Icon name="plus" size={32} />
+                    </button>
                 </div>
             );
         }
@@ -865,11 +868,21 @@
                 setSidebarOpen(false);
             };
 
+            const tabTitles = {
+                dashboard: '대시보드',
+                transactions: '거래 내역',
+                assets: '자산 현황',
+                settings: '설정'
+            };
+
             return (
                 <React.Fragment>
                     <div className="mobile-header">
                         <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'white', padding: '0.4rem' }}><Icon name="menu" size={24} /></button>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}><Icon name="activity" size={24} /><h2>Smart Finance</h2></div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                            <Icon name={tab === 'dashboard' ? 'layout-dashboard' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} />
+                            <h2>{tabTitles[tab] || 'Smart Finance'}</h2>
+                        </div>
                         <button onClick={() => location.reload()} style={{ background: 'transparent', color: 'white', padding: '0.4rem' }}><Icon name="refresh-cw" size={24} /></button>
                     </div>
                     <div className={`mobile-overlay ${sidebarOpen ? 'visible' : ''}`} onClick={() => setSidebarOpen(false)}></div>
