@@ -537,11 +537,11 @@
                     <div className="card modal-content" style={{ maxWidth: '420px', width: '90%', padding: '2rem' }}>
                         <h2 style={{ marginBottom: '1.5rem', fontSize: '1.5rem' }}>자산 {editItem ? '수정' : '추가'}</h2>
                         <form onSubmit={handleSubmit}>
-                            <div style={{ marginBottom: '1.2rem' }}><label>자산명</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required /></div>
-                            <div style={{ marginBottom: '1.2rem' }}><label>소유자</label><select value={form.ownerId} onChange={e => setForm({ ...form, ownerId: e.target.value })} required><option value="">선택</option>{data.owners.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>
-                            <div style={{ marginBottom: '1.2rem' }}><label>그룹</label><select value={form.groupId} onChange={e => setForm({ ...form, groupId: e.target.value })}><option value="">선택 (선택사항)</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
-                            <div style={{ marginBottom: '1.2rem' }}><label>자산 유형</label><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}><option value="Cash">현금</option><option value="Bank">은행</option><option value="Card">카드</option></select></div>
-                            <div style={{ marginBottom: '1.2rem' }}><label>초기 잔액</label><input type="number" value={form.initialBalance} onChange={e => setForm({ ...form, initialBalance: e.target.value })} required /></div>
+                            <div className="form-row"><label>자산명</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required /></div>
+                            <div className="form-row"><label>소유자</label><select value={form.ownerId} onChange={e => setForm({ ...form, ownerId: e.target.value })} required><option value="">선택</option>{data.owners.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>
+                            <div className="form-row"><label>그룹</label><select value={form.groupId} onChange={e => setForm({ ...form, groupId: e.target.value })}><option value="">선택 (선택사항)</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+                            <div className="form-row"><label>자산 유형</label><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}><option value="Cash">현금</option><option value="Bank">은행</option><option value="Card">카드</option></select></div>
+                            <div className="form-row"><label>초기 잔액</label><input type="number" value={form.initialBalance} onChange={e => setForm({ ...form, initialBalance: e.target.value })} required /></div>
                             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                                 <button type="button" onClick={onClose} style={{ background: '#30363d', color: 'white' }}>취소</button>
                                 {editItem && <button type="button" className="danger" onClick={handleDelete}>삭제</button>}
@@ -600,19 +600,19 @@
                     <div className="card modal-content" style={{ maxWidth: '420px', width: '90%', padding: '2rem', margin: 'auto' }}>
                         <h2 style={{ marginBottom: '1.5rem', fontSize: '1.5rem' }}>거래 {editItem ? '수정' : '추가'}</h2>
                         <form onSubmit={handleSubmit}>
-                            <div style={{ marginBottom: '1.2rem' }}><label>날짜</label><input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required /></div>
-                            <div style={{ marginBottom: '1.2rem' }}><label>구분</label><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}><option value="Income">수입</option><option value="Expense">지출</option><option value="Transfer">이체</option></select></div>
-                            <div style={{ marginBottom: '1.2rem' }}><label>카테고리</label><select value={form.categoryId} onChange={e => setForm({ ...form, categoryId: e.target.value })} required><option value="">선택하세요</option>{filteredCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-                            <div style={{ marginBottom: '1.2rem' }}><label>금액</label><input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="금액 입력" required /></div>
-                            <div style={{ marginBottom: '1.2rem' }}><label>그룹 (출금)</label><select value={form.groupId} onChange={e => setForm({ ...form, groupId: e.target.value })}><option value="">전체/미지정</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
-                            <div style={{ marginBottom: '1.2rem' }}><label>{form.type === 'Transfer' ? '출금 자산' : '자산'}</label><select value={form.assetId} onChange={e => setForm({ ...form, assetId: e.target.value })}>{filteredAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+                            <div className="form-row"><label>날짜</label><input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required /></div>
+                            <div className="form-row"><label>구분</label><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}><option value="Income">수입</option><option value="Expense">지출</option><option value="Transfer">이체</option></select></div>
+                            <div className="form-row"><label>카테고리</label><select value={form.categoryId} onChange={e => setForm({ ...form, categoryId: e.target.value })} required><option value="">선택하세요</option>{filteredCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+                            <div className="form-row"><label>금액</label><input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="금액 입력" required /></div>
+                            <div className="form-row"><label>그룹 (출금)</label><select value={form.groupId} onChange={e => setForm({ ...form, groupId: e.target.value })}><option value="">전체/미지정</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+                            <div className="form-row"><label>{form.type === 'Transfer' ? '출금 자산' : '자산'}</label><select value={form.assetId} onChange={e => setForm({ ...form, assetId: e.target.value })}>{filteredAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
                             {form.type === 'Transfer' && (
                                 <React.Fragment>
-                                    <div style={{ marginBottom: '1.2rem' }}><label>그룹 (입금)</label><select value={form.toGroupId} onChange={e => setForm({ ...form, toGroupId: e.target.value })}><option value="">전체/미지정</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
-                                    <div style={{ marginBottom: '1.2rem' }}><label>입금 자산</label><select value={form.toAssetId} onChange={e => setForm({ ...form, toAssetId: e.target.value })}>{filteredToAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+                                    <div className="form-row"><label>그룹 (입금)</label><select value={form.toGroupId} onChange={e => setForm({ ...form, toGroupId: e.target.value })}><option value="">전체/미지정</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+                                    <div className="form-row"><label>입금 자산</label><select value={form.toAssetId} onChange={e => setForm({ ...form, toAssetId: e.target.value })}>{filteredToAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
                                 </React.Fragment>
                             )}
-                            <div style={{ marginBottom: '1.5rem' }}><label>메모</label><input value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} placeholder="메모" /></div>
+                            <div className="form-row"><label>메모</label><input value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} placeholder="메모" /></div>
                             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                                 <button type="button" onClick={onClose} style={{ background: '#30363d', color: 'white' }}>취소</button>
                                 {editItem && <button type="button" className="danger" onClick={handleDelete}>삭제</button>}
