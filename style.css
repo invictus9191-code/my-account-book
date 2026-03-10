@@ -467,6 +467,10 @@ button.danger {
     display: flex !important;
   }
 
+  .page-header {
+    display: none !important;
+  }
+
   .main-content {
     padding: 1rem;
     padding-top: 1.5rem;
