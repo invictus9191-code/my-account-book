@@ -548,33 +548,56 @@ button.danger {
   }
 
   .modal-content .form-row {
-    margin-bottom: 1.2rem !important; /* 행간 거리 증가 (사용자 요청) */
-    flex-direction: column;
-    align-items: stretch; /* 센터 정렬을 위해 stretch 후 내부 정렬 조정 */
+    margin-bottom: 0.6rem !important;
+    flex-direction: row; /* 가로 배치 */
+    align-items: center;
+    gap: 8px;
   }
 
   .modal-content label {
-    flex: 0 0 auto;
-    width: 100%;
-    margin-bottom: 0.4rem;
-    font-size: 1.05rem;
-    text-align: center; /* 라벨 가운데 정렬 */
+    flex: 0 0 85px; /* 라벨 너비 고정 */
+    margin-bottom: 0;
+    font-size: 1rem;
+    text-align: left;
   }
 
   .modal-content input,
   .modal-content select,
-  .modal-content textarea,
-  .type-button-group,
+  .modal-content textarea {
+    flex: 1;
+    width: auto;
+    text-align: center; /* 내부 텍스트 가운데 정렬 */
+    text-align-last: center; /* select 요소 값 가운데 정렬 */
+  }
+
+  /* 퀵 버튼 컨테이너 정렬 및 간격 최적화 */
   .quick-amount-container {
     width: 100%;
-    text-align: center; /* 입력값 가운데 정렬 */
+  }
+
+  .quick-amount-buttons {
+    gap: 2px;
+    margin-top: 4px;
+  }
+
+  .quick-amount-buttons button {
+    padding: 3px 6px;
+    font-size: 0.7rem;
+    flex: 1; /* 컴팩트하게 배치 */
+    min-width: 40px;
+  }
+
+  .modal-content .modal-footer {
+    margin-top: 1rem !important;
+    display: flex;
+    gap: 8px;
   }
 
   .modal-content .modal-footer button {
     flex: 1;
-    height: 44px !important;
+    height: 40px !important;
     font-size: 0.9rem;
-    padding: 0.5rem;
+    padding: 0.4rem;
   }
 
   .detail-title {
