@@ -548,7 +548,26 @@ button.danger {
   }
 
   .modal-content .form-row {
-    margin-bottom: 0.6rem !important;
+    margin-bottom: 1.2rem !important; /* 행간 거리 증가 (사용자 요청) */
+    flex-direction: column;
+    align-items: stretch; /* 센터 정렬을 위해 stretch 후 내부 정렬 조정 */
+  }
+
+  .modal-content label {
+    flex: 0 0 auto;
+    width: 100%;
+    margin-bottom: 0.4rem;
+    font-size: 1.05rem;
+    text-align: center; /* 라벨 가운데 정렬 */
+  }
+
+  .modal-content input,
+  .modal-content select,
+  .modal-content textarea,
+  .type-button-group,
+  .quick-amount-container {
+    width: 100%;
+    text-align: center; /* 입력값 가운데 정렬 */
   }
 
   .modal-content .modal-footer button {
