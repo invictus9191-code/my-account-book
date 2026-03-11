@@ -581,10 +581,10 @@ button.danger {
   }
 
   .quick-amount-buttons button {
-    padding: 3px 6px;
-    font-size: 0.7rem;
-    flex: 1; /* 컴팩트하게 배치 */
-    min-width: 40px;
+    padding: 4px 8px; /* 한포인트 크게 조정 */
+    font-size: 0.8rem; /* 0.7rem에서 0.8rem으로 확대 */
+    flex: 1;
+    min-width: 45px; /* 약간 넓힘 */
   }
 
   .modal-content .modal-footer {
