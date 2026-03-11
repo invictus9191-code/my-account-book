@@ -226,7 +226,7 @@
                     <div className="fade-in">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
                             <button onClick={() => setView('main')} className="icon-btn"><Icon name="arrow-left" /></button>
-                            <h1>{selectedMonth} {view === 'income_detail' ? '수입' : view === 'expense_detail' ? '지출' : '저축'} 카테고리별</h1>
+                            <h1 className="detail-title">{selectedMonth} {view === 'income_detail' ? '수입' : view === 'expense_detail' ? '지출' : '저축'} 카테고리별</h1>
                         </div>
                         <div className="card">
                             {catGrouped.map(c => (
@@ -250,7 +250,7 @@
                     <div className="fade-in">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
                             <button onClick={() => setView(backView)} className="icon-btn"><Icon name="arrow-left" /></button>
-                            <h1>{selectedMonth} {category.name} 내역</h1>
+                            <h1 className="detail-title">{selectedMonth} {category.name} 내역</h1>
                         </div>
                         <div className="card" style={{ padding: 0 }}>
                             <table className="transaction-table">
@@ -283,7 +283,7 @@
                     <div className="fade-in">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem' }}>
                             <button onClick={() => setView('main')} className="icon-btn"><Icon name="arrow-left" /></button>
-                            <h1>자산 현황 ({selectedMonth.split('-')[0]}년 {selectedMonth.split('-')[1]}월 말 기준)</h1>
+                            <h1 className="detail-title">자산 현황 ({selectedMonth.split('-')[0]}년 {selectedMonth.split('-')[1]}월 말 기준)</h1>
                         </div>
                         <div className="card">
                             {groupGrouped.map(g => (

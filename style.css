@@ -558,6 +558,10 @@ button.danger {
     padding: 0.5rem;
   }
 
+  .detail-title {
+    font-size: 1.35rem !important; /* Reduced by ~2pt for better mobile fit */
+  }
+
   /* Specific column hiding for Transaction Page */
   .mobile-hide {
     display: none !important;
