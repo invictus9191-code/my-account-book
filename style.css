@@ -543,6 +543,21 @@ button.danger {
     font-size: 0.85rem;
   }
 
+  .modal-content .modal-title {
+    display: none !important;
+  }
+
+  .modal-content .form-row {
+    margin-bottom: 0.6rem !important;
+  }
+
+  .modal-content .modal-footer button {
+    flex: 1;
+    height: 44px !important;
+    font-size: 0.9rem;
+    padding: 0.5rem;
+  }
+
   /* Specific column hiding for Transaction Page */
   .mobile-hide {
     display: none !important;
