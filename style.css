@@ -527,15 +527,20 @@ button.danger {
   .modal-content label {
     flex: 0 0 80px;
     /* Slightly smaller on mobile */
-    font-size: 0.95rem;
+    font-size: 1.05rem; /* ~1.33px increased (1pt) */
   }
 
   input[type="date"],
   input[type="number"],
   input[type="text"],
   select {
-    height: 38px !important;
-    font-size: 1rem;
+    height: 44px !important;
+    font-size: 1.1rem;
+  }
+
+  .quick-amount-buttons button {
+    padding: 8px 12px;
+    font-size: 0.85rem;
   }
 
   /* Specific column hiding for Transaction Page */
