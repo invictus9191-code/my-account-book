@@ -554,15 +554,15 @@
                                         <button type="button" onClick={() => {
                                             const current = Number(form.initialBalance || 0);
                                             setForm({ ...form, initialBalance: (current + 1000000).toString() });
-                                        }}>100만</button>
+                                        }}>백만</button>
                                         <button type="button" onClick={() => {
                                             const current = Number(form.initialBalance || 0);
                                             setForm({ ...form, initialBalance: (current + 100000).toString() });
-                                        }}>10만</button>
+                                        }}>십만</button>
                                         <button type="button" onClick={() => {
                                             const current = Number(form.initialBalance || 0);
                                             setForm({ ...form, initialBalance: (current + 10000).toString() });
-                                        }}>1만</button>
+                                        }}>만</button>
                                         <button type="button" onClick={() => {
                                             const current = Number(form.initialBalance || 0);
                                             setForm({ ...form, initialBalance: (current + 1000).toString() });
@@ -662,10 +662,9 @@
                                 <div className="quick-amount-container">
                                     <input type="text" value={form.amount ? Number(form.amount).toLocaleString() : ''} onChange={handleAmountChange} placeholder="금액 입력" required />
                                     <div className="quick-amount-buttons">
-                                        <button type="button" onClick={() => handleQuickAmount(1000000)}>100만</button>
-                                        <button type="button" onClick={() => handleQuickAmount(100000)}>10만</button>
-                                        <button type="button" onClick={() => handleQuickAmount(10000)}>1만</button>
-                                        <button type="button" onClick={() => handleQuickAmount(10000)}>1만</button>
+                                        <button type="button" onClick={() => handleQuickAmount(1000000)}>백만</button>
+                                        <button type="button" onClick={() => handleQuickAmount(100000)}>십만</button>
+                                        <button type="button" onClick={() => handleQuickAmount(10000)}>만</button>
                                         <button type="button" onClick={() => handleQuickAmount(1000)}>천</button>
                                         <button type="button" onClick={() => handleQuickAmount(100)}>백</button>
                                         <button type="button" onClick={() => handleQuickAmount(10)}>십</button>
