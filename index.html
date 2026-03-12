@@ -34,6 +34,7 @@
         const STORAGE_KEY = 'INV_HOUSEHOLD_DATA';
         const FIREBASE_CONFIG_KEY = 'INV_FIREBASE_CONFIG';
         const PASSWORD_KEY = 'INV_APP_PASSWORD';
+        const SHARED_ID_KEY = 'INV_SHARED_ID';
         const DEFAULT_PASSWORD = '9999';
 
         const initialData = {
@@ -703,10 +704,28 @@
             const [newCat, setNewCat] = useState({ name: '', type: 'Expense' });
             const [editingAsset, setEditingAsset] = useState(null);
             const [showAssetModal, setShowAssetModal] = useState(false);
+            const [tempSharedId, setTempSharedId] = useState(localStorage.getItem(SHARED_ID_KEY) || '');
 
             const saveFb = () => { try { const c = JSON.parse(fbVal); localStorage.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(c)); setFbConfig(c); alert('Firebase 설정이 저장되었습니다. 앱을 다시 시작합니다.'); location.reload(); } catch (e) { alert('유효한 JSON 형식이 아닙니다.'); } };
             const resetFb = () => { if (confirm('서버 설정을 초기화하시겠습니까?')) { localStorage.removeItem(FIREBASE_CONFIG_KEY); setFbConfig(null); alert('설정이 초기화되었습니다.'); location.reload(); } };
             const changePw = () => { if (newPw.length < 4) { alert('비밀번호는 4자리 이상이어야 합니다.'); return; } localStorage.setItem(PASSWORD_KEY, newPw); setNewPw(''); alert('비밀번호가 변경되었습니다.'); };
+
+            const saveSharedId = () => {
+                if (tempSharedId.trim()) {
+                    localStorage.setItem(SHARED_ID_KEY, tempSharedId.trim());
+                    alert('공유 ID가 저장되었습니다. 앱을 다시 시작합니다.');
+                    location.reload();
+                } else {
+                    localStorage.removeItem(SHARED_ID_KEY);
+                    alert('공유 ID가 제거되었습니다. 개인 모드로 전환합니다.');
+                    location.reload();
+                }
+            };
+            const generateSharedId = () => {
+                const newId = Math.random().toString(36).substring(2, 10).toUpperCase();
+                setTempSharedId(newId);
+                alert(`신규 공유 ID가 생성되었습니다: ${newId}\n'저장' 버튼을 눌러야 적용됩니다.`);
+            };
 
             const exportData = () => { const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `household_backup_${new Date().toISOString().split('T')[0]}.json`; a.click(); };
             const importData = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => { try { const d = JSON.parse(ev.target.result); if (confirm('데이터를 덮어쓰시겠습니까? 현재 데이터는 사라집니다.')) { setData(d); alert('데이터를 성공적으로 불러왔습니다.'); } } catch (err) { alert('잘못된 백업 파일입니다.'); } }; reader.readAsText(file); };
@@ -746,6 +765,18 @@
                                         <div>
                                             <h3>🔑 비밀번호 변경</h3>
                                             <div style={{ display: 'flex', gap: '8px', margin: '1rem 0' }}><input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="새 비밀번호 입력" /><button className="primary" onClick={changePw}>변경</button></div>
+                                        </div>
+                                        <div style={{ borderTop: '1px solid #30363d', paddingTop: '1.5rem' }}>
+                                            <h3>🔗 데이터 공유 설정 (공유 ID)</h3>
+                                            <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '0.5rem' }}>동일한 공유 ID를 입력한 계정끼리 데이터가 실시간으로 연동됩니다.</p>
+                                            <div style={{ display: 'flex', gap: '8px', margin: '0.5rem 0' }}>
+                                                <input value={tempSharedId} onChange={e => setTempSharedId(e.target.value)} placeholder="공유 ID 입력" />
+                                                <button className="primary" onClick={saveSharedId}>저장</button>
+                                                <button onClick={generateSharedId} style={{ background: '#30363d', color: 'white' }}>생성</button>
+                                            </div>
+                                            {tempSharedId === (localStorage.getItem(SHARED_ID_KEY) || '') && tempSharedId && (
+                                                <p style={{ color: '#238636', fontSize: '0.8rem' }}>현재 공유 모드 활성화 중</p>
+                                            )}
                                         </div>
                                         <div style={{ borderTop: '1px solid #30363d', paddingTop: '1.5rem' }}>
                                             <h3>💾 데이터 백업 및 복구</h3>
@@ -873,7 +904,12 @@
 
             const syncToCloud = (newData) => {
                 if (user && window.firebase && firebase.apps.length) {
-                    firebase.firestore().collection('users').doc(user.uid).set(newData).catch(err => console.error("Firebase Sync Error:", err));
+                    const sharedId = localStorage.getItem(SHARED_ID_KEY);
+                    if (sharedId) {
+                        firebase.firestore().collection('shared_data').doc(sharedId).set(newData).catch(err => console.error("Firebase Sync Error:", err));
+                    } else {
+                        firebase.firestore().collection('users').doc(user.uid).set(newData).catch(err => console.error("Firebase Sync Error:", err));
+                    }
                 }
             };
 
@@ -883,9 +919,16 @@
                 const unsubscribe = firebase.auth().onAuthStateChanged(u => {
                     setUser(u);
                     if (u) {
-                        firebase.firestore().collection('users').doc(u.uid).get().then(d => {
-                            if (d.exists) setData(d.data());
-                        });
+                        const sharedId = localStorage.getItem(SHARED_ID_KEY);
+                        if (sharedId) {
+                            firebase.firestore().collection('shared_data').doc(sharedId).get().then(d => {
+                                if (d.exists) setData(d.data());
+                            });
+                        } else {
+                            firebase.firestore().collection('users').doc(u.uid).get().then(d => {
+                                if (d.exists) setData(d.data());
+                            });
+                        }
                     }
                 });
                 return () => unsubscribe();
