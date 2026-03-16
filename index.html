@@ -491,7 +491,6 @@
             // 자산 거래내역 뷰
             if (selectedAsset) {
                 const asset = selectedAsset;
-                const bal = calculateAssetBalance(asset.id, data.assets, data.transactions);
                 const txList = data.transactions
                     .filter(t => t.assetId === asset.id || t.toAssetId === asset.id)
                     .sort((a, b) => b.date.localeCompare(a.date));
@@ -499,8 +498,12 @@
                 // 월별 그룹핑
                 const grouped = txList.reduce((acc, t) => {
                     const month = t.date.substring(0, 7);
-                    if (!acc[month]) acc[month] = [];
-                    acc[month].push(t);
+                    if (!acc[month]) acc[month] = { transactions: [], income: 0, expense: 0 };
+                    acc[month].transactions.push(t);
+                    if (t.type === 'Income' && t.assetId === asset.id) acc[month].income += Number(t.amount);
+                    if (t.type === 'Transfer' && t.toAssetId === asset.id) acc[month].income += Number(t.amount);
+                    if (t.type === 'Expense' && t.assetId === asset.id) acc[month].expense += Number(t.amount);
+                    if (t.type === 'Transfer' && t.assetId === asset.id) acc[month].expense += Number(t.amount);
                     return acc;
                 }, {});
                 const sortedMonths = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
@@ -510,19 +513,23 @@
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem' }}>
                             <button onClick={() => setSelectedAsset(null)} className="icon-btn"><Icon name="arrow-left" /></button>
                             <h1 className="detail-title">{asset.name} 거래내역</h1>
-                            <span style={{ marginLeft: 'auto', color: '#58a6ff', fontWeight: 700, fontSize: '1.1rem' }}>{bal.toLocaleString()}원</span>
                         </div>
-                        <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
+                        <div className="card" style={{ overflowX: 'hidden', padding: 0 }}>
                             <table className="transaction-table">
                                 <thead><tr><th>날짜</th><th className="mobile-hide">구분</th><th className="mobile-hide">카테고리</th><th>금액</th><th className="mobile-hide">자산</th><th>메모</th></tr></thead>
                                 <tbody>
                                     {sortedMonths.map(month => {
                                         const [y, m] = month.split('-');
-                                        const txs = grouped[month];
+                                        const { transactions: txs, income: monthIncome, expense: monthExpense } = grouped[month];
                                         return (
                                             <React.Fragment key={month}>
                                                 <tr style={{ background: 'rgba(56, 139, 253, 0.1)', fontWeight: 'bold' }}>
-                                                    <td colSpan="6" style={{ padding: '0.5rem 1rem', fontSize: '1rem', color: '#58a6ff' }}>[{y}년 {m}월]</td>
+                                                    <td colSpan="6" style={{ padding: '0.5rem 1rem', fontSize: '1rem', color: '#58a6ff' }}>
+                                                        <div>[{y}년 {m}월]</div>
+                                                        <div style={{ fontSize: '0.85rem', marginTop: '0.2rem' }}>
+                                                            (수입: {monthIncome.toLocaleString()} / 지출: {monthExpense.toLocaleString()})
+                                                        </div>
+                                                    </td>
                                                 </tr>
                                                 {txs.map(t => (
                                                     <tr key={t.id} onClick={() => { setEdit(t); setShowModal(true); }} style={{ cursor: 'pointer' }} className="list-item">
