@@ -421,6 +421,8 @@
         }
 
         function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud }) {
+            const [searchTerm, setSearchTerm] = useState('');
+
             const del = (id) => {
                 if (confirm('삭제하시겠습니까?')) {
                     const newData = { ...data, transactions: data.transactions.filter(t => t.id !== id) };
@@ -429,7 +431,17 @@
                 }
             };
 
-            const grouped = data.transactions.sort((a, b) => new Date(b.date) - new Date(a.date)).reduce((acc, t) => {
+            const filteredTransactions = data.transactions.filter(t => {
+                if (!searchTerm) return true;
+                const term = searchTerm.toLowerCase();
+                const memoMatch = t.memo?.toLowerCase().includes(term);
+                const categoryMatch = data.categories.find(c => c.id === t.categoryId)?.name?.toLowerCase().includes(term);
+                const assetMatch = data.assets.find(a => a.id === t.assetId)?.name?.toLowerCase().includes(term);
+                const toAssetMatch = t.type === 'Transfer' && data.assets.find(a => a.id === t.toAssetId)?.name?.toLowerCase().includes(term);
+                return memoMatch || categoryMatch || assetMatch || toAssetMatch;
+            });
+
+            const grouped = filteredTransactions.sort((a, b) => new Date(b.date) - new Date(a.date)).reduce((acc, t) => {
                 const month = t.date.substring(0, 7); // YYYY-MM
                 if (!acc[month]) acc[month] = { transactions: [], income: 0, expense: 0, savings: 0 };
                 acc[month].transactions.push(t);
@@ -452,8 +464,15 @@
 
             return (
                 <div className="fade-in">
-                    <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center' }}>
-                        <h1>거래 내역</h1><button className="primary" onClick={() => { setEdit(null); setShowModal(true); }}>+ 거래 추가</button>
+                    <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                        <h1>거래 내역</h1>
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            <div className="search-box" style={{ position: 'relative' }}>
+                                <Icon name="search" size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e' }} />
+                                <input type="text" placeholder="검색어 입력..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ paddingLeft: '32px', paddingRight: '10px', paddingTop: '8px', paddingBottom: '8px', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: '#c9d1d9', width: '200px' }} />
+                            </div>
+                            <button className="primary" onClick={() => { setEdit(null); setShowModal(true); }}>+ 거래 추가</button>
+                        </div>
                     </div>
                     <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
                         <table className="transaction-table">
@@ -485,7 +504,7 @@
                                         </React.Fragment>
                                     );
                                 })}
-                                {data.transactions.length === 0 && <tr><td colSpan="6" style={{ textAlign: 'center', padding: '2rem' }}>거래 내역이 없습니다.</td></tr>}
+                                {filteredTransactions.length === 0 && <tr><td colSpan="6" style={{ textAlign: 'center', padding: '2rem' }}>검색 결과가 없습니다.</td></tr>}
                             </tbody>
                         </table>
                     </div>
