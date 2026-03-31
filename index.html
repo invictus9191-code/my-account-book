@@ -420,8 +420,7 @@
             );
         }
 
-        function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud }) {
-            const [searchTerm, setSearchTerm] = useState('');
+        function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm }) {
 
             const del = (id) => {
                 if (confirm('삭제하시겠습니까?')) {
@@ -467,7 +466,7 @@
                     <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                         <h1 className="page-title">거래 내역</h1>
                         <div className="header-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
-                            <div className="search-box" style={{ position: 'relative', flex: 1, maxWidth: '300px' }}>
+                            <div className="search-box mobile-hide" style={{ position: 'relative', flex: 1, maxWidth: '300px' }}>
                                 <Icon name="search" size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e' }} />
                                 <input className="search-input" type="text" placeholder="검색어 입력..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ paddingLeft: '32px', paddingRight: '10px', paddingTop: '8px', paddingBottom: '8px', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: '#c9d1d9', width: '100%' }} />
                             </div>
@@ -1019,6 +1018,8 @@
             const [editAsset, setEditAsset] = useState(null);
 
             const [sidebarOpen, setSidebarOpen] = useState(false);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [showMobileSearch, setShowMobileSearch] = useState(false);
 
             const syncToCloud = (newData) => {
                 if (user && window.firebase && firebase.apps.length) {
@@ -1082,8 +1083,32 @@
                             <Icon name={tab === 'dashboard' ? 'layout-dashboard' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
                             <h2>{tabTitles[tab] || 'Smart Finance'}</h2>
                         </div>
+                        {tab === 'transactions' && (
+                            <button className="mobile-only" onClick={() => setShowMobileSearch(!showMobileSearch)} style={{ background: 'transparent', color: 'white', padding: '0.4rem', marginRight: '4px' }}>
+                                <Icon name="search" size={20} />
+                            </button>
+                        )}
                         <button onClick={() => location.reload()} style={{ background: 'transparent', color: 'white', padding: '0.4rem' }}><Icon name="refresh-cw" size={24} /></button>
                     </div>
+                    {tab === 'transactions' && showMobileSearch && (
+                        <div className="mobile-only fade-in" style={{ background: '#21262d', padding: '10px 15px', borderBottom: '1px solid #30363d', display: 'flex', position: 'sticky', top: '53px', zIndex: 999, width: '100%', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>
+                            <div style={{ position: 'relative', flex: 1 }}>
+                                <Icon name="search" size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e' }} />
+                                <input 
+                                    type="text" 
+                                    value={searchTerm} 
+                                    onChange={e => setSearchTerm(e.target.value)} 
+                                    placeholder="검색어 입력..." 
+                                    style={{ width: '100%', padding: '8px 10px 8px 32px', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: 'white' }} 
+                                />
+                                {searchTerm && (
+                                    <button onClick={() => setSearchTerm('')} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', color: '#8b949e', padding: 0 }}>
+                                        <Icon name="x" size={14} />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
                     <div className={`mobile-overlay ${sidebarOpen ? 'visible' : ''}`} onClick={() => setSidebarOpen(false)}></div>
                     <div className={`sidebar ${sidebarOpen ? 'mobile-open' : ''}`}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
@@ -1098,7 +1123,7 @@
                     </div>
                     <div className="main-content"><div className="container">
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} />}
-                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} />}
+                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} />}
                     </div></div>
