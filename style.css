@@ -467,8 +467,23 @@ button.danger {
     display: flex !important;
   }
 
-  .page-header {
+  .page-title,
+  .header-add-btn {
     display: none !important;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  
+  .search-box {
+    width: 100%;
+    max-width: none !important;
+  }
+  
+  .search-input {
+    width: 100% !important;
   }
 
   .main-content {

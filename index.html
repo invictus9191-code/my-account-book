@@ -465,13 +465,13 @@
             return (
                 <div className="fade-in">
                     <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                        <h1>거래 내역</h1>
-                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                            <div className="search-box" style={{ position: 'relative' }}>
+                        <h1 className="page-title">거래 내역</h1>
+                        <div className="header-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
+                            <div className="search-box" style={{ position: 'relative', flex: 1, maxWidth: '300px' }}>
                                 <Icon name="search" size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e' }} />
-                                <input type="text" placeholder="검색어 입력..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ paddingLeft: '32px', paddingRight: '10px', paddingTop: '8px', paddingBottom: '8px', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: '#c9d1d9', width: '200px' }} />
+                                <input className="search-input" type="text" placeholder="검색어 입력..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ paddingLeft: '32px', paddingRight: '10px', paddingTop: '8px', paddingBottom: '8px', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: '#c9d1d9', width: '100%' }} />
                             </div>
-                            <button className="primary" onClick={() => { setEdit(null); setShowModal(true); }}>+ 거래 추가</button>
+                            <button className="primary header-add-btn" onClick={() => { setEdit(null); setShowModal(true); }}>+ 거래 추가</button>
                         </div>
                     </div>
                     <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
