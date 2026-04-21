@@ -1112,12 +1112,33 @@ service cloud.firestore {
             const syncToCloud = (newData) => {
                 if (user && window.firebase && firebase.apps.length) {
                     const sharedId = localStorage.getItem(SHARED_ID_KEY);
-                    if (sharedId) {
-                        firebase.firestore().collection('shared_data').doc(sharedId).set(newData).catch(err => console.error("Firebase Sync Error:", err));
-                    } else {
-                        firebase.firestore().collection('users').doc(user.uid).set(newData).catch(err => console.error("Firebase Sync Error:", err));
-                    }
+                    const docRef = sharedId 
+                        ? firebase.firestore().collection('shared_data').doc(sharedId) 
+                        : firebase.firestore().collection('users').doc(user.uid);
+                    docRef.set(newData).catch(err => console.error("Firebase Sync Error:", err));
                 }
+            };
+
+            const mergeData = (local, cloud) => {
+                if (!cloud) return local;
+                const mergeCollection = (localArr = [], cloudArr = []) => {
+                    const merged = [...localArr];
+                    const localIds = new Set(localArr.map(item => item.id));
+                    cloudArr.forEach(item => {
+                        if (!localIds.has(item.id)) {
+                            merged.push(item);
+                        }
+                    });
+                    return merged;
+                };
+
+                return {
+                    owners: mergeCollection(local.owners, cloud.owners),
+                    groups: mergeCollection(local.groups, cloud.groups),
+                    assets: mergeCollection(local.assets, cloud.assets),
+                    categories: mergeCollection(local.categories, cloud.categories),
+                    transactions: mergeCollection(local.transactions, cloud.transactions)
+                };
             };
 
             useEffect(() => {
@@ -1136,28 +1157,29 @@ service cloud.firestore {
                             : firebase.firestore().collection('users').doc(u.uid);
                         
                         unsubSnapshot = docRef.onSnapshot(d => {
-                            if (d.exists) {
-                                const cloudData = d.data();
-                                setData(prev => {
-                                    if (JSON.stringify(prev) !== JSON.stringify(cloudData)) {
-                                        return cloudData;
-                                    }
-                                    return prev;
-                                });
-                            } else {
-                                // 클라우드에 데이터가 없는 경우, 현재 로컬 데이터를 업로드 (초기 연동)
-                                console.log("Cloud data empty. Attempting initial sync...");
-                                const currentLocalData = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-                                if (currentLocalData && (currentLocalData.transactions?.length > 0 || currentLocalData.assets?.length > 1)) {
-                                    docRef.set(currentLocalData)
-                                        .then(() => console.log("Initial data synced to cloud."))
-                                        .catch(err => console.error("Initial sync fail:", err));
+                            const cloudData = d.exists ? d.data() : null;
+                            const currentLocalData = JSON.parse(localStorage.getItem(STORAGE_KEY) || JSON.stringify(initialData));
+                            
+                            // 로컬 데이터를 우선으로 클라우드 데이터와 병합
+                            const mergedData = mergeData(currentLocalData, cloudData);
+
+                            // 병합된 결과가 현재 상태와 다르면 업데이트
+                            setData(prev => {
+                                if (JSON.stringify(prev) !== JSON.stringify(mergedData)) {
+                                    return mergedData;
                                 }
+                                return prev;
+                            });
+
+                            // 병합 결과가 클라우드와 다르면 클라우드 업데이트 (역동기화)
+                            if (JSON.stringify(mergedData) !== JSON.stringify(cloudData)) {
+                                console.log("Data merged (Local prioritized). Syncing up to cloud...");
+                                docRef.set(mergedData).catch(err => console.error("Merge Sync Fail:", err));
                             }
                         }, err => {
                             console.error("Firebase Snapshot Error:", err);
                             if (err.code === 'permission-denied') {
-                                alert("Firebase 권한 오류: Firestore 보안 규칙을 확인해주세요.\n(설정 메뉴의 가이드를 참고하세요)");
+                                alert("Firebase 권한 오류: Firestore 보안 규칙을 확인해주세요.");
                             } else {
                                 alert("Firebase 연동 오류: " + err.message);
                             }
