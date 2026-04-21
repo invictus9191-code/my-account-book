@@ -845,7 +845,24 @@
             };
 
             const exportData = () => { const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `household_backup_${new Date().toISOString().split('T')[0]}.json`; a.click(); };
-            const importData = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => { try { const d = JSON.parse(ev.target.result); if (confirm('데이터를 덮어쓰시겠습니까? 현재 데이터는 사라집니다.')) { setData(d); alert('데이터를 성공적으로 불러왔습니다.'); } } catch (err) { alert('잘못된 백업 파일입니다.'); } }; reader.readAsText(file); };
+            const importData = (e) => { 
+                const file = e.target.files[0]; 
+                if (!file) return; 
+                const reader = new FileReader(); 
+                reader.onload = (ev) => { 
+                    try { 
+                        const d = JSON.parse(ev.target.result); 
+                        if (confirm('데이터를 덮어쓰시겠습니까? 현재 데이터는 사라집니다.')) { 
+                            setData(d); 
+                            syncToCloud(d);
+                            alert('데이터를 성공적으로 불러왔습니다.'); 
+                        } 
+                    } catch (err) { 
+                        alert('잘못된 백업 파일입니다.'); 
+                    } 
+                }; 
+                reader.readAsText(file); 
+            };
 
             // Management Functions
             const addOwner = () => { if (!newOwner) return; const newData = { ...data, owners: [...data.owners, { id: Date.now().toString(), name: newOwner }] }; setData(newData); syncToCloud(newData); setNewOwner(''); };
@@ -1035,22 +1052,36 @@
             useEffect(() => {
                 if (!fbConfig || !window.firebase) return;
                 if (!firebase.apps.length) firebase.initializeApp(fbConfig);
-                const unsubscribe = firebase.auth().onAuthStateChanged(u => {
+                
+                let unsubSnapshot = null;
+                const unsubscribeAuth = firebase.auth().onAuthStateChanged(u => {
                     setUser(u);
+                    if (unsubSnapshot) { unsubSnapshot(); unsubSnapshot = null; }
+                    
                     if (u) {
                         const sharedId = localStorage.getItem(SHARED_ID_KEY);
-                        if (sharedId) {
-                            firebase.firestore().collection('shared_data').doc(sharedId).get().then(d => {
-                                if (d.exists) setData(d.data());
-                            });
-                        } else {
-                            firebase.firestore().collection('users').doc(u.uid).get().then(d => {
-                                if (d.exists) setData(d.data());
-                            });
-                        }
+                        const docRef = sharedId 
+                            ? firebase.firestore().collection('shared_data').doc(sharedId) 
+                            : firebase.firestore().collection('users').doc(u.uid);
+                        
+                        unsubSnapshot = docRef.onSnapshot(d => {
+                            if (d.exists) {
+                                const cloudData = d.data();
+                                setData(prev => {
+                                    if (JSON.stringify(prev) !== JSON.stringify(cloudData)) {
+                                        return cloudData;
+                                    }
+                                    return prev;
+                                });
+                            }
+                        }, err => console.error("Firebase Snapshot Error:", err));
                     }
                 });
-                return () => unsubscribe();
+
+                return () => {
+                    unsubscribeAuth();
+                    if (unsubSnapshot) unsubSnapshot();
+                };
             }, [fbConfig]);
 
             useEffect(() => {
