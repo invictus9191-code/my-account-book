@@ -420,7 +420,7 @@
             );
         }
 
-        function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm }) {
+        function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm, isConnected }) {
 
             const del = (id) => {
                 if (confirm('삭제하시겠습니까?')) {
@@ -470,7 +470,14 @@
                                 <Icon name="search" size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e' }} />
                                 <input className="search-input" type="text" placeholder="검색어 입력..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ paddingLeft: '32px', paddingRight: '10px', paddingTop: '8px', paddingBottom: '8px', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: '#c9d1d9', width: '100%' }} />
                             </div>
-                            <button className="primary header-add-btn" onClick={() => { setEdit(null); setShowModal(true); }}>+ 거래 추가</button>
+                            <button 
+                                className={`primary header-add-btn ${!isConnected ? 'btn-disabled' : ''}`} 
+                                onClick={() => { 
+                                    if(!isConnected) { alert('Firebase 연동이 필요합니다.'); return; }
+                                    setEdit(null); setShowModal(true); 
+                                }}
+                                title={!isConnected ? "Firebase 연동 시에만 작성 가능합니다." : ""}
+                            >+ 거래 추가</button>
                         </div>
                     </div>
                     <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
@@ -507,7 +514,14 @@
                             </tbody>
                         </table>
                     </div>
-                    <button className="fab-add-transaction" onClick={() => { setEdit(null); setShowModal(true); }} style={{ display: 'none' }}>
+                    <button 
+                        className={`fab-add-transaction ${!isConnected ? 'btn-disabled' : ''}`} 
+                        onClick={() => { 
+                            if(!isConnected) { alert('Firebase 연동이 필요합니다.'); return; }
+                            setEdit(null); setShowModal(true); 
+                        }} 
+                        style={{ display: 'none' }}
+                    >
                         <Icon name="plus" size={32} />
                     </button>
                 </div>
@@ -708,7 +722,7 @@
             );
         }
 
-        function TransactionModal({ data, setData, onClose, editItem, syncToCloud }) {
+        function TransactionModal({ data, setData, onClose, editItem, syncToCloud, isConnected }) {
             const [form, setForm] = useState(() => {
                 const groups = data.groups || [];
                 const firstGroup = groups.length > 0 ? groups[0].id : '';
@@ -737,6 +751,7 @@
             const handleSubmit = (e) => {
                 if (e) e.preventDefault();
                 if (form.type === 'Transfer' && form.assetId === form.toAssetId) { alert('동일 자산 간 이체는 불가합니다.'); return; }
+                if (!isConnected) { alert('Firebase 서버와 연결되지 않아 저장할 수 없습니다.'); return; }
                 const newData = { ...data, transactions: editItem ? data.transactions.map(t => t.id === editItem.id ? { ...form, id: editItem.id } : t) : [...data.transactions, { ...form, id: Date.now().toString() }] };
                 setData(newData);
                 syncToCloud(newData);
@@ -764,45 +779,51 @@
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', overflowY: 'auto', zIndex: 1000, padding: '1rem 0' }}>
                     <div className="card modal-content" style={{ maxWidth: '420px', width: '90%', padding: '2rem', margin: 'auto' }}>
                         <h2 className="modal-title" style={{ marginBottom: '1.5rem', fontSize: '1.5rem' }}>거래 {editItem ? '수정' : '추가'}</h2>
+                        {!isConnected && (
+                            <div className="sync-warning">
+                                <Icon name="alert-circle" size={18} />
+                                <span>Firebase에 연동되지 않아 작성이 제한됩니다.</span>
+                            </div>
+                        )}
                         <form onSubmit={handleSubmit}>
                             <div className="form-row"><label>날짜</label><input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required /></div>
                             <div className="form-row">
                                 <label>구분</label>
                                 <div className="type-button-group">
-                                    <button type="button" className={form.type === 'Income' ? 'active' : ''} data-type="Income" onClick={() => setForm({ ...form, type: 'Income' })}>수입</button>
-                                    <button type="button" className={form.type === 'Expense' ? 'active' : ''} data-type="Expense" onClick={() => setForm({ ...form, type: 'Expense' })}>지출</button>
-                                    <button type="button" className={form.type === 'Transfer' ? 'active' : ''} data-type="Transfer" onClick={() => setForm({ ...form, type: 'Transfer' })}>이체</button>
+                                    <button type="button" className={`${form.type === 'Income' ? 'active' : ''} ${!isConnected ? 'btn-disabled' : ''}`} data-type="Income" onClick={() => setForm({ ...form, type: 'Income' })}>수입</button>
+                                    <button type="button" className={`${form.type === 'Expense' ? 'active' : ''} ${!isConnected ? 'btn-disabled' : ''}`} data-type="Expense" onClick={() => setForm({ ...form, type: 'Expense' })}>지출</button>
+                                    <button type="button" className={`${form.type === 'Transfer' ? 'active' : ''} ${!isConnected ? 'btn-disabled' : ''}`} data-type="Transfer" onClick={() => setForm({ ...form, type: 'Transfer' })}>이체</button>
                                 </div>
                             </div>
-                            <div className="form-row"><label>카테고리</label><select value={form.categoryId} onChange={e => setForm({ ...form, categoryId: e.target.value })} required><option value="">선택하세요</option>{filteredCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+                            <div className="form-row"><label>카테고리</label><select value={form.categoryId} onChange={e => setForm({ ...form, categoryId: e.target.value })} required disabled={!isConnected}><option value="">선택하세요</option>{filteredCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
                             <div className="form-row" style={{ alignItems: 'flex-start' }}>
                                 <label style={{ marginTop: '10px' }}>금액</label>
                                 <div className="quick-amount-container">
-                                    <input type="text" value={form.amount ? Number(form.amount).toLocaleString() : ''} onChange={handleAmountChange} placeholder="금액 입력" required />
+                                    <input type="text" value={form.amount ? Number(form.amount).toLocaleString() : ''} onChange={handleAmountChange} placeholder="금액 입력" required disabled={!isConnected} />
                                     <div className="quick-amount-buttons">
-                                        <button type="button" onClick={() => handleQuickAmount(1000000)}>백만</button>
-                                        <button type="button" onClick={() => handleQuickAmount(100000)}>십만</button>
-                                        <button type="button" onClick={() => handleQuickAmount(10000)}>만</button>
-                                        <button type="button" onClick={() => handleQuickAmount(1000)}>천</button>
-                                        <button type="button" onClick={() => handleQuickAmount(100)}>백</button>
-                                        <button type="button" onClick={() => handleQuickAmount(10)}>십</button>
-                                        <button type="button" className="clear-btn" onClick={clearAmount}>지우기</button>
+                                        <button type="button" onClick={() => handleQuickAmount(1000000)} disabled={!isConnected}>백만</button>
+                                        <button type="button" onClick={() => handleQuickAmount(100000)} disabled={!isConnected}>십만</button>
+                                        <button type="button" onClick={() => handleQuickAmount(10000)} disabled={!isConnected}>만</button>
+                                        <button type="button" onClick={() => handleQuickAmount(1000)} disabled={!isConnected}>천</button>
+                                        <button type="button" onClick={() => handleQuickAmount(100)} disabled={!isConnected}>백</button>
+                                        <button type="button" onClick={() => handleQuickAmount(10)} disabled={!isConnected}>십</button>
+                                        <button type="button" className="clear-btn" onClick={clearAmount} disabled={!isConnected}>지우기</button>
                                     </div>
                                 </div>
                             </div>
-                            <div className="form-row"><label>그룹 (출금)</label><select value={form.groupId} onChange={e => setForm({ ...form, groupId: e.target.value })}><option value="">전체/미지정</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
-                            <div className="form-row"><label>{form.type === 'Transfer' ? '출금 자산' : '자산'}</label><select value={form.assetId} onChange={e => setForm({ ...form, assetId: e.target.value })}>{filteredAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+                            <div className="form-row"><label>그룹 (출금)</label><select value={form.groupId} onChange={e => setForm({ ...form, groupId: e.target.value })} disabled={!isConnected}><option value="">전체/미지정</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+                            <div className="form-row"><label>{form.type === 'Transfer' ? '출금 자산' : '자산'}</label><select value={form.assetId} onChange={e => setForm({ ...form, assetId: e.target.value })} disabled={!isConnected}>{filteredAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
                             {form.type === 'Transfer' && (
                                 <React.Fragment>
-                                    <div className="form-row"><label>그룹 (입금)</label><select value={form.toGroupId} onChange={e => setForm({ ...form, toGroupId: e.target.value })}><option value="">전체/미지정</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
-                                    <div className="form-row"><label>입금 자산</label><select value={form.toAssetId} onChange={e => setForm({ ...form, toAssetId: e.target.value })}>{filteredToAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+                                    <div className="form-row"><label>그룹 (입금)</label><select value={form.toGroupId} onChange={e => setForm({ ...form, toGroupId: e.target.value })} disabled={!isConnected}><option value="">전체/미지정</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+                                    <div className="form-row"><label>입금 자산</label><select value={form.toAssetId} onChange={e => setForm({ ...form, toAssetId: e.target.value })} disabled={!isConnected}>{filteredToAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
                                 </React.Fragment>
                             )}
-                            <div className="form-row"><label>메모</label><input value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} placeholder="메모" /></div>
+                            <div className="form-row"><label>메모</label><input value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} placeholder="메모" disabled={!isConnected} /></div>
                             <div className="modal-footer" style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                                 <button type="button" onClick={onClose} style={{ background: '#30363d', color: 'white' }}>취소</button>
-                                {editItem && <button type="button" className="danger" onClick={handleDelete}>삭제</button>}
-                                <button type="submit" className="primary">저장</button>
+                                {editItem && <button type="button" className="danger" onClick={handleDelete} disabled={!isConnected}>삭제</button>}
+                                <button type="submit" className={`primary ${!isConnected ? 'btn-disabled' : ''}`} disabled={!isConnected}>저장</button>
                             </div>
                         </form>
                     </div>
@@ -1038,6 +1059,10 @@
             const [searchTerm, setSearchTerm] = useState('');
             const [showMobileSearch, setShowMobileSearch] = useState(false);
 
+            const isConnected = useMemo(() => {
+                return !!user && !!fbConfig && window.firebase && firebase.apps.length > 0;
+            }, [user, fbConfig]);
+
             const syncToCloud = (newData) => {
                 if (user && window.firebase && firebase.apps.length) {
                     const sharedId = localStorage.getItem(SHARED_ID_KEY);
@@ -1113,6 +1138,10 @@
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                             <Icon name={tab === 'dashboard' ? 'layout-dashboard' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
                             <h2>{tabTitles[tab] || 'Smart Finance'}</h2>
+                            <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`} style={{ marginLeft: '8px' }}>
+                                <div className="connection-dot"></div>
+                                <span>{isConnected ? '연동됨' : '미연동'}</span>
+                            </div>
                         </div>
                         {tab === 'transactions' && (
                             <button className="mobile-only" onClick={() => setShowMobileSearch(!showMobileSearch)} style={{ background: 'transparent', color: 'white', padding: '0.4rem', marginRight: '4px' }}>
@@ -1142,9 +1171,15 @@
                     )}
                     <div className={`mobile-overlay ${sidebarOpen ? 'visible' : ''}`} onClick={() => setSidebarOpen(false)}></div>
                     <div className={`sidebar ${sidebarOpen ? 'mobile-open' : ''}`}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Icon name="activity" size={24} /><h2>Smart Finance</h2></div>
                             <button className="mobile-only" onClick={() => setSidebarOpen(false)} style={{ background: 'transparent', color: 'white', display: window.innerWidth <= 768 ? 'block' : 'none' }}><Icon name="x" size={24} /></button>
+                        </div>
+                        <div style={{ marginBottom: '1rem', padding: '0 0.5rem' }}>
+                            <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
+                                <div className="connection-dot"></div>
+                                <span>{isConnected ? 'Firebase 클라우드 연동 중' : '서버 연결 안 됨 (작성 제한됨)'}</span>
+                            </div>
                         </div>
                         <div className={`nav-item ${tab === 'dashboard' ? 'active' : ''}`} onClick={() => menuClick('dashboard')}><Icon name="layout-dashboard" /> 대시보드</div>
                         <div className={`nav-item ${tab === 'transactions' ? 'active' : ''}`} onClick={() => menuClick('transactions')}><Icon name="list" /> 거래 내역</div>
@@ -1154,11 +1189,11 @@
                     </div>
                     <div className="main-content"><div className="container">
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} />}
-                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} />}
+                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} />}
                     </div></div>
-                    {showModal && <TransactionModal data={data} setData={setData} onClose={() => { setShowModal(false); setEdit(null); }} editItem={edit} syncToCloud={syncToCloud} />}
+                    {showModal && <TransactionModal data={data} setData={setData} onClose={() => { setShowModal(false); setEdit(null); }} editItem={edit} syncToCloud={syncToCloud} isConnected={isConnected} />}
                     {showAssetModal && <AssetModal data={data} setData={setData} onClose={() => { setShowAssetModal(false); setEditAsset(null); }} editItem={editAsset} syncToCloud={syncToCloud} />}
                 </React.Fragment>
             );
