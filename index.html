@@ -421,6 +421,7 @@
         }
 
         function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm, isConnected }) {
+            const [authorFilter, setAuthorFilter] = useState('ALL');
 
             const del = (id) => {
                 if (confirm('삭제하시겠습니까?')) {
@@ -431,6 +432,7 @@
             };
 
             const filteredTransactions = data.transactions.filter(t => {
+                if (authorFilter !== 'ALL' && t.authorEmail !== authorFilter) return false;
                 if (!searchTerm) return true;
                 const term = searchTerm.toLowerCase();
                 const memoMatch = t.memo?.toLowerCase().includes(term);
@@ -466,6 +468,21 @@
                     <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                         <h1 className="page-title">거래 내역</h1>
                         <div className="header-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
+                            <div className="filter-box" style={{ marginRight: '5px' }}>
+                                <select 
+                                    value={authorFilter} 
+                                    onChange={e => setAuthorFilter(e.target.value)}
+                                    style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #30363d', background: '#21262d', color: 'white', fontWeight: 'bold' }}
+                                >
+                                    <option value="ALL">전체</option>
+                                    {Array.from(new Set(data.transactions.map(t => t.authorEmail).filter(Boolean))).map(email => {
+                                        const abbrs = data.authorAbbreviations || [];
+                                        const found = abbrs.find(a => a.email === email);
+                                        const label = found ? found.abbr : email.split('@')[0];
+                                        return <option key={email} value={email}>{label}</option>;
+                                    })}
+                                </select>
+                            </div>
                             <div className="search-box mobile-hide" style={{ position: 'relative', flex: 1, maxWidth: '300px' }}>
                                 <Icon name="search" size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e' }} />
                                 <input className="search-input" type="text" placeholder="검색어 입력..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ paddingLeft: '32px', paddingRight: '10px', paddingTop: '8px', paddingBottom: '8px', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: '#c9d1d9', width: '100%' }} />
@@ -722,7 +739,7 @@
             );
         }
 
-        function TransactionModal({ data, setData, onClose, editItem, syncToCloud, isConnected }) {
+        function TransactionModal({ data, setData, onClose, editItem, syncToCloud, isConnected, user }) {
             const [form, setForm] = useState(() => {
                 const groups = data.groups || [];
                 const firstGroup = groups.length > 0 ? groups[0].id : '';
@@ -752,7 +769,8 @@
                 if (e) e.preventDefault();
                 if (form.type === 'Transfer' && form.assetId === form.toAssetId) { alert('동일 자산 간 이체는 불가합니다.'); return; }
                 if (!isConnected) { alert('Firebase 서버와 연결되지 않아 저장할 수 없습니다.'); return; }
-                const newData = { ...data, transactions: editItem ? data.transactions.map(t => t.id === editItem.id ? { ...form, id: editItem.id } : t) : [...data.transactions, { ...form, id: Date.now().toString() }] };
+                const authorEmail = editItem?.authorEmail || user?.email || '';
+                const newData = { ...data, transactions: editItem ? data.transactions.map(t => t.id === editItem.id ? { ...form, id: editItem.id, authorEmail } : t) : [...data.transactions, { ...form, id: Date.now().toString(), authorEmail }] };
                 setData(newData);
                 syncToCloud(newData);
                 onClose();
@@ -834,10 +852,12 @@
         function Settings({ data, setData, fbConfig, setFbConfig, syncToCloud, user, isConnected }) {
             const [fbVal, setFbVal] = useState(fbConfig ? JSON.stringify(fbConfig, null, 2) : '');
             const [newPw, setNewPw] = useState('');
-            const [activeTab, setActiveTab] = useState('general'); // general, owners, groups, categories, assets
+            const [activeTab, setActiveTab] = useState('general'); // general, owners, groups, categories, assets, authors
 
             // State for management tabs
             const [newOwner, setNewOwner] = useState('');
+            const [newEmail, setNewEmail] = useState('');
+            const [newAbbr, setNewAbbr] = useState('');
             const [newGroup, setNewGroup] = useState('');
             const [newCat, setNewCat] = useState({ name: '', type: 'Expense' });
             const [editingAsset, setEditingAsset] = useState(null);
@@ -909,6 +929,21 @@
             const addCat = () => { if (!newCat.name) return; const newData = { ...data, categories: [...data.categories, { ...newCat, id: Date.now().toString() }] }; setData(newData); syncToCloud(newData); setNewCat({ ...newCat, name: '' }); };
             const delCat = (id) => { if (confirm('삭제하시겠습니까?')) { const newData = { ...data, categories: data.categories.filter(c => c.id !== id) }; setData(newData); syncToCloud(newData); } };
 
+            const addAbbr = () => {
+                if (!newEmail || !newAbbr) return;
+                const newData = { ...data, authorAbbreviations: [...(data.authorAbbreviations || []).filter(a => a.email !== newEmail), { email: newEmail, abbr: newAbbr }] };
+                setData(newData);
+                syncToCloud(newData);
+                setNewEmail(''); setNewAbbr('');
+            };
+            const delAbbr = (email) => {
+                if (confirm('이 약칭을 삭제하시겠습니까?')) {
+                    const newData = { ...data, authorAbbreviations: (data.authorAbbreviations || []).filter(a => a.email !== email) };
+                    setData(newData);
+                    syncToCloud(newData);
+                }
+            };
+
             const renderCatList = (type) => (
                 <div style={{ marginBottom: '1.5rem' }}>
                     <h4 style={{ marginBottom: '0.5rem', color: '#8b949e' }}>{type === 'Income' ? '수입' : type === 'Expense' ? '지출' : '이체'}</h4>
@@ -921,7 +956,7 @@
                 <div className="fade-in">
                     <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: '1.5rem' }}>
                         <div style={{ display: 'flex', borderBottom: '1px solid #30363d', background: 'rgba(22, 27, 34, 0.5)', overflowX: 'auto' }}>
-                            {[{ id: 'general', label: '일반/백업' }, { id: 'owners', label: '소유자' }, { id: 'groups', label: '자산 그룹' }, { id: 'assets', label: '자산 목록' }, { id: 'categories', label: '카테고리' }].map(t => (
+                            {[{ id: 'general', label: '일반/백업' }, { id: 'owners', label: '소유자' }, { id: 'groups', label: '자산 그룹' }, { id: 'assets', label: '자산 목록' }, { id: 'categories', label: '카테고리' }, { id: 'authors', label: '작성자 약칭' }].map(t => (
                                 <button key={t.id} onClick={() => setActiveTab(t.id)} style={{ padding: '1rem 1.5rem', background: 'transparent', color: activeTab === t.id ? '#58a6ff' : '#8b949e', borderBottom: activeTab === t.id ? '2px solid #58a6ff' : '2px solid transparent', borderRadius: 0, whiteSpace: 'nowrap' }}>
                                     {t.label}
                                 </button>
@@ -995,6 +1030,26 @@ service cloud.firestore {
 }`}
                                             </pre>
                                         </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'authors' && (
+                                <div>
+                                    <h3>작성자 약칭 관리</h3>
+                                    <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>거래내역 필터에 표시될 이메일별 약칭을 설정합니다.</p>
+                                    <div style={{ display: 'flex', gap: '8px', margin: '1rem 0', maxWidth: '500px' }}>
+                                        <input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="이메일 (예: test@test.com)" />
+                                        <input value={newAbbr} onChange={e => setNewAbbr(e.target.value)} placeholder="약칭 (예: TS)" style={{ width: '100px' }} />
+                                        <button className="primary" onClick={addAbbr}>추가</button>
+                                    </div>
+                                    <div style={{ maxWidth: '500px' }}>
+                                        {(data.authorAbbreviations || []).map(a => (
+                                            <div key={a.email} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #30363d' }}>
+                                                <span>{a.email} <span style={{ color: '#58a6ff', marginLeft: '10px' }}>[{a.abbr}]</span></span>
+                                                <button onClick={() => delAbbr(a.email)} style={{ background: 'transparent', color: '#da3633', fontSize: '0.85rem' }}>삭제</button>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             )}
@@ -1277,7 +1332,7 @@ service cloud.firestore {
                         {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} />}
                     </div></div>
-                    {showModal && <TransactionModal data={data} setData={setData} onClose={() => { setShowModal(false); setEdit(null); }} editItem={edit} syncToCloud={syncToCloud} isConnected={isConnected} />}
+                    {showModal && <TransactionModal data={data} setData={setData} onClose={() => { setShowModal(false); setEdit(null); }} editItem={edit} syncToCloud={syncToCloud} isConnected={isConnected} user={user} />}
                     {showAssetModal && <AssetModal data={data} setData={setData} onClose={() => { setShowAssetModal(false); setEditAsset(null); }} editItem={editAsset} syncToCloud={syncToCloud} />}
                 </React.Fragment>
             );
