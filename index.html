@@ -420,8 +420,7 @@
             );
         }
 
-        function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm, isConnected }) {
-            const [authorFilter, setAuthorFilter] = useState('ALL');
+        function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm, isConnected, authorFilter, setAuthorFilter }) {
 
             const del = (id) => {
                 if (confirm('삭제하시겠습니까?')) {
@@ -468,7 +467,7 @@
                     <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                         <h1 className="page-title">거래 내역</h1>
                         <div className="header-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
-                            <div className="filter-box" style={{ marginRight: '5px' }}>
+                            <div className="filter-box mobile-hide" style={{ marginRight: '5px' }}>
                                 <select 
                                     value={authorFilter} 
                                     onChange={e => setAuthorFilter(e.target.value)}
@@ -1156,6 +1155,8 @@ service cloud.firestore {
             const [tab, setTab] = useState('transactions');
             const [showModal, setShowModal] = useState(false);
             const [edit, setEdit] = useState(null);
+            
+            const [authorFilter, setAuthorFilter] = useState('ALL');
 
             // For Dashboard Asset editing
             const [showAssetModal, setShowAssetModal] = useState(false);
@@ -1256,9 +1257,25 @@ service cloud.firestore {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                             <Icon name={tab === 'dashboard' ? 'layout-dashboard' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
                             <h2>{tabTitles[tab] || 'Smart Finance'}</h2>
-                            <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`} style={{ marginLeft: '8px' }}>
+                            {tab === 'transactions' && (
+                                <select 
+                                    className="mobile-only"
+                                    value={authorFilter} 
+                                    onChange={e => setAuthorFilter(e.target.value)}
+                                    style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #30363d', background: '#21262d', color: 'white', fontWeight: 'bold', fontSize: '0.85rem', marginLeft: 'auto' }}
+                                >
+                                    <option value="ALL">전체 작성자</option>
+                                    {Array.from(new Set((data.transactions || []).map(t => t.authorEmail).filter(Boolean))).map(email => {
+                                        const abbrs = data.authorAbbreviations || [];
+                                        const found = abbrs.find(a => a.email === email);
+                                        const label = found ? found.abbr : email;
+                                        return <option key={email} value={email}>{label}</option>;
+                                    })}
+                                </select>
+                            )}
+                            <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`} style={{ marginLeft: tab === 'transactions' ? '4px' : 'auto' }}>
                                 <div className="connection-dot"></div>
-                                <span>{isConnected ? '연동됨' : '미연동'}</span>
+                                <span className="mobile-hide">{isConnected ? '연동됨' : '미연동'}</span>
                             </div>
                         </div>
                         {tab === 'transactions' && (
@@ -1307,7 +1324,7 @@ service cloud.firestore {
                     </div>
                     <div className="main-content"><div className="container">
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} />}
-                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} />}
+                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} />}
                     </div></div>

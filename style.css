@@ -418,6 +418,10 @@ button.danger {
 }
 
 /* Mobile Responsive */
+.mobile-only {
+  display: none !important;
+}
+
 .mobile-header {
   display: none;
   position: sticky;
@@ -622,6 +626,10 @@ button.danger {
   /* Specific column hiding for Transaction Page */
   .mobile-hide {
     display: none !important;
+  }
+
+  .mobile-only {
+    display: flex !important;
   }
 
   /* Floating Action Button (FAB) */
