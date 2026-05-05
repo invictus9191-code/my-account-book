@@ -1262,9 +1262,9 @@ service cloud.firestore {
                                     className="mobile-only"
                                     value={authorFilter} 
                                     onChange={e => setAuthorFilter(e.target.value)}
-                                    style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #30363d', background: '#21262d', color: 'white', fontWeight: 'bold', fontSize: '0.85rem', marginLeft: 'auto' }}
+                                    style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #30363d', background: '#21262d', color: 'white', fontWeight: 'bold', fontSize: '0.85rem', marginLeft: 'auto', maxWidth: '80px' }}
                                 >
-                                    <option value="ALL">전체 작성자</option>
+                                    <option value="ALL">전체</option>
                                     {Array.from(new Set((data.transactions || []).map(t => t.authorEmail).filter(Boolean))).map(email => {
                                         const abbrs = data.authorAbbreviations || [];
                                         const found = abbrs.find(a => a.email === email);
