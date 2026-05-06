@@ -47,7 +47,7 @@ body {
 }
 
 .sidebar h2 {
-  font-size: 1.5rem;
+  font-size: calc(1.5rem - 1pt);
   font-weight: 700;
   margin-bottom: 2rem;
   background: linear-gradient(90deg, #58a6ff, #bc8cff);
@@ -437,6 +437,10 @@ button.danger {
   align-items: center;
   z-index: 1000;
   backdrop-filter: var(--glass-effect);
+}
+
+.mobile-header h2 {
+  font-size: calc(1.5rem - 1pt);
 }
 
 .mobile-overlay {
