@@ -206,18 +206,22 @@
                 return { labels: labels.map(m => `${m.substring(5)}월`), categoryData };
             }, [selectedMonth, selectedCategory, data.transactions]);
 
-            const chartOptions = {
-                chart: { type: 'bar', toolbar: { show: false }, background: 'transparent' },
+            const getChartOptions = (id) => ({
+                chart: { type: 'bar', id: id, toolbar: { show: false }, background: 'transparent' },
                 theme: { mode: 'dark' },
                 xaxis: { categories: annualData.labels },
-                yaxis: { labels: { formatter: (value) => value.toLocaleString() } },
+                yaxis: { 
+                    labels: { formatter: (value) => typeof value === 'number' && !isNaN(value) ? Math.floor(value).toLocaleString() : value },
+                    forceNiceScale: true,
+                    decimalsInFloat: 0
+                },
                 dataLabels: { enabled: false },
                 grid: { borderColor: '#30363d' },
                 tooltip: {
                     theme: 'dark',
-                    y: { formatter: (value) => value.toLocaleString() + '원' }
+                    y: { formatter: (value) => typeof value === 'number' && !isNaN(value) ? Math.floor(value).toLocaleString() + '원' : value + '원' }
                 }
-            };
+            });
 
             const renderDiff = (curr, prev) => {
                 const diff = curr - prev;
@@ -416,7 +420,7 @@
                             {window.ReactApexChart ? (
                                 chartType === 'income_expense' ? (
                                     <window.ReactApexChart
-                                        options={{ ...chartOptions, colors: ['#238636', '#da3633'] }}
+                                        options={{ ...getChartOptions('chart-income-expense'), colors: ['#238636', '#da3633'] }}
                                         series={[
                                             { name: '수입', data: annualData.incomeData },
                                             { name: '지출', data: annualData.expenseData }
@@ -425,7 +429,7 @@
                                     />
                                 ) : (
                                     <window.ReactApexChart
-                                        options={{ ...chartOptions, colors: ['#1f6feb'] }}
+                                        options={{ ...getChartOptions('chart-savings'), colors: ['#1f6feb'] }}
                                         series={[{ name: '저축', data: annualData.savingsData }]}
                                         type="bar" height={280}
                                     />
@@ -436,7 +440,7 @@
                             <h3>연간 자산 흐름</h3>
                             {window.ReactApexChart ? (
                                 <window.ReactApexChart
-                                    options={{ ...chartOptions, colors: ['#58a6ff'] }}
+                                    options={{ ...getChartOptions('chart-assets'), colors: ['#58a6ff'] }}
                                     series={[{ name: '자산액', data: annualData.assetData }]}
                                     type="bar" height={280}
                                 />
@@ -468,7 +472,7 @@
                         </div>
                         {window.ReactApexChart ? (
                             <window.ReactApexChart
-                                options={{ ...chartOptions, colors: ['#a371f7'] }}
+                                options={{ ...getChartOptions('chart-category'), colors: ['#a371f7'] }}
                                 series={[{ name: '금액', data: annualCategoryData.categoryData }]}
                                 type="bar" height={280}
                             />
