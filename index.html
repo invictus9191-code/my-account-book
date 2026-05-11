@@ -83,6 +83,19 @@
         };
 
         function Dashboard({ data, setEdit, setShowModal, setEditAsset, setShowAssetModal }) {
+            const [categoryType, setCategoryType] = useState('Expense');
+            const [selectedCategory, setSelectedCategory] = useState(() => {
+                const cats = data.categories ? data.categories.filter(c => c.type === 'Expense') : [];
+                return cats.length > 0 ? cats[0].id : '';
+            });
+
+            useEffect(() => {
+                const cats = data.categories.filter(c => c.type === categoryType);
+                if (cats.length > 0 && !cats.find(c => c.id === selectedCategory)) {
+                    setSelectedCategory(cats[0].id);
+                }
+            }, [categoryType, data.categories, selectedCategory]);
+
             const [selectedMonth, setSelectedMonth] = useState(() => {
                 const now = new Date();
                 return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -178,6 +191,20 @@
 
                 return { labels: labels.map(m => `${m.substring(5)}월`), incomeData, expenseData, savingsData, assetData };
             }, [selectedMonth, data.transactions, data.assets]);
+
+            const annualCategoryData = useMemo(() => {
+                const [year, month] = selectedMonth.split('-').map(Number);
+                const labels = Array.from({ length: 12 }, (_, i) => {
+                    const d = new Date(year, month - 1 - (11 - i), 1);
+                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                });
+                const categoryData = labels.map(m => {
+                    return data.transactions
+                        .filter(t => t.date.startsWith(m) && t.categoryId === selectedCategory)
+                        .reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+                });
+                return { labels: labels.map(m => `${m.substring(5)}월`), categoryData };
+            }, [selectedMonth, selectedCategory, data.transactions]);
 
             const chartOptions = {
                 chart: { type: 'bar', toolbar: { show: false }, background: 'transparent' },
@@ -415,6 +442,37 @@
                                 />
                             ) : "차트 로딩 중..."}
                         </div>
+                    </div>
+
+                    <div className="card" style={{ marginTop: '1.5rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <h3>카테고리별 연간 흐름</h3>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <select 
+                                    value={categoryType} 
+                                    onChange={e => setCategoryType(e.target.value)}
+                                    style={{ padding: '0.4rem', borderRadius: '6px', background: '#21262d', color: 'white', border: '1px solid #30363d', fontSize: '0.9rem' }}
+                                >
+                                    <option value="Expense">지출</option>
+                                    <option value="Income">수입</option>
+                                    <option value="Transfer">이체/저축</option>
+                                </select>
+                                <select 
+                                    value={selectedCategory} 
+                                    onChange={e => setSelectedCategory(e.target.value)}
+                                    style={{ padding: '0.4rem', borderRadius: '6px', background: '#21262d', color: 'white', border: '1px solid #30363d', maxWidth: '150px', fontSize: '0.9rem' }}
+                                >
+                                    {data.categories.filter(c => c.type === categoryType).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                        {window.ReactApexChart ? (
+                            <window.ReactApexChart
+                                options={{ ...chartOptions, colors: ['#a371f7'] }}
+                                series={[{ name: '금액', data: annualCategoryData.categoryData }]}
+                                type="bar" height={280}
+                            />
+                        ) : "차트 로딩 중..."}
                     </div>
                 </div>
             );
