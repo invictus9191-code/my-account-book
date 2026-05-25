@@ -804,7 +804,8 @@
             const [form, setForm] = useState(() => {
                 const groups = data.groups || [];
                 const firstGroup = groups.length > 0 ? groups[0].id : '';
-                const initial = editItem || { date: new Date().toISOString().split('T')[0], type: 'Expense', amount: '', categoryId: '', groupId: firstGroup, assetId: data.assets[0]?.id || '', toGroupId: firstGroup, toAssetId: '', memo: '' };
+                const getTodayKST = () => { const now = new Date(); const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000); return kst.toISOString().split('T')[0]; };
+                const initial = editItem || { date: getTodayKST(), type: 'Expense', amount: '', categoryId: '', groupId: firstGroup, assetId: data.assets[0]?.id || '', toGroupId: firstGroup, toAssetId: '', memo: '' };
 
                 // For editing existing records, determine group from asset
                 if (editItem) {
@@ -960,7 +961,7 @@
                 alert(`신규 공유 ID가 생성되었습니다: ${newId}\n'저장' 버튼을 눌러야 적용됩니다.`);
             };
 
-            const exportData = () => { const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `household_backup_${new Date().toISOString().split('T')[0]}.json`; a.click(); };
+            const exportData = () => { const now = new Date(); const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000); const todayKST = kst.toISOString().split('T')[0]; const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `household_backup_${todayKST}.json`; a.click(); };
             const importData = (e) => { 
                 const file = e.target.files[0]; 
                 if (!file) return; 
