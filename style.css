@@ -527,6 +527,17 @@ button.danger {
     font-size: 0.85rem;
   }
 
+  .month-group-row, .empty-row {
+    display: block;
+    width: 100%;
+  }
+
+  .month-group-row td, .empty-row td {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
   th,
   td {
     padding: 0.8rem 0.5rem;
