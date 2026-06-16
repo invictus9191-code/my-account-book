@@ -9,11 +9,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- Scripts -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/prop-types/prop-types.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prop-types/prop-types.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <script src="https://cdn.jsdelivr.net/npm/react-apexcharts@1.4.1/dist/react-apexcharts.iife.min.js"></script>
 
@@ -1203,14 +1203,19 @@ service cloud.firestore {
             const [data, setData] = useState(() => {
                 const s = localStorage.getItem(STORAGE_KEY);
                 if (!s) return initialData;
-                const p = JSON.parse(s);
+                let p;
+                try { p = JSON.parse(s); } catch (e) { p = null; }
+                if (!p || typeof p !== 'object') return initialData;
                 if (!p.categories || p.categories.length < 10) p.categories = initialData.categories;
                 if (!p.groups) p.groups = initialData.groups;
-                if (p.assets) p.assets = p.assets.map(a => ({
+                if (!p.assets) p.assets = initialData.assets;
+                else p.assets = p.assets.map(a => ({
                     ...a,
                     initialBalance: a.initialBalance !== undefined ? a.initialBalance : 0,
                     groupId: a.groupId || ''
                 }));
+                if (!p.transactions) p.transactions = [];
+                if (!p.owners) p.owners = initialData.owners;
                 return p;
             });
             const [user, setUser] = useState(null);
@@ -1396,7 +1401,29 @@ service cloud.firestore {
                 </React.Fragment>
             );
         }
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+        class ErrorBoundary extends React.Component {
+            constructor(props) {
+                super(props);
+                this.state = { hasError: false, error: null };
+            }
+            static getDerivedStateFromError(error) {
+                return { hasError: true, error };
+            }
+            render() {
+                if (this.state.hasError) {
+                    return (
+                        <div style={{ color: 'white', padding: '20px', fontFamily: 'sans-serif' }}>
+                            <h2>오류가 발생했습니다.</h2>
+                            <pre style={{ background: '#30363d', padding: '10px', borderRadius: '5px' }}>{this.state.error?.toString()}</pre>
+                            <button onClick={() => { localStorage.removeItem(STORAGE_KEY); location.reload(); }} style={{ marginTop: '10px', padding: '10px', background: 'red', color: 'white', border: 'none', borderRadius: '5px' }}>로컬 데이터 초기화 및 새로고침</button>
+                        </div>
+                    );
+                }
+                return this.props.children;
+            }
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<ErrorBoundary><App /></ErrorBoundary>);
     </script>
 </body>
 
