@@ -64,7 +64,7 @@
                     spanRef.current.innerHTML = `<i data-lucide="${name}" style="width: ${size}px; height: ${size}px;"></i>`;
                     window.lucide.createIcons();
                 }
-            });
+            }, [name, size, className]);
             return <span ref={spanRef} className={`icon-wrapper ${className}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, ...style }}></span>;
         };
 
@@ -214,7 +214,7 @@
 
             const getChartOptions = (id) => ({
                 chart: { type: 'bar', id: id, toolbar: { show: false }, background: 'transparent' },
-                theme: { mode: 'dark' },
+                theme: { mode: 'light' },
                 xaxis: { categories: annualData.labels },
                 yaxis: { 
                     labels: { formatter: (value) => typeof value === 'number' && !isNaN(value) ? Math.floor(value).toLocaleString() : value },
@@ -222,7 +222,7 @@
                     decimalsInFloat: 0
                 },
                 dataLabels: { enabled: false },
-                grid: { borderColor: '#30363d' },
+                grid: { borderColor: '#d0d7de' },
                 tooltip: {
                     theme: 'dark',
                     y: { formatter: (value) => typeof value === 'number' && !isNaN(value) ? Math.floor(value).toLocaleString() + '원' : value + '원' }
@@ -284,7 +284,7 @@
                                 const diff = c.amount - c.prevAmount;
                                 const hasPrev = c.prevAmount > 0;
                                 return (
-                                    <div key={c.id} className="list-item" onClick={() => { setSelectedId(c.id); setView('category_list'); }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', borderBottom: '1px solid #30363d', cursor: 'pointer' }}>
+                                    <div key={c.id} className="list-item" onClick={() => { setSelectedId(c.id); setView('category_list'); }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', borderBottom: '1px solid var(--border-color)', cursor: 'pointer' }}>
                                         <span>{c.name}</span>
                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
                                             <span style={{ fontWeight: 600 }}>{c.amount.toLocaleString()}원 <Icon name="chevron-right" size={14} /></span>
@@ -350,13 +350,13 @@
                         <div className="card">
                             {groupGrouped.map(g => (
                                 <div key={g.id} style={{ marginBottom: '1.5rem' }}>
-                                    <h3 style={{ borderBottom: '1px solid #30363d', paddingBottom: '0.5rem', marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between' }}>
+                                    <h3 style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between' }}>
                                         {g.name} <span>{g.total.toLocaleString()}원</span>
                                     </h3>
                                     {g.assets.map(a => {
                                         const bal = calculateAssetBalance(a.id, data.assets, data.transactions, upToDate);
                                         return (
-                                            <div key={a.id} onClick={() => { setEditAsset(a); setShowAssetModal(true); }} style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '1rem', paddingBottom: '0.3rem', color: '#8b949e', cursor: 'pointer' }} className="list-item">
+                                            <div key={a.id} onClick={() => { setEditAsset(a); setShowAssetModal(true); }} style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '1rem', paddingBottom: '0.3rem', color: 'var(--text-secondary)', cursor: 'pointer' }} className="list-item">
                                                 <span>{a.name}</span>
                                                 <span>{bal.toLocaleString()}원</span>
                                             </div>
@@ -372,7 +372,7 @@
             return (
                 <div className="fade-in">
                     <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1.5rem' }}>
-                        <select className="month-select" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} style={{ padding: '0.5rem', borderRadius: '6px', background: '#21262d', color: 'white', border: '1px solid #30363d' }}>
+                        <select className="month-select" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} style={{ padding: '0.5rem', borderRadius: '6px', background: 'var(--btn-secondary-bg)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}>
                             {availableMonths.map(m => {
                                 const [y, mon] = m.split('-');
                                 return <option key={m} value={m}>{y}년 {mon}월</option>;
@@ -411,14 +411,14 @@
                         <div className="card">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                                 <h3>연간 흐름</h3>
-                                <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(22, 27, 34, 0.4)', padding: '4px', borderRadius: '8px' }}>
+                                <div style={{ display: 'flex', gap: '0.5rem', background: 'var(--hover-bg)', padding: '4px', borderRadius: '8px' }}>
                                     <button
                                         onClick={() => setChartType('income_expense')}
-                                        style={{ background: chartType === 'income_expense' ? '#30363d' : 'transparent', color: chartType === 'income_expense' ? 'white' : '#8b949e', padding: '0.3rem 0.6rem', fontSize: '0.85rem' }}
+                                        style={{ background: chartType === 'income_expense' ? 'var(--hover-bg)' : 'transparent', color: chartType === 'income_expense' ? 'var(--accent-color)' : 'var(--text-secondary)', padding: '0.3rem 0.6rem', fontSize: '0.85rem' }}
                                     >수입/지출</button>
                                     <button
                                         onClick={() => setChartType('savings')}
-                                        style={{ background: chartType === 'savings' ? '#30363d' : 'transparent', color: chartType === 'savings' ? 'white' : '#8b949e', padding: '0.3rem 0.6rem', fontSize: '0.85rem' }}
+                                        style={{ background: chartType === 'savings' ? 'var(--hover-bg)' : 'transparent', color: chartType === 'savings' ? 'var(--accent-color)' : 'var(--text-secondary)', padding: '0.3rem 0.6rem', fontSize: '0.85rem' }}
                                     >저축</button>
                                 </div>
                             </div>
@@ -426,7 +426,7 @@
                             {window.ReactApexChart ? (
                                 chartType === 'income_expense' ? (
                                     <window.ReactApexChart
-                                        options={{ ...getChartOptions('chart-income-expense'), colors: ['#238636', '#da3633'] }}
+                                        options={{ ...getChartOptions('chart-income-expense'), colors: ['var(--income-color)', 'var(--expense-color)'] }}
                                         series={[
                                             { name: '수입', data: annualData.incomeData },
                                             { name: '지출', data: annualData.expenseData }
@@ -446,7 +446,7 @@
                             <h3>연간 자산 흐름</h3>
                             {window.ReactApexChart ? (
                                 <window.ReactApexChart
-                                    options={{ ...getChartOptions('chart-assets'), colors: ['#58a6ff'] }}
+                                    options={{ ...getChartOptions('chart-assets'), colors: ['var(--accent-color)'] }}
                                     series={[{ name: '자산액', data: annualData.assetData }]}
                                     type="bar" height={280}
                                 />
@@ -461,7 +461,7 @@
                                 <select 
                                     value={categoryType} 
                                     onChange={e => setCategoryType(e.target.value)}
-                                    style={{ padding: '0.4rem', borderRadius: '6px', background: '#21262d', color: 'white', border: '1px solid #30363d', fontSize: '0.9rem' }}
+                                    style={{ padding: '0.4rem', borderRadius: '6px', background: 'var(--btn-secondary-bg)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
                                 >
                                     <option value="Expense">지출</option>
                                     <option value="Income">수입</option>
@@ -470,7 +470,7 @@
                                 <select 
                                     value={selectedCategory} 
                                     onChange={e => setSelectedCategory(e.target.value)}
-                                    style={{ padding: '0.4rem', borderRadius: '6px', background: '#21262d', color: 'white', border: '1px solid #30363d', maxWidth: '150px', fontSize: '0.9rem' }}
+                                    style={{ padding: '0.4rem', borderRadius: '6px', background: 'var(--btn-secondary-bg)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', maxWidth: '150px', fontSize: '0.9rem' }}
                                 >
                                     {data.categories.filter(c => c.type === categoryType).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                 </select>
@@ -488,7 +488,18 @@
             );
         }
 
+        function useIsMobile() {
+            const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+            useEffect(() => {
+                const handleResize = () => setIsMobile(window.innerWidth <= 768);
+                window.addEventListener('resize', handleResize);
+                return () => window.removeEventListener('resize', handleResize);
+            }, []);
+            return isMobile;
+        }
+
         function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm, isConnected, authorFilter, setAuthorFilter }) {
+            const isMobile = useIsMobile();
 
             const del = (id) => {
                 if (confirm('삭제하시겠습니까?')) {
@@ -539,7 +550,7 @@
                                 <select 
                                     value={authorFilter} 
                                     onChange={e => setAuthorFilter(e.target.value)}
-                                    style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid #30363d', background: '#21262d', color: 'white', fontWeight: 'bold' }}
+                                    style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--btn-secondary-bg)', color: 'var(--text-primary)', fontWeight: 'bold' }}
                                 >
                                     <option value="ALL">전체</option>
                                     {Array.from(new Set(data.transactions.map(t => t.authorEmail).filter(Boolean))).map(email => {
@@ -551,8 +562,8 @@
                                 </select>
                             </div>
                             <div className="search-box mobile-hide" style={{ position: 'relative', flex: 1, maxWidth: '300px' }}>
-                                <Icon name="search" size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e' }} />
-                                <input className="search-input" type="text" placeholder="검색어 입력..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ paddingLeft: '32px', paddingRight: '10px', paddingTop: '8px', paddingBottom: '8px', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: '#c9d1d9', width: '100%' }} />
+                                <Icon name="search" size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+                                <input className="search-input" type="text" placeholder="검색어 입력..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ paddingLeft: '32px', paddingRight: '10px', paddingTop: '8px', paddingBottom: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)', width: '100%' }} />
                             </div>
                             <button 
                                 className={`primary header-add-btn ${!isConnected ? 'btn-disabled' : ''}`} 
@@ -573,8 +584,8 @@
                                     const { transactions, income, expense } = grouped[month];
                                     return (
                                         <React.Fragment key={month}>
-                                            <tr className="month-group-row" style={{ background: 'rgba(56, 139, 253, 0.1)', fontWeight: 'bold' }}>
-                                                <td colSpan="6" style={{ padding: '0.5rem 1rem', fontSize: '1rem', color: '#58a6ff' }}>
+                                            <tr className="month-group-row" style={{ background: 'var(--table-header-bg)', fontWeight: 'bold' }}>
+                                                <td colSpan={isMobile ? 3 : 6} style={{ padding: '0.5rem 1rem', fontSize: '1rem', color: 'var(--accent-color)' }}>
                                                     <div>[{y}년 {m}월]</div>
                                                     <div style={{ fontSize: '0.85rem', marginTop: '0.2rem' }}>
                                                         (수입: {income.toLocaleString()} / 지출: {expense.toLocaleString()} / 저축: {grouped[month].savings.toLocaleString()})
@@ -594,7 +605,7 @@
                                         </React.Fragment>
                                     );
                                 })}
-                                {filteredTransactions.length === 0 && <tr className="empty-row"><td colSpan="6" style={{ textAlign: 'center', padding: '2rem' }}>검색 결과가 없습니다.</td></tr>}
+                                {filteredTransactions.length === 0 && <tr className="empty-row"><td colSpan={isMobile ? 3 : 6} style={{ textAlign: 'center', padding: '2rem' }}>검색 결과가 없습니다.</td></tr>}
                             </tbody>
                         </table>
                     </div>
@@ -662,8 +673,8 @@
                                         const { transactions: txs, income: monthIncome, expense: monthExpense } = grouped[month];
                                         return (
                                             <React.Fragment key={month}>
-                                                <tr style={{ background: 'rgba(56, 139, 253, 0.1)', fontWeight: 'bold' }}>
-                                                    <td colSpan="6" style={{ padding: '0.5rem 1rem', fontSize: '1rem', color: '#58a6ff' }}>
+                                                <tr style={{ background: 'var(--table-header-bg)', fontWeight: 'bold' }}>
+                                                    <td colSpan="6" style={{ padding: '0.5rem 1rem', fontSize: '1rem', color: 'var(--accent-color)' }}>
                                                         <div>[{y}년 {m}월]</div>
                                                         <div style={{ fontSize: '0.85rem', marginTop: '0.2rem' }}>
                                                             (수입: {monthIncome.toLocaleString()} / 지출: {monthExpense.toLocaleString()})
@@ -689,7 +700,7 @@
                                             </React.Fragment>
                                         );
                                     })}
-                                    {txList.length === 0 && <tr><td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: '#8b949e' }}>거래 내역이 없습니다.</td></tr>}
+                                    {txList.length === 0 && <tr><td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>거래 내역이 없습니다.</td></tr>}
                                 </tbody>
                             </table>
                         </div>
@@ -702,18 +713,18 @@
                     <div className="card">
                         {groupGrouped.map(g => (
                             <div key={g.id} style={{ marginBottom: '2rem' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.8rem', borderBottom: '2px solid #30363d', marginBottom: '1rem' }}>
-                                    <h3 style={{ color: '#58a6ff' }}>{g.name}</h3>
-                                    <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#58a6ff' }}>{g.total.toLocaleString()}원</span>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.8rem', borderBottom: '2px solid var(--border-color)', marginBottom: '1rem' }}>
+                                    <h3 style={{ color: 'var(--accent-color)' }}>{g.name}</h3>
+                                    <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--accent-color)' }}>{g.total.toLocaleString()}원</span>
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                     {g.assets.map(a => {
                                         const bal = calculateAssetBalance(a.id, data.assets, data.transactions);
                                         return (
-                                            <div key={a.id} onClick={() => setSelectedAsset(a)} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 1rem', background: 'rgba(22, 27, 34, 0.4)', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s' }} className="list-item">
+                                            <div key={a.id} onClick={() => setSelectedAsset(a)} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 1rem', background: 'var(--hover-bg)', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s' }} className="list-item">
                                                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     {a.name}
-                                                    <Icon name="chevron-right" size={14} style={{ color: '#58a6ff', opacity: 0.7 }} />
+                                                    <Icon name="chevron-right" size={14} style={{ color: 'var(--accent-color)', opacity: 0.7 }} />
                                                 </span>
                                                 <span style={{ fontWeight: 500 }}>{bal.toLocaleString()}원</span>
                                             </div>
@@ -722,7 +733,7 @@
                                 </div>
                             </div>
                         ))}
-                        {groupGrouped.length === 0 && <div style={{ padding: '2rem', textAlign: 'center', color: '#8b949e' }}>등록된 자산이 없습니다. 설정에서 자산을 추가해주세요.</div>}
+                        {groupGrouped.length === 0 && <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>등록된 자산이 없습니다. 설정에서 자산을 추가해주세요.</div>}
                     </div>
                 </div>
             );
@@ -795,7 +806,7 @@
                                 </div>
                             </div>
                             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
-                                <button type="button" onClick={onClose} style={{ background: '#30363d', color: 'white' }}>취소</button>
+                                <button type="button" onClick={onClose} style={{ background: 'var(--border-color)', color: 'var(--text-primary)' }}>취소</button>
                                 {editItem && <button type="button" className="danger" onClick={handleDelete}>삭제</button>}
                                 <button type="submit" className="primary">저장</button>
                             </div>
@@ -906,7 +917,7 @@
                             )}
                             <div className="form-row"><label>메모</label><input value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} placeholder="메모" disabled={!isConnected} /></div>
                             <div className="modal-footer" style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
-                                <button type="button" onClick={onClose} style={{ background: '#30363d', color: 'white' }}>취소</button>
+                                <button type="button" onClick={onClose} style={{ background: 'var(--border-color)', color: 'var(--text-primary)' }}>취소</button>
                                 {editItem && <button type="button" className="danger" onClick={handleDelete} disabled={!isConnected}>삭제</button>}
                                 <button type="submit" className={`primary ${!isConnected ? 'btn-disabled' : ''}`} disabled={!isConnected}>저장</button>
                             </div>
@@ -1013,18 +1024,18 @@
 
             const renderCatList = (type) => (
                 <div style={{ marginBottom: '1.5rem' }}>
-                    <h4 style={{ marginBottom: '0.5rem', color: '#8b949e' }}>{type === 'Income' ? '수입' : type === 'Expense' ? '지출' : '이체'}</h4>
+                    <h4 style={{ marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>{type === 'Income' ? '수입' : type === 'Expense' ? '지출' : '이체'}</h4>
                     <div style={{ display: 'flex', gap: '8px', margin: '0.5rem 0' }}><input value={newCat.type === type ? newCat.name : ''} onChange={e => setNewCat({ type, name: e.target.value })} placeholder="카테고리명" /><button className="primary" onClick={() => { if (newCat.type === type) addCat(); }}>추가</button></div>
-                    {data.categories.filter(c => c.type === type).map(c => (<div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #30363d' }}>{c.name} <button onClick={() => delCat(c.id)} style={{ background: 'transparent', color: '#da3633', fontSize: '0.8rem' }}>삭제</button></div>))}
+                    {data.categories.filter(c => c.type === type).map(c => (<div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>{c.name} <button onClick={() => delCat(c.id)} style={{ background: 'transparent', color: 'var(--expense-color)', fontSize: '0.8rem' }}>삭제</button></div>))}
                 </div>
             );
 
             return (
                 <div className="fade-in">
                     <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: '1.5rem' }}>
-                        <div style={{ display: 'flex', borderBottom: '1px solid #30363d', background: 'rgba(22, 27, 34, 0.5)', overflowX: 'auto' }}>
+                        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', background: 'var(--hover-bg)', overflowX: 'auto' }}>
                             {[{ id: 'general', label: '일반/백업' }, { id: 'owners', label: '소유자' }, { id: 'groups', label: '자산 그룹' }, { id: 'assets', label: '자산 목록' }, { id: 'categories', label: '카테고리' }, { id: 'authors', label: '작성자 약칭' }].map(t => (
-                                <button key={t.id} onClick={() => setActiveTab(t.id)} style={{ padding: '1rem 1.5rem', background: 'transparent', color: activeTab === t.id ? '#58a6ff' : '#8b949e', borderBottom: activeTab === t.id ? '2px solid #58a6ff' : '2px solid transparent', borderRadius: 0, whiteSpace: 'nowrap' }}>
+                                <button key={t.id} onClick={() => setActiveTab(t.id)} style={{ padding: '1rem 1.5rem', background: 'transparent', color: activeTab === t.id ? 'var(--accent-color)' : 'var(--text-secondary)', borderBottom: activeTab === t.id ? '2px solid var(--accent-color)' : '2px solid transparent', borderRadius: 0, whiteSpace: 'nowrap' }}>
                                     {t.label}
                                 </button>
                             ))}
@@ -1037,53 +1048,53 @@
                                             <h3>🔑 비밀번호 변경</h3>
                                             <div style={{ display: 'flex', gap: '8px', margin: '1rem 0' }}><input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="새 비밀번호 입력" /><button className="primary" onClick={changePw}>변경</button></div>
                                         </div>
-                                        <div style={{ borderTop: '1px solid #30363d', paddingTop: '1.5rem' }}>
+                                        <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
                                             <h3>🔗 데이터 공유 설정 (공유 ID)</h3>
-                                            <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '0.5rem' }}>동일한 공유 ID를 입력한 계정끼리 데이터가 실시간으로 연동됩니다.</p>
+                                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>동일한 공유 ID를 입력한 계정끼리 데이터가 실시간으로 연동됩니다.</p>
                                             <div style={{ display: 'flex', gap: '8px', margin: '0.5rem 0' }}>
                                                 <input value={tempSharedId} onChange={e => setTempSharedId(e.target.value)} placeholder="공유 ID 입력" />
                                                 <button className="primary" onClick={saveSharedId}>저장</button>
-                                                <button onClick={generateSharedId} style={{ background: '#30363d', color: 'white' }}>생성</button>
+                                                <button onClick={generateSharedId} style={{ background: 'var(--border-color)', color: 'var(--text-primary)' }}>생성</button>
                                             </div>
                                             {tempSharedId === (localStorage.getItem(SHARED_ID_KEY) || '') && tempSharedId && (
-                                                <p style={{ color: '#238636', fontSize: '0.8rem' }}>현재 공유 모드 활성화 중</p>
+                                                <p style={{ color: 'var(--income-color)', fontSize: '0.8rem' }}>현재 공유 모드 활성화 중</p>
                                             )}
                                         </div>
-                                        <div style={{ borderTop: '1px solid #30363d', paddingTop: '1.5rem' }}>
+                                        <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
                                             <h3>💾 데이터 백업 및 복구</h3>
                                             <div style={{ display: 'flex', gap: '12px', marginTop: '1rem' }}>
-                                                <button onClick={exportData} style={{ background: '#30363d', color: 'white', flex: 1 }}><Icon name="download" size={16} /> JSON 저장</button>
+                                                <button onClick={exportData} style={{ background: 'var(--border-color)', color: 'var(--text-primary)', flex: 1 }}><Icon name="download" size={16} /> JSON 저장</button>
                                                 <label className="auth-btn login" style={{ textAlign: 'center', cursor: 'pointer', margin: 0, flex: 1 }}><Icon name="upload" size={16} /> 복구 <input type="file" accept=".json" onChange={importData} style={{ display: 'none' }} /></label>
                                             </div>
                                         </div>
                                     </div>
                                     <div>
                                         <h3>☁️ 서버 연동 (Firebase)</h3>
-                                        <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '0.5rem' }}>Firebase 프로젝트 "웹 앱" 구성 JSON을 입력하세요.</p>
+                                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>Firebase 프로젝트 "웹 앱" 구성 JSON을 입력하세요.</p>
                                         <div style={{ background: 'rgba(255, 165, 0, 0.1)', padding: '8px', borderRadius: '6px', marginBottom: '1rem', border: '1px solid rgba(255, 165, 0, 0.3)' }}>
                                             <p style={{ color: '#ffa500', fontSize: '0.78rem' }}>⚠️ <b>주의</b>: <code>private_key</code>가 들어있는 <b>서비스 계정 JSON</b>이 아닌, <code>apiKey</code>가 포함된 <b>웹 앱 설정</b> 객체를 입력해야 합니다.</p>
                                         </div>
                                         {fbConfig && !user && (
-                                            <div style={{ background: 'rgba(56, 139, 253, 0.15)', padding: '12px', borderRadius: '6px', marginBottom: '1rem', border: '1px solid #388bfd' }}>
-                                                <p style={{ color: '#58a6ff', fontSize: '0.85rem', fontWeight: 'bold' }}>💡 설정 저장 완료! 이제 로그인을 해주세요.</p>
-                                                <p style={{ color: '#8b949e', fontSize: '0.75rem', marginTop: '4px' }}>Firebase 연동을 위해서는 구글 로그인이 필요합니다. 좌측 하단(모바일은 메뉴 내)의 <b>로그인</b> 버튼을 눌러주세요.</p>
+                                            <div style={{ background: 'rgba(56, 139, 253, 0.15)', padding: '12px', borderRadius: '6px', marginBottom: '1rem', border: '1px solid var(--accent-color)' }}>
+                                                <p style={{ color: 'var(--accent-color)', fontSize: '0.85rem', fontWeight: 'bold' }}>💡 설정 저장 완료! 이제 로그인을 해주세요.</p>
+                                                <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '4px' }}>Firebase 연동을 위해서는 구글 로그인이 필요합니다. 좌측 하단(모바일은 메뉴 내)의 <b>로그인</b> 버튼을 눌러주세요.</p>
                                             </div>
                                         )}
                                         {isConnected && (
-                                            <div style={{ background: 'rgba(35, 134, 54, 0.15)', padding: '10px', borderRadius: '6px', marginBottom: '1rem', border: '1px solid #238636' }}>
+                                            <div style={{ background: 'rgba(35, 134, 54, 0.15)', padding: '10px', borderRadius: '6px', marginBottom: '1rem', border: '1px solid var(--income-color)' }}>
                                                 <p style={{ color: '#3fb950', fontSize: '0.85rem' }}>✅ Firebase 실시간 연동 중입니다.</p>
                                             </div>
                                         )}
-                                        <textarea value={fbVal} onChange={e => setFbVal(e.target.value)} rows="8" placeholder='{"apiKey": "...", "authDomain": "...", ...}' style={{ width: '100%', marginBottom: '1rem', background: '#0d1117', color: '#8b949e', padding: '10px', fontSize: '13px', fontFamily: 'monospace' }} />
+                                        <textarea value={fbVal} onChange={e => setFbVal(e.target.value)} rows="8" placeholder='{"apiKey": "...", "authDomain": "...", ...}' style={{ width: '100%', marginBottom: '1rem', background: 'var(--bg-color)', color: 'var(--text-secondary)', padding: '10px', fontSize: '13px', fontFamily: 'monospace' }} />
                                         <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem' }}>
                                             <button className="primary" onClick={saveFb}>저장</button>
-                                            <button onClick={resetFb} style={{ background: '#30363d', color: 'white' }}>기본값으로 초기화</button>
+                                            <button onClick={resetFb} style={{ background: 'var(--border-color)', color: 'var(--text-primary)' }}>기본값으로 초기화</button>
                                         </div>
 
-                                        <div style={{ borderTop: '1px solid #30363d', paddingTop: '1rem' }}>
+                                        <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
                                             <h4>🛠️ Firestore 보안 규칙 가이드</h4>
-                                            <p style={{ color: '#8b949e', fontSize: '0.8rem', marginTop: '0.5rem' }}>연동이 안 된다면 Firebase 콘솔의 Rules 탭에서 아래와 같이 설정했는지 확인하세요:</p>
-                                            <pre style={{ background: '#0d1117', padding: '10px', borderRadius: '4px', fontSize: '0.75rem', color: '#8b949e', marginTop: '8px', overflowX: 'auto' }}>
+                                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.5rem' }}>연동이 안 된다면 Firebase 콘솔의 Rules 탭에서 아래와 같이 설정했는지 확인하세요:</p>
+                                            <pre style={{ background: 'var(--bg-color)', padding: '10px', borderRadius: '4px', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '8px', overflowX: 'auto' }}>
 {`rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -1104,9 +1115,9 @@ service cloud.firestore {
                             {activeTab === 'authors' && (
                                 <div>
                                     <h3>작성자 약칭 관리</h3>
-                                    <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>거래내역 필터에 표시될 이메일별 약칭을 설정합니다.</p>
+                                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem' }}>거래내역 필터에 표시될 이메일별 약칭을 설정합니다.</p>
                                     <div style={{ display: 'flex', gap: '8px', margin: '1rem 0', maxWidth: '500px' }}>
-                                        <select value={newEmail} onChange={e => setNewEmail(e.target.value)} style={{ padding: '8px', borderRadius: '6px', background: '#0d1117', color: 'white', border: '1px solid #30363d', flex: 1 }}>
+                                        <select value={newEmail} onChange={e => setNewEmail(e.target.value)} style={{ padding: '8px', borderRadius: '6px', background: 'var(--bg-color)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', flex: 1 }}>
                                             <option value="">이메일 선택</option>
                                             {Array.from(new Set(data.transactions.map(t => t.authorEmail).filter(Boolean))).map(email => (
                                                 <option key={email} value={email}>{email}</option>
@@ -1117,9 +1128,9 @@ service cloud.firestore {
                                     </div>
                                     <div style={{ maxWidth: '500px' }}>
                                         {(data.authorAbbreviations || []).map(a => (
-                                            <div key={a.email} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #30363d' }}>
-                                                <span>{a.email} <span style={{ color: '#58a6ff', marginLeft: '10px' }}>[{a.abbr}]</span></span>
-                                                <button onClick={() => delAbbr(a.email)} style={{ background: 'transparent', color: '#da3633', fontSize: '0.85rem' }}>삭제</button>
+                                            <div key={a.email} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border-color)' }}>
+                                                <span>{a.email} <span style={{ color: 'var(--accent-color)', marginLeft: '10px' }}>[{a.abbr}]</span></span>
+                                                <button onClick={() => delAbbr(a.email)} style={{ background: 'transparent', color: 'var(--expense-color)', fontSize: '0.85rem' }}>삭제</button>
                                             </div>
                                         ))}
                                     </div>
@@ -1129,10 +1140,10 @@ service cloud.firestore {
                             {activeTab === 'owners' && (
                                 <div>
                                     <h3>소유자 관리</h3>
-                                    <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>자산을 소유하는 구성원을 등록합니다.</p>
+                                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem' }}>자산을 소유하는 구성원을 등록합니다.</p>
                                     <div style={{ display: 'flex', gap: '8px', margin: '1rem 0', maxWidth: '400px' }}><input value={newOwner} onChange={e => setNewOwner(e.target.value)} placeholder="이름" /><button className="primary" onClick={addOwner}>추가</button></div>
                                     <div style={{ maxWidth: '400px' }}>
-                                        {data.owners.map(o => (<div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #30363d' }}>{o.name} <button onClick={() => delOwner(o.id)} style={{ background: 'transparent', color: '#da3633', fontSize: '0.85rem' }}>삭제</button></div>))}
+                                        {data.owners.map(o => (<div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border-color)' }}>{o.name} <button onClick={() => delOwner(o.id)} style={{ background: 'transparent', color: 'var(--expense-color)', fontSize: '0.85rem' }}>삭제</button></div>))}
                                     </div>
                                 </div>
                             )}
@@ -1140,10 +1151,10 @@ service cloud.firestore {
                             {activeTab === 'groups' && (
                                 <div>
                                     <h3>자산 그룹 관리</h3>
-                                    <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>자산을 논리적으로 묶어주는 그룹을 등록합니다.</p>
+                                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1rem' }}>자산을 논리적으로 묶어주는 그룹을 등록합니다.</p>
                                     <div style={{ display: 'flex', gap: '8px', margin: '1rem 0', maxWidth: '400px' }}><input value={newGroup} onChange={e => setNewGroup(e.target.value)} placeholder="그룹명" /><button className="primary" onClick={addGroup}>추가</button></div>
                                     <div style={{ maxWidth: '400px' }}>
-                                        {(data.groups || []).map(g => (<div key={g.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #30363d' }}>{g.name} <button onClick={() => delGroup(g.id)} style={{ background: 'transparent', color: '#da3633', fontSize: '0.85rem' }}>삭제</button></div>))}
+                                        {(data.groups || []).map(g => (<div key={g.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border-color)' }}>{g.name} <button onClick={() => delGroup(g.id)} style={{ background: 'transparent', color: 'var(--expense-color)', fontSize: '0.85rem' }}>삭제</button></div>))}
                                     </div>
                                 </div>
                             )}
@@ -1183,10 +1194,10 @@ service cloud.firestore {
                                                             <td>{data.owners.find(o => o.id === a.ownerId)?.name}</td>
                                                             <td>{data.groups?.find(g => g.id === a.groupId)?.name || '-'}</td>
                                                             <td>{a.type === 'Cash' ? '현금' : a.type === 'Bank' ? '은행' : '카드'}</td>
-                                                            <td style={{ color: '#8b949e' }}>{Number(a.initialBalance || 0).toLocaleString()}</td>
-                                                            <td style={{ fontWeight: 600, color: '#58a6ff' }}>{bal.toLocaleString()}</td>
+                                                            <td style={{ color: 'var(--text-secondary)' }}>{Number(a.initialBalance || 0).toLocaleString()}</td>
+                                                            <td style={{ fontWeight: 600, color: 'var(--accent-color)' }}>{bal.toLocaleString()}</td>
                                                             <td>
-                                                                <button onClick={() => { setEditingAsset(a); setShowAssetModal(true); }} style={{ background: 'transparent', color: '#58a6ff', padding: '0.3rem' }}>수정</button>
+                                                                <button onClick={() => { setEditingAsset(a); setShowAssetModal(true); }} style={{ background: 'transparent', color: 'var(--accent-color)', padding: '0.3rem' }}>수정</button>
                                                             </td>
                                                         </tr>
                                                     );
@@ -1326,7 +1337,7 @@ service cloud.firestore {
             return (
                 <React.Fragment>
                     <div className="mobile-header">
-                        <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'white', padding: '0.4rem' }}><Icon name="menu" size={24} /></button>
+                        <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem' }}><Icon name="menu" size={24} /></button>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                             <Icon name={tab === 'dashboard' ? 'layout-dashboard' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
                             <h2>{tabTitles[tab] || 'Smart Finance'}</h2>
@@ -1335,7 +1346,7 @@ service cloud.firestore {
                                     className="mobile-only"
                                     value={authorFilter} 
                                     onChange={e => setAuthorFilter(e.target.value)}
-                                    style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #30363d', background: '#21262d', color: 'white', fontWeight: 'bold', fontSize: '0.85rem', marginLeft: 'auto', maxWidth: '80px' }}
+                                    style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--btn-secondary-bg)', color: 'var(--text-primary)', fontWeight: 'bold', fontSize: '0.85rem', marginLeft: 'auto', maxWidth: '80px' }}
                                 >
                                     <option value="ALL">전체</option>
                                     {Array.from(new Set((data.transactions || []).map(t => t.authorEmail).filter(Boolean))).map(email => {
@@ -1352,25 +1363,25 @@ service cloud.firestore {
                             </div>
                         </div>
                         {tab === 'transactions' && (
-                            <button className="mobile-only" onClick={() => setShowMobileSearch(!showMobileSearch)} style={{ background: 'transparent', color: 'white', padding: '0.4rem', marginRight: '4px' }}>
+                            <button className="mobile-only" onClick={() => setShowMobileSearch(!showMobileSearch)} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem', marginRight: '4px' }}>
                                 <Icon name="search" size={20} />
                             </button>
                         )}
-                        <button onClick={() => location.reload()} style={{ background: 'transparent', color: 'white', padding: '0.4rem' }}><Icon name="refresh-cw" size={24} /></button>
+                        <button onClick={() => location.reload()} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem' }}><Icon name="refresh-cw" size={24} /></button>
                     </div>
                     {tab === 'transactions' && showMobileSearch && (
-                        <div className="mobile-only fade-in" style={{ background: '#21262d', padding: '10px 15px', borderBottom: '1px solid #30363d', display: 'flex', position: 'sticky', top: '53px', zIndex: 999, width: '100%', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>
+                        <div className="mobile-only fade-in" style={{ background: 'var(--btn-secondary-bg)', padding: '10px 15px', borderBottom: '1px solid var(--border-color)', display: 'flex', position: 'sticky', top: '53px', zIndex: 999, width: '100%', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>
                             <div style={{ position: 'relative', flex: 1 }}>
-                                <Icon name="search" size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e' }} />
+                                <Icon name="search" size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
                                 <input 
                                     type="text" 
                                     value={searchTerm} 
                                     onChange={e => setSearchTerm(e.target.value)} 
                                     placeholder="검색어 입력..." 
-                                    style={{ width: '100%', padding: '8px 10px 8px 32px', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: 'white' }} 
+                                    style={{ width: '100%', padding: '8px 10px 8px 32px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-primary)' }} 
                                 />
                                 {searchTerm && (
-                                    <button onClick={() => setSearchTerm('')} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', color: '#8b949e', padding: 0 }}>
+                                    <button onClick={() => setSearchTerm('')} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', color: 'var(--text-secondary)', padding: 0 }}>
                                         <Icon name="x" size={14} />
                                     </button>
                                 )}
@@ -1381,7 +1392,7 @@ service cloud.firestore {
                     <div className={`sidebar ${sidebarOpen ? 'mobile-open' : ''}`}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Icon name="activity" size={24} /><h2>Smart Finance</h2></div>
-                            <button className="mobile-only" onClick={() => setSidebarOpen(false)} style={{ background: 'transparent', color: 'white', display: window.innerWidth <= 768 ? 'block' : 'none' }}><Icon name="x" size={24} /></button>
+                            <button className="mobile-only" onClick={() => setSidebarOpen(false)} style={{ background: 'transparent', color: 'var(--text-primary)', display: window.innerWidth <= 768 ? 'block' : 'none' }}><Icon name="x" size={24} /></button>
                         </div>
                         <div style={{ marginBottom: '1rem', padding: '0 0.5rem' }}>
                             <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
@@ -1393,7 +1404,7 @@ service cloud.firestore {
                         <div className={`nav-item ${tab === 'transactions' ? 'active' : ''}`} onClick={() => menuClick('transactions')}><Icon name="list" /> 거래 내역</div>
                         <div className={`nav-item ${tab === 'assets' ? 'active' : ''}`} onClick={() => menuClick('assets')}><Icon name="wallet" /> 자산 현황</div>
                         <div className={`nav-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => menuClick('settings')}><Icon name="settings" /> 설정</div>
-                        <div className="user-profile">{user ? <button onClick={() => firebase.auth().signOut()} className="auth-btn" style={{ background: 'transparent', color: '#8b949e' }}><Icon name="log-out" size={16} /> 로그아웃</button> : <button className="auth-btn login" onClick={() => { if (!fbConfig) setTab('settings'); else firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); }}><Icon name="log-in" size={16} /> 로그인</button>}</div>
+                        <div className="user-profile">{user ? <button onClick={() => firebase.auth().signOut()} className="auth-btn" style={{ background: 'transparent', color: 'var(--text-secondary)' }}><Icon name="log-out" size={16} /> 로그아웃</button> : <button className="auth-btn login" onClick={() => { if (!fbConfig) setTab('settings'); else firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); }}><Icon name="log-in" size={16} /> 로그인</button>}</div>
                     </div>
                     <div className="main-content"><div className="container">
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} />}
@@ -1417,10 +1428,10 @@ service cloud.firestore {
             render() {
                 if (this.state.hasError) {
                     return (
-                        <div style={{ color: 'white', padding: '20px', fontFamily: 'sans-serif' }}>
+                        <div style={{ color: 'var(--text-primary)', padding: '20px', fontFamily: 'sans-serif' }}>
                             <h2>오류가 발생했습니다.</h2>
-                            <pre style={{ background: '#30363d', padding: '10px', borderRadius: '5px' }}>{this.state.error?.toString()}</pre>
-                            <button onClick={() => { localStorage.removeItem(STORAGE_KEY); location.reload(); }} style={{ marginTop: '10px', padding: '10px', background: 'red', color: 'white', border: 'none', borderRadius: '5px' }}>로컬 데이터 초기화 및 새로고침</button>
+                            <pre style={{ background: 'var(--border-color)', padding: '10px', borderRadius: '5px' }}>{this.state.error?.toString()}</pre>
+                            <button onClick={() => { localStorage.removeItem(STORAGE_KEY); location.reload(); }} style={{ marginTop: '10px', padding: '10px', background: 'red', color: 'var(--text-primary)', border: 'none', borderRadius: '5px' }}>로컬 데이터 초기화 및 새로고침</button>
                         </div>
                     );
                 }
