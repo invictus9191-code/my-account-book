@@ -141,9 +141,34 @@ body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 2rem;
+  padding: 1rem 2rem; /* Reduced top/bottom padding from 2rem */
   padding-bottom: 4rem;
   transition: all 0.3s ease;
+}
+
+.page-header {
+  margin-bottom: 0.5rem !important; /* Reduced from 1rem */
+}
+
+.subtotal-row {
+  background: rgba(56, 139, 253, 0.1) !important;
+  font-weight: bold !important;
+}
+
+.subtotal-row td {
+  color: var(--text-primary) !important; /* Make it black/dark */
+  padding: 0.6rem 1rem !important;
+}
+
+.subtotal-label {
+  font-size: 1rem;
+  margin-bottom: 2px;
+}
+
+.subtotal-values {
+  font-size: 0.85rem;
+  font-weight: normal;
+  color: var(--text-secondary);
 }
 
 .page-title {
@@ -397,29 +422,22 @@ select {
   color: var(--expense-color);
 }
 
-/* ===== Icon Fix: 라이트 모드에서 Lucide 아이콘 색상 강제 지정 ===== */
-.icon-wrapper svg,
-.icon-wrapper i,
-.icon-wrapper i svg {
-  color: var(--icon-color) !important;
-  stroke: var(--icon-color) !important;
-  fill: none !important;
+/* ===== Icon Fix: SVG 아이콘 기본 스타일 ===== */
+.icon-wrapper {
+  /* color는 부모에서 상속 or prop으로 직접 설정됨 */
+}
+.icon-wrapper svg {
+  display: block;
+  flex-shrink: 0;
+  /* stroke는 JS에서 직접 svg.setAttribute('stroke', color) 로 설정됨 */
 }
 
-/* 네비게이션 아이템 내 아이콘 */
-.nav-item .icon-wrapper svg,
-.nav-item .icon-wrapper i svg {
-  stroke: currentColor !important;
-}
-
-/* FAB 버튼 내 아이콘은 흰색 */
-.fab-add-transaction .icon-wrapper svg,
-.fab-add-transaction .icon-wrapper i svg {
+/* FAB 버튼 내 아이콘은 흰색 강제 */
+.fab-add-transaction .icon-wrapper svg {
   stroke: white !important;
   color: white !important;
 }
 
-/* 월별 부분합 뱃지 스타일 */
 .month-badge {
   display: inline-flex;
   align-items: center;
@@ -427,7 +445,6 @@ select {
   border-radius: 12px;
   font-size: 0.8rem;
   font-weight: 600;
-  margin-left: 6px;
   white-space: nowrap;
 }
 .month-badge.income {

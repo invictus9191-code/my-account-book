@@ -59,14 +59,29 @@
 
         const Icon = ({ name, size = 18, className = "", style = {}, color }) => {
             const spanRef = React.useRef();
-            const resolvedColor = color || 'var(--icon-color)';
+            const resolvedColor = color || 'currentColor';
             useEffect(() => {
-                if (spanRef.current && window.lucide) {
-                    spanRef.current.innerHTML = `<i data-lucide="${name}" style="width:${size}px;height:${size}px;color:${resolvedColor};stroke:${resolvedColor};"></i>`;
-                    window.lucide.createIcons();
+                if (!spanRef.current || !window.lucide) return;
+                // Create fresh i element for Lucide to process
+                const i = document.createElement('i');
+                i.setAttribute('data-lucide', name);
+                spanRef.current.innerHTML = '';
+                spanRef.current.appendChild(i);
+                // Call createIcons which replaces <i> with <svg>
+                window.lucide.createIcons();
+                // After replacement, find the SVG and apply color
+                const svg = spanRef.current.querySelector('svg');
+                if (svg) {
+                    svg.setAttribute('width', size);
+                    svg.setAttribute('height', size);
+                    svg.setAttribute('stroke', resolvedColor);
+                    svg.style.color = resolvedColor;
+                    svg.style.stroke = resolvedColor;
+                    svg.style.display = 'block';
+                    svg.style.flexShrink = '0';
                 }
-            }, [name, size, className, color]);
-            return <span ref={spanRef} className={`icon-wrapper ${className}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, flexShrink: 0, ...style }}></span>;
+            }, [name, size, color]);
+            return <span ref={spanRef} className={`icon-wrapper ${className}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, flexShrink: 0, color: resolvedColor, ...style }}></span>;
         };
 
         const calculateAssetBalance = (assetId, assets, transactions, upToDate) => {
@@ -544,7 +559,7 @@
 
             return (
                 <div className="fade-in">
-                    <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                    <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                         <h1 className="page-title">거래 내역</h1>
                         <div className="header-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
                             <div className="filter-box mobile-hide" style={{ marginRight: '5px' }}>
@@ -585,10 +600,10 @@
                                     const { transactions, income, expense } = grouped[month];
                                     return (
                                         <React.Fragment key={month}>
-                                            <tr className="month-group-row" style={{ background: 'var(--table-header-bg)', fontWeight: 'bold' }}>
-                                                <td colSpan={isMobile ? 3 : 6} style={{ padding: '0.4rem 1rem' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
-                                                        <span style={{ color: 'var(--accent-color)', fontWeight: 700, fontSize: '0.95rem', marginRight: '4px' }}>[{y}년 {m}월]</span>
+                                            <tr className="month-group-row" style={{ background: 'var(--table-header-bg)' }}>
+                                                <td colSpan={isMobile ? 3 : 6} style={{ padding: '0.5rem 1rem' }}>
+                                                    <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)', marginBottom: '4px' }}>[{y}년 {m}월]</div>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                                                         <span className="month-badge income">수입 {income.toLocaleString()}</span>
                                                         <span className="month-badge expense">지출 {expense.toLocaleString()}</span>
                                                         <span className="month-badge savings">저축 {grouped[month].savings.toLocaleString()}</span>
@@ -640,6 +655,8 @@
             if (uncategorizedAssets.length > 0) {
                 groupGrouped.push({ id: 'uncategorized', name: '미지정 그룹', total: uncategorizedTotal, assets: uncategorizedAssets });
             }
+
+            const grandTotal = groupGrouped.reduce((sum, g) => sum + g.total, 0);
 
             // 자산 거래내역 뷰
             if (selectedAsset) {
@@ -713,6 +730,11 @@
 
             return (
                 <div className="fade-in">
+                    <div className="card" style={{ background: 'linear-gradient(135deg, var(--accent-color) 0%, #8250df 100%)', border: 'none', marginBottom: '1rem', padding: '1.5rem 2rem' }}>
+                        <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>전체 자산 합계</div>
+                        <div style={{ color: 'white', fontSize: '2rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{grandTotal.toLocaleString()}원</div>
+                        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', marginTop: '0.4rem' }}>자산 {data.assets.length}개 관리 중</div>
+                    </div>
                     <div className="card">
                         {groupGrouped.map(g => (
                             <div key={g.id} style={{ marginBottom: '2rem' }}>

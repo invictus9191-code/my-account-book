@@ -27,9 +27,16 @@
             transactions: []
         };
 
-        const Icon = ({ name, size = 18, className = "" }) => {
-            useEffect(() => { if (window.lucide) window.lucide.createIcons(); }, [name]);
-            return <i data-lucide={name} className={className} style={{ width: size, height: size }}></i>;
+        const Icon = ({ name, size = 18, className = "", style = {} }) => {
+            useEffect(() => { 
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                } else {
+                    // Lucide가 아직 로드되지 않은 경우를 대비해 짧은 지연 후 재시도
+                    setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 100);
+                }
+            }, [name]);
+            return <i data-lucide={name} className={className} style={{ width: size, height: size, display: 'inline-block', ...style }}></i>;
         };
 
         const calculateAssetBalance = (assetId, assets, transactions, upToDate) => {
@@ -499,6 +506,10 @@
                     <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                         <h1 className="page-title">거래 내역</h1>
                         <div className="header-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
+                            <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'} mobile-hide`}>
+                                <div className="connection-dot"></div>
+                                <span>{isConnected ? '연동됨' : '미연동'}</span>
+                            </div>
                             <div className="filter-box mobile-hide" style={{ marginRight: '5px' }}>
                                 <select 
                                     value={authorFilter} 
@@ -514,7 +525,7 @@
                                     })}
                                 </select>
                             </div>
-                            <div className="search-box mobile-hide" style={{ position: 'relative', flex: 1, maxWidth: '300px' }}>
+                            <div className="search-box mobile-hide" style={{ position: 'relative', flex: 1, maxWidth: '250px' }}>
                                 <Icon name="search" size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e' }} />
                                 <input className="search-input" type="text" placeholder="검색어 입력..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ paddingLeft: '32px', paddingRight: '10px', paddingTop: '8px', paddingBottom: '8px', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: '#c9d1d9', width: '100%' }} />
                             </div>
@@ -525,7 +536,10 @@
                                     setEdit(null); setShowModal(true); 
                                 }}
                                 title={!isConnected ? "Firebase 연동 시에만 작성 가능합니다." : ""}
-                            >+ 거래 추가</button>
+                                style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                            >
+                                <Icon name="plus" size={16} /> 거래 추가
+                            </button>
                         </div>
                     </div>
                     <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
@@ -537,10 +551,10 @@
                                     const { transactions, income, expense } = grouped[month];
                                     return (
                                         <React.Fragment key={month}>
-                                            <tr style={{ background: 'rgba(56, 139, 253, 0.1)', fontWeight: 'bold' }}>
-                                                <td colSpan="6" style={{ padding: '0.5rem 1rem', fontSize: '1rem', color: '#58a6ff' }}>
-                                                    <div>[{y}년 {m}월]</div>
-                                                    <div style={{ fontSize: '0.85rem', marginTop: '0.2rem' }}>
+                                            <tr className="subtotal-row">
+                                                <td colSpan="6">
+                                                    <div className="subtotal-label">[{y}년 {m}월]</div>
+                                                    <div className="subtotal-values">
                                                         (수입: {income.toLocaleString()} / 지출: {expense.toLocaleString()} / 저축: {grouped[month].savings.toLocaleString()})
                                                     </div>
                                                 </td>
@@ -592,6 +606,8 @@
                 groupGrouped.push({ id: 'uncategorized', name: '미지정 그룹', total: uncategorizedTotal, assets: uncategorizedAssets });
             }
 
+            const grandTotal = groupGrouped.reduce((sum, g) => sum + g.total, 0);
+
             // 자산 거래내역 뷰
             if (selectedAsset) {
                 const asset = selectedAsset;
@@ -627,10 +643,10 @@
                                         const { transactions: txs, income: monthIncome, expense: monthExpense } = grouped[month];
                                         return (
                                             <React.Fragment key={month}>
-                                                <tr style={{ background: 'rgba(56, 139, 253, 0.1)', fontWeight: 'bold' }}>
-                                                    <td colSpan="6" style={{ padding: '0.5rem 1rem', fontSize: '1rem', color: '#58a6ff' }}>
-                                                        <div>[{y}년 {m}월]</div>
-                                                        <div style={{ fontSize: '0.85rem', marginTop: '0.2rem' }}>
+                                                <tr className="subtotal-row">
+                                                    <td colSpan="6">
+                                                        <div className="subtotal-label">[{y}년 {m}월]</div>
+                                                        <div className="subtotal-values">
                                                             (수입: {monthIncome.toLocaleString()} / 지출: {monthExpense.toLocaleString()})
                                                         </div>
                                                     </td>
@@ -664,6 +680,13 @@
 
             return (
                 <div className="fade-in">
+                    <div className="card" style={{ background: 'var(--accent-color)', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.5rem 2rem', marginBottom: '1.5rem' }}>
+                        <div>
+                            <div style={{ fontSize: '0.9rem', opacity: 0.9, marginBottom: '4px' }}>전체 자산 합계</div>
+                            <div style={{ fontSize: '1.8rem', fontWeight: 800 }}>{grandTotal.toLocaleString()}원</div>
+                        </div>
+                        <Icon name="wallet" size={40} style={{ opacity: 0.3 }} />
+                    </div>
                     <div className="card">
                         {groupGrouped.map(g => (
                             <div key={g.id} style={{ marginBottom: '2rem' }}>
