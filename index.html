@@ -57,15 +57,16 @@
             transactions: []
         };
 
-        const Icon = ({ name, size = 18, className = "", style = {} }) => {
+        const Icon = ({ name, size = 18, className = "", style = {}, color }) => {
             const spanRef = React.useRef();
+            const resolvedColor = color || 'var(--icon-color)';
             useEffect(() => {
                 if (spanRef.current && window.lucide) {
-                    spanRef.current.innerHTML = `<i data-lucide="${name}" style="width: ${size}px; height: ${size}px;"></i>`;
+                    spanRef.current.innerHTML = `<i data-lucide="${name}" style="width:${size}px;height:${size}px;color:${resolvedColor};stroke:${resolvedColor};"></i>`;
                     window.lucide.createIcons();
                 }
-            }, [name, size, className]);
-            return <span ref={spanRef} className={`icon-wrapper ${className}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, ...style }}></span>;
+            }, [name, size, className, color]);
+            return <span ref={spanRef} className={`icon-wrapper ${className}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, flexShrink: 0, ...style }}></span>;
         };
 
         const calculateAssetBalance = (assetId, assets, transactions, upToDate) => {
@@ -585,10 +586,12 @@
                                     return (
                                         <React.Fragment key={month}>
                                             <tr className="month-group-row" style={{ background: 'var(--table-header-bg)', fontWeight: 'bold' }}>
-                                                <td colSpan={isMobile ? 3 : 6} style={{ padding: '0.5rem 1rem', fontSize: '1rem', color: 'var(--accent-color)' }}>
-                                                    <div>[{y}년 {m}월]</div>
-                                                    <div style={{ fontSize: '0.85rem', marginTop: '0.2rem' }}>
-                                                        (수입: {income.toLocaleString()} / 지출: {expense.toLocaleString()} / 저축: {grouped[month].savings.toLocaleString()})
+                                                <td colSpan={isMobile ? 3 : 6} style={{ padding: '0.4rem 1rem' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+                                                        <span style={{ color: 'var(--accent-color)', fontWeight: 700, fontSize: '0.95rem', marginRight: '4px' }}>[{y}년 {m}월]</span>
+                                                        <span className="month-badge income">수입 {income.toLocaleString()}</span>
+                                                        <span className="month-badge expense">지출 {expense.toLocaleString()}</span>
+                                                        <span className="month-badge savings">저축 {grouped[month].savings.toLocaleString()}</span>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -616,7 +619,7 @@
                             setEdit(null); setShowModal(true); 
                         }} 
                     >
-                        <Icon name="plus" size={32} />
+                        <Icon name="plus" size={32} color="white" />
                     </button>
                 </div>
             );
@@ -1337,16 +1340,17 @@ service cloud.firestore {
             return (
                 <React.Fragment>
                     <div className="mobile-header">
-                        <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem' }}><Icon name="menu" size={24} /></button>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                            <Icon name={tab === 'dashboard' ? 'layout-dashboard' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
-                            <h2>{tabTitles[tab] || 'Smart Finance'}</h2>
+                        <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem', flexShrink: 0 }}><Icon name="menu" size={24} color="var(--text-primary)" /></button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                            <h2 style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tabTitles[tab] || 'Smart Finance'}</h2>
+                        </div>
+                        <div className="mobile-header-right">
                             {tab === 'transactions' && (
                                 <select 
                                     className="mobile-only"
                                     value={authorFilter} 
                                     onChange={e => setAuthorFilter(e.target.value)}
-                                    style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--btn-secondary-bg)', color: 'var(--text-primary)', fontWeight: 'bold', fontSize: '0.85rem', marginLeft: 'auto', maxWidth: '80px' }}
+                                    style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--btn-secondary-bg)', color: 'var(--text-primary)', fontWeight: 'bold', fontSize: '0.85rem', maxWidth: '80px' }}
                                 >
                                     <option value="ALL">전체</option>
                                     {Array.from(new Set((data.transactions || []).map(t => t.authorEmail).filter(Boolean))).map(email => {
@@ -1357,17 +1361,17 @@ service cloud.firestore {
                                     })}
                                 </select>
                             )}
-                            <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`} style={{ marginLeft: tab === 'transactions' ? '4px' : 'auto' }}>
+                            <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
                                 <div className="connection-dot"></div>
                                 <span className="mobile-hide">{isConnected ? '연동됨' : '미연동'}</span>
                             </div>
+                            {tab === 'transactions' && (
+                                <button className="mobile-only" onClick={() => setShowMobileSearch(!showMobileSearch)} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem' }}>
+                                    <Icon name="search" size={20} color="var(--text-primary)" />
+                                </button>
+                            )}
+                            <button onClick={() => location.reload()} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem' }}><Icon name="refresh-cw" size={22} color="var(--text-primary)" /></button>
                         </div>
-                        {tab === 'transactions' && (
-                            <button className="mobile-only" onClick={() => setShowMobileSearch(!showMobileSearch)} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem', marginRight: '4px' }}>
-                                <Icon name="search" size={20} />
-                            </button>
-                        )}
-                        <button onClick={() => location.reload()} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem' }}><Icon name="refresh-cw" size={24} /></button>
                     </div>
                     {tab === 'transactions' && showMobileSearch && (
                         <div className="mobile-only fade-in" style={{ background: 'var(--btn-secondary-bg)', padding: '10px 15px', borderBottom: '1px solid var(--border-color)', display: 'flex', position: 'sticky', top: '53px', zIndex: 999, width: '100%', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>
@@ -1391,8 +1395,8 @@ service cloud.firestore {
                     <div className={`mobile-overlay ${sidebarOpen ? 'visible' : ''}`} onClick={() => setSidebarOpen(false)}></div>
                     <div className={`sidebar ${sidebarOpen ? 'mobile-open' : ''}`}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Icon name="activity" size={24} /><h2>Smart Finance</h2></div>
-                            <button className="mobile-only" onClick={() => setSidebarOpen(false)} style={{ background: 'transparent', color: 'var(--text-primary)', display: window.innerWidth <= 768 ? 'block' : 'none' }}><Icon name="x" size={24} /></button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Icon name="activity" size={24} color="var(--accent-color)" /><h2>Smart Finance</h2></div>
+                            <button className="mobile-only" onClick={() => setSidebarOpen(false)} style={{ background: 'transparent', color: 'var(--text-primary)', display: window.innerWidth <= 768 ? 'block' : 'none' }}><Icon name="x" size={24} color="var(--text-primary)" /></button>
                         </div>
                         <div style={{ marginBottom: '1rem', padding: '0 0.5rem' }}>
                             <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
@@ -1400,11 +1404,11 @@ service cloud.firestore {
                                 <span>{isConnected ? 'Firebase 클라우드 연동 중' : '서버 연결 안 됨 (작성 제한됨)'}</span>
                             </div>
                         </div>
-                        <div className={`nav-item ${tab === 'dashboard' ? 'active' : ''}`} onClick={() => menuClick('dashboard')}><Icon name="layout-dashboard" /> 대시보드</div>
-                        <div className={`nav-item ${tab === 'transactions' ? 'active' : ''}`} onClick={() => menuClick('transactions')}><Icon name="list" /> 거래 내역</div>
-                        <div className={`nav-item ${tab === 'assets' ? 'active' : ''}`} onClick={() => menuClick('assets')}><Icon name="wallet" /> 자산 현황</div>
-                        <div className={`nav-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => menuClick('settings')}><Icon name="settings" /> 설정</div>
-                        <div className="user-profile">{user ? <button onClick={() => firebase.auth().signOut()} className="auth-btn" style={{ background: 'transparent', color: 'var(--text-secondary)' }}><Icon name="log-out" size={16} /> 로그아웃</button> : <button className="auth-btn login" onClick={() => { if (!fbConfig) setTab('settings'); else firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); }}><Icon name="log-in" size={16} /> 로그인</button>}</div>
+                        <div className={`nav-item ${tab === 'dashboard' ? 'active' : ''}`} onClick={() => menuClick('dashboard')}><Icon name="layout-dashboard" color={tab === 'dashboard' ? 'var(--accent-color)' : 'var(--text-secondary)'} /> 대시보드</div>
+                        <div className={`nav-item ${tab === 'transactions' ? 'active' : ''}`} onClick={() => menuClick('transactions')}><Icon name="list" color={tab === 'transactions' ? 'var(--accent-color)' : 'var(--text-secondary)'} /> 거래 내역</div>
+                        <div className={`nav-item ${tab === 'assets' ? 'active' : ''}`} onClick={() => menuClick('assets')}><Icon name="wallet" color={tab === 'assets' ? 'var(--accent-color)' : 'var(--text-secondary)'} /> 자산 현황</div>
+                        <div className={`nav-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => menuClick('settings')}><Icon name="settings" color={tab === 'settings' ? 'var(--accent-color)' : 'var(--text-secondary)'} /> 설정</div>
+                        <div className="user-profile">{user ? <button onClick={() => firebase.auth().signOut()} className="auth-btn" style={{ background: 'transparent', color: 'var(--text-secondary)' }}><Icon name="log-out" size={16} color="var(--text-secondary)" /> 로그아웃</button> : <button className="auth-btn login" onClick={() => { if (!fbConfig) setTab('settings'); else firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); }}><Icon name="log-in" size={16} color="white" /> 로그인</button>}</div>
                     </div>
                     <div className="main-content"><div className="container">
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} />}

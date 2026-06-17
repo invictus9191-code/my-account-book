@@ -13,11 +13,15 @@
   
   --sidebar-bg: #ffffff;
   --input-bg: rgba(255, 255, 255, 0.8);
-  --hover-bg: rgba(9, 105, 218, 0.1);
+  --hover-bg: rgba(9, 105, 218, 0.08);
   --btn-secondary-bg: #f3f4f6;
   --overlay-bg: rgba(0, 0, 0, 0.4);
   --header-bg: #ffffff;
   --connection-bg: rgba(208, 215, 222, 0.5);
+  --table-header-bg: rgba(9, 105, 218, 0.06);
+
+  /* 아이콘 색상 - 라이트 모드에서 명시적으로 지정 */
+  --icon-color: #24292f;
 }
 
 * {
@@ -158,8 +162,8 @@ body {
   border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  margin-bottom: 1rem;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.07);
 }
 
 /* Dashboard Grid */
@@ -393,9 +397,53 @@ select {
   color: var(--expense-color);
 }
 
-button.danger {
-  background: var(--expense-color);
-  color: white;
+/* ===== Icon Fix: 라이트 모드에서 Lucide 아이콘 색상 강제 지정 ===== */
+.icon-wrapper svg,
+.icon-wrapper i,
+.icon-wrapper i svg {
+  color: var(--icon-color) !important;
+  stroke: var(--icon-color) !important;
+  fill: none !important;
+}
+
+/* 네비게이션 아이템 내 아이콘 */
+.nav-item .icon-wrapper svg,
+.nav-item .icon-wrapper i svg {
+  stroke: currentColor !important;
+}
+
+/* FAB 버튼 내 아이콘은 흰색 */
+.fab-add-transaction .icon-wrapper svg,
+.fab-add-transaction .icon-wrapper i svg {
+  stroke: white !important;
+  color: white !important;
+}
+
+/* 월별 부분합 뱃지 스타일 */
+.month-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+.month-badge.income {
+  background: rgba(26, 127, 55, 0.1);
+  color: var(--income-color);
+  border: 1px solid rgba(26, 127, 55, 0.3);
+}
+.month-badge.expense {
+  background: rgba(207, 34, 46, 0.1);
+  color: var(--expense-color);
+  border: 1px solid rgba(207, 34, 46, 0.25);
+}
+.month-badge.savings {
+  background: rgba(130, 80, 223, 0.1);
+  color: var(--transfer-color);
+  border: 1px solid rgba(130, 80, 223, 0.25);
 }
 
 
@@ -490,6 +538,10 @@ button.danger {
   .page-title,
   .header-add-btn {
     display: none !important;
+  }
+  
+  .page-header {
+    margin-bottom: 0.4rem !important;
   }
   
   .header-actions {
@@ -704,6 +756,14 @@ button.danger {
   background: rgba(218, 54, 51, 0.1);
   border-color: rgba(248, 81, 73, 0.3);
   color: #f85149;
+}
+
+/* Mobile header - 전체드롭박스, 연동상태 우측 정렬 */
+.mobile-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
 }
 
 .connection-dot {
