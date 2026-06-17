@@ -503,7 +503,7 @@
 
             return (
                 <div className="fade-in">
-                    <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                    <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                         <h1 className="page-title">거래 내역</h1>
                         <div className="header-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
                             <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'} mobile-hide`}>
@@ -593,17 +593,19 @@
         function AssetManagementPage({ data, setEdit, setShowModal }) {
             const [selectedAsset, setSelectedAsset] = useState(null);
 
-            const groupGrouped = (data.groups || []).map(g => {
-                const assets = data.assets.filter(a => a.groupId === g.id);
-                const total = assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions), 0);
-                return { ...g, total, assets };
-            }).filter(g => g.assets.length > 0);
+            const groupGrouped = (data.groups || [])
+                .sort((a, b) => (a.order || 0) - (b.order || 0)) // 정렬 순서 적용
+                .map(g => {
+                    const assets = data.assets.filter(a => a.groupId === g.id);
+                    const total = assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions), 0);
+                    return { ...g, total, assets };
+                }).filter(g => g.assets.length > 0);
 
             const uncategorizedAssets = data.assets.filter(a => !a.groupId);
             const uncategorizedTotal = uncategorizedAssets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions), 0);
 
             if (uncategorizedAssets.length > 0) {
-                groupGrouped.push({ id: 'uncategorized', name: '미지정 그룹', total: uncategorizedTotal, assets: uncategorizedAssets });
+                groupGrouped.push({ id: 'uncategorized', name: '미지정 그룹', total: uncategorizedTotal, assets: uncategorizedAssets, order: 999 });
             }
 
             const grandTotal = groupGrouped.reduce((sum, g) => sum + g.total, 0);
@@ -680,12 +682,12 @@
 
             return (
                 <div className="fade-in">
-                    <div className="card" style={{ background: 'var(--accent-color)', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.5rem 2rem', marginBottom: '1.5rem' }}>
+                    <div className="asset-total-card">
                         <div>
-                            <div style={{ fontSize: '0.9rem', opacity: 0.9, marginBottom: '4px' }}>전체 자산 합계</div>
-                            <div style={{ fontSize: '1.8rem', fontWeight: 800 }}>{grandTotal.toLocaleString()}원</div>
+                            <div style={{ fontSize: '0.85rem', opacity: 0.9, marginBottom: '2px' }}>전체 자산 합계</div>
+                            <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{grandTotal.toLocaleString()}원</div>
                         </div>
-                        <Icon name="wallet" size={40} style={{ opacity: 0.3 }} />
+                        <Icon name="wallet" size={32} style={{ opacity: 0.4 }} />
                     </div>
                     <div className="card">
                         {groupGrouped.map(g => (
@@ -1385,6 +1387,12 @@ service cloud.firestore {
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} />}
                     </div></div>
                     {showModal && <TransactionModal data={data} setData={setData} onClose={() => { setShowModal(false); setEdit(null); }} editItem={edit} syncToCloud={syncToCloud} isConnected={isConnected} user={user} />}
+                    {showAssetModal && <AssetModal data={data} setData={setData} onClose={() => { setShowAssetModal(false); setEditAsset(null); }} editItem={editAsset} syncToCloud={syncToCloud} />}
+                </React.Fragment>
+            );
+        }
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    sactionModal data={data} setData={setData} onClose={() => { setShowModal(false); setEdit(null); }} editItem={edit} syncToCloud={syncToCloud} isConnected={isConnected} user={user} />}
                     {showAssetModal && <AssetModal data={data} setData={setData} onClose={() => { setShowAssetModal(false); setEditAsset(null); }} editItem={editAsset} syncToCloud={syncToCloud} />}
                 </React.Fragment>
             );

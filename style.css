@@ -141,13 +141,12 @@ body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 1rem 2rem; /* Reduced top/bottom padding from 2rem */
-  padding-bottom: 4rem;
+  padding: 0.2rem 2rem 4rem 2rem; /* Greatly reduced top padding */
   transition: all 0.3s ease;
 }
 
 .page-header {
-  margin-bottom: 0.5rem !important; /* Reduced from 1rem */
+  margin-bottom: 0 !important; /* Removed margin */
 }
 
 .subtotal-row {
@@ -558,7 +557,7 @@ select {
   }
   
   .page-header {
-    margin-bottom: 0.4rem !important;
+    margin-bottom: 0 !important;
   }
   
   .header-actions {
@@ -576,8 +575,8 @@ select {
   }
 
   .main-content {
-    padding: 1rem;
-    padding-top: 1.5rem;
+    padding: 0.2rem 1rem 4rem 1rem;
+    padding-top: 0.2rem;
   }
 
   .mobile-overlay.visible {
@@ -779,8 +778,35 @@ select {
 .mobile-header-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   margin-left: auto;
+  padding-right: 0;
+}
+
+.header-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0.6rem 1rem;
+}
+
+.header-add-btn i, .header-add-btn svg {
+  stroke: white !important;
+  color: white !important;
+  display: inline-block !important;
+}
+
+.asset-total-card {
+  background: var(--accent-color);
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.8rem 1.5rem;
+  margin-bottom: 1.5rem;
+  border-radius: 16px;
+  min-height: 60px;
 }
 
 .connection-dot {
