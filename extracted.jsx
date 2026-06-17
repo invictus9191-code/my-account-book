@@ -1392,10 +1392,4 @@ service cloud.firestore {
             );
         }
         ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-    sactionModal data={data} setData={setData} onClose={() => { setShowModal(false); setEdit(null); }} editItem={edit} syncToCloud={syncToCloud} isConnected={isConnected} user={user} />}
-                    {showAssetModal && <AssetModal data={data} setData={setData} onClose={() => { setShowAssetModal(false); setEditAsset(null); }} editItem={editAsset} syncToCloud={syncToCloud} />}
-                </React.Fragment>
-            );
-        }
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     
