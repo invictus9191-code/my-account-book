@@ -1311,7 +1311,7 @@ service cloud.firestore {
             return (
                 <React.Fragment>
                     <div className="mobile-header">
-                        <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'white', padding: '0.4rem' }}><Icon name="menu" size={24} /></button>
+                        <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem' }}><Icon name="menu" size={24} /></button>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                             <Icon name={tab === 'dashboard' ? 'layout-dashboard' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
                             <h2>{tabTitles[tab] || 'Smart Finance'}</h2>
@@ -1337,11 +1337,11 @@ service cloud.firestore {
                             </div>
                         </div>
                         {tab === 'transactions' && (
-                            <button className="mobile-only" onClick={() => setShowMobileSearch(!showMobileSearch)} style={{ background: 'transparent', color: 'white', padding: '0.4rem', marginRight: '4px' }}>
+                            <button className="mobile-only" onClick={() => setShowMobileSearch(!showMobileSearch)} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem', marginRight: '4px' }}>
                                 <Icon name="search" size={20} />
                             </button>
                         )}
-                        <button onClick={() => location.reload()} style={{ background: 'transparent', color: 'white', padding: '0.4rem' }}><Icon name="refresh-cw" size={24} /></button>
+                        <button onClick={() => location.reload()} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem' }}><Icon name="refresh-cw" size={24} /></button>
                     </div>
                     {tab === 'transactions' && showMobileSearch && (
                         <div className="mobile-only fade-in" style={{ background: '#21262d', padding: '10px 15px', borderBottom: '1px solid #30363d', display: 'flex', position: 'sticky', top: '53px', zIndex: 999, width: '100%', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>
