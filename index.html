@@ -99,94 +99,257 @@
         })();
     </script>
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        // React 구문 시작
+        (function() {
+            const { useState, useEffect, useMemo } = React;
 
-        const STORAGE_KEY = 'INV_HOUSEHOLD_DATA';
-        const FIREBASE_CONFIG_KEY = 'INV_FIREBASE_CONFIG';
-        const PASSWORD_KEY = 'INV_APP_PASSWORD';
-        const SHARED_ID_KEY = 'INV_SHARED_ID';
-        const DEFAULT_PASSWORD = '9999';
+            const STORAGE_KEY = 'INV_HOUSEHOLD_DATA';
+            const FIREBASE_CONFIG_KEY = 'INV_FIREBASE_CONFIG';
+            const PASSWORD_KEY = 'INV_APP_PASSWORD';
+            const SHARED_ID_KEY = 'INV_SHARED_ID';
+            const DEFAULT_PASSWORD = '9999';
 
-        const initialData = {
-            owners: [{ id: 'o1', name: '홍길동' }],
-            groups: [{ id: 'g1', name: '주거래' }],
-            assets: [{ id: 'a1', ownerId: 'o1', groupId: 'g1', name: '현금', type: 'Cash', initialBalance: 0 }],
-            categories: [
-                { id: 'ex1', type: 'Expense', name: '식비' }, { id: 'ex2', type: 'Expense', name: '카페/간식' },
-                { id: 'ex3', type: 'Expense', name: '외식/배달' }, { id: 'ex4', type: 'Expense', name: '생활용품' },
-                { id: 'ex5', type: 'Expense', name: '교통' }, { id: 'ex6', type: 'Expense', name: '주거/통신' },
-                { id: 'ex7', type: 'Expense', name: '건강' }, { id: 'ex8', type: 'Expense', name: '문화' },
-                { id: 'ex9', type: 'Expense', name: '여행' }, { id: 'ex10', type: 'Expense', name: '교육' },
-                { id: 'ex11', type: 'Expense', name: '경조사' }, { id: 'ex12', type: 'Expense', name: '대출' },
-                { id: 'ex13', type: 'Expense', name: '부모님' }, { id: 'ex14', type: 'Expense', name: '미용' },
-                { id: 'ex15', type: 'Expense', name: '용돈' }, { id: 'ex16', type: 'Expense', name: '기타' },
-                { id: 'in1', type: 'Income', name: '급여' }, { id: 'in2', type: 'Income', name: '금융수입' },
-                { id: 'in3', type: 'Income', name: '기타수입' }, { id: 'in4', type: 'Income', name: '보너스' },
-                { id: 'tr1', type: 'Transfer', name: '저축' }, { id: 'tr2', type: 'Transfer', name: '이체' }
-            ],
-            transactions: []
-        };
+            const initialData = {
+                owners: [{ id: 'o1', name: '홍길동' }],
+                groups: [{ id: 'g1', name: '주거래' }],
+                assets: [{ id: 'a1', ownerId: 'o1', groupId: 'g1', name: '현금', type: 'Cash', initialBalance: 0 }],
+                categories: [
+                    { id: 'ex1', type: 'Expense', name: '식비' }, { id: 'ex2', type: 'Expense', name: '카페/간식' },
+                    { id: 'ex3', type: 'Expense', name: '외식/배달' }, { id: 'ex4', type: 'Expense', name: '생활용품' },
+                    { id: 'ex5', type: 'Expense', name: '교통' }, { id: 'ex6', type: 'Expense', name: '주거/통신' },
+                    { id: 'ex7', type: 'Expense', name: '건강' }, { id: 'ex8', type: 'Expense', name: '문화' },
+                    { id: 'ex9', type: 'Expense', name: '여행' }, { id: 'ex10', type: 'Expense', name: '교육' },
+                    { id: 'ex11', type: 'Expense', name: '경조사' }, { id: 'ex12', type: 'Expense', name: '대출' },
+                    { id: 'ex13', type: 'Expense', name: '부모님' }, { id: 'ex14', type: 'Expense', name: '미용' },
+                    { id: 'ex15', type: 'Expense', name: '용돈' }, { id: 'ex16', type: 'Expense', name: '기타' },
+                    { id: 'in1', type: 'Income', name: '급여' }, { id: 'in2', type: 'Income', name: '금융수입' },
+                    { id: 'in3', type: 'Income', name: '기타수입' }, { id: 'in4', type: 'Income', name: '보너스' },
+                    { id: 'tr1', type: 'Transfer', name: '저축' }, { id: 'tr2', type: 'Transfer', name: '이체' }
+                ],
+                transactions: []
+            };
 
-        // ... 기존 코드와 동일 ...
+            const Icon = ({ name, size = 18, className = "", style = {} }) => {
+                useEffect(() => { 
+                    if (window.lucide) {
+                        window.lucide.createIcons();
+                    } else {
+                        setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 100);
+                    }
+                }, [name]);
+                return <i data-lucide={name} className={className} style={{ width: size, height: size, display: 'inline-block', ...style }}></i>;
+            };
 
-        function App() {
-            const [data, setData] = useState(() => {
-                try {
-                    const saved = localStorage.getItem(STORAGE_KEY);
-                    return saved ? JSON.parse(saved) : initialData;
-                } catch (e) {
-                    console.error("Data load error:", e);
-                    return initialData;
-                }
-            });
-            const [tab, setTab] = useState('transactions');
-            const [sidebarOpen, setSidebarOpen] = useState(false);
-            const [user, setUser] = useState(null);
-            const [fbConfig, setFbConfig] = useState(() => {
-                try {
-                    const saved = localStorage.getItem(FIREBASE_CONFIG_KEY);
-                    return saved ? JSON.parse(saved) : null;
-                } catch (e) {
-                    return null;
-                }
-            });
-            const [showModal, setShowModal] = useState(false);
-            const [edit, setEdit] = useState(null);
+            const calculateAssetBalance = (assetId, assets, transactions, upToDate) => {
+                const asset = assets.find(a => a.id === assetId);
+                if (!asset) return 0;
+                const history = transactions.filter(t => {
+                    const match = t.assetId === assetId || t.toAssetId === assetId;
+                    if (upToDate) return match && t.date <= upToDate;
+                    return match;
+                });
+                return history.reduce((sum, t) => {
+                    const amt = Number(t.amount || 0);
+                    if (t.type === 'Income' && t.assetId === assetId) return sum + amt;
+                    if (t.type === 'Expense' && t.assetId === assetId) return sum - amt;
+                    if (t.type === 'Transfer') {
+                        if (t.assetId === assetId) return sum - amt;
+                        if (t.toAssetId === assetId) return sum + amt;
+                    }
+                    return sum;
+                }, Number(asset.initialBalance || 0));
+            };
 
-            const isConnected = !!user && !!fbConfig;
-            const syncToCloud = (d) => { if (isConnected) firebase.firestore().collection('shared_data').doc(localStorage.getItem(SHARED_ID_KEY) || user.uid).set(d); };
+            function Dashboard({ data, setEdit, setShowModal, setEditAsset, setShowAssetModal }) {
+                const [selectedMonth, setSelectedMonth] = useState(() => {
+                    const now = new Date();
+                    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                });
+                const [view, setView] = useState('main');
 
-            useEffect(() => {
-                if (fbConfig && window.firebase && !firebase.apps.length) {
-                    firebase.initializeApp(fbConfig);
-                    firebase.auth().onAuthStateChanged(u => setUser(u));
-                }
-            }, [fbConfig]);
+                const availableMonths = useMemo(() => {
+                    const months = new Set();
+                    data.transactions.forEach(t => months.add(t.date.substring(0, 7)));
+                    const now = new Date();
+                    months.add(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+                    return Array.from(months).sort((a, b) => b.localeCompare(a));
+                }, [data.transactions]);
 
-            useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }, [data]);
+                const stats = useMemo(() => {
+                    const [year, month] = selectedMonth.split('-').map(Number);
+                    const currentMonthT = data.transactions.filter(t => t.date.startsWith(selectedMonth));
+                    const savingsCategories = data.categories.filter(c => c.name === '저축' || c.name.includes('저축')).map(c => c.id);
+                    const income = currentMonthT.filter(t => t.type === 'Income').reduce((s, t) => s + Number(t.amount), 0);
+                    const rawExpense = currentMonthT.filter(t => t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0);
+                    const savings = currentMonthT.filter(t => (t.type === 'Expense' || t.type === 'Transfer') && savingsCategories.includes(t.categoryId)).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+                    const expense = rawExpense - currentMonthT.filter(t => t.type === 'Expense' && savingsCategories.includes(t.categoryId)).reduce((s, t) => s + Number(t.amount), 0);
 
-            return (
-                <React.Fragment>
-                    <div className="mobile-header">
-                        <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'var(--text-primary)' }}><Icon name="menu" size={24} /></button>
-                        <h2 style={{ flex: 1, textAlign: 'center' }}>가계부</h2>
-                        <button onClick={() => location.reload()} style={{ background: 'transparent', color: 'var(--text-primary)' }}><Icon name="refresh-cw" size={22} /></button>
+                    const totalAssets = data.assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions, `${selectedMonth}-31`), 0);
+                    return { income, expense, savings, totalAssets };
+                }, [selectedMonth, data.transactions, data.assets]);
+
+                if (view !== 'main') return <div className="fade-in"><button onClick={() => setView('main')} className="icon-btn"><Icon name="arrow-left" /></button>상세보기 준비 중...</div>;
+
+                return (
+                    <div className="fade-in">
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+                            <select className="month-select" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}>
+                                {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                        </div>
+                        <div className="dashboard-grid">
+                            <div className="card stat-card interactive" onClick={() => setView('income_detail')}><span className="stat-label">수입</span><span className="stat-value">{stats.income.toLocaleString()}원</span></div>
+                            <div className="card stat-card interactive" onClick={() => setView('expense_detail')}><span className="stat-label">지출</span><span className="stat-value">{stats.expense.toLocaleString()}원</span></div>
+                            <div className="card stat-card interactive" onClick={() => setView('savings_detail')}><span className="stat-label">저축</span><span className="stat-value">{stats.savings.toLocaleString()}원</span></div>
+                            <div className="card stat-card"><span className="stat-label">자산 총액</span><span className="stat-value">{stats.totalAssets.toLocaleString()}원</span></div>
+                        </div>
                     </div>
-                    <div className={`sidebar ${sidebarOpen ? 'mobile-open' : ''}`}>
-                        <div className="nav-item" onClick={() => { setTab('dashboard'); setSidebarOpen(false); }}><Icon name="layout-dashboard" /> 대시보드</div>
-                        <div className="nav-item" onClick={() => { setTab('transactions'); setSidebarOpen(false); }}><Icon name="list" /> 거래 내역</div>
-                        <div className="nav-item" onClick={() => { setTab('assets'); setSidebarOpen(false); }}><Icon name="wallet" /> 자산 현황</div>
-                    </div>
-                    <div className="main-content">
-                        {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} />}
-                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} user={user} syncToCloud={syncToCloud} />}
-                        {tab === 'assets' && <AssetManagementPage data={data} />}
-                    </div>
-                </React.Fragment>
-            );
-        }
+                );
+            }
 
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+            function TransactionPage({ data, setData, setEdit, setShowModal, isConnected, user, searchTerm, setSearchTerm, authorFilter, setAuthorFilter, syncToCloud }) {
+                const filtered = data.transactions.filter(t => {
+                    if (authorFilter !== 'ALL' && t.authorEmail !== authorFilter) return false;
+                    if (searchTerm && !t.memo?.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+                    return true;
+                });
+                const grouped = filtered.sort((a, b) => b.date.localeCompare(a.date)).reduce((acc, t) => {
+                    const m = t.date.substring(0, 7);
+                    if (!acc[m]) acc[m] = { txs: [], income: 0, expense: 0, savings: 0 };
+                    acc[m].txs.push(t);
+                    const isSavings = data.categories.find(c => c.id === t.categoryId)?.name.includes('저축');
+                    if (t.type === 'Income') acc[m].income += Number(t.amount);
+                    else if (t.type === 'Expense') { if (isSavings) acc[m].savings += Number(t.amount); else acc[m].expense += Number(t.amount); }
+                    return acc;
+                }, {});
+                const months = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+                return (
+                    <div className="fade-in">
+                        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0 }}>
+                            <h1 className="page-title">거래 내역</h1>
+                            <button className="primary header-add-btn" onClick={() => { setEdit(null); setShowModal(true); }}><Icon name="plus" size={16} /> 거래 추가</button>
+                        </div>
+                        <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+                            <table className="transaction-table">
+                                <thead><tr><th>날짜</th><th>금액</th><th>카테고리</th><th>자산</th><th>메모</th></tr></thead>
+                                <tbody>
+                                    {months.map(m => (
+                                        <React.Fragment key={m}>
+                                            <tr className="subtotal-row">
+                                                <td colSpan="5">
+                                                    <div className="subtotal-label">[{m.split('-')[0]}년 {m.split('-')[1]}월]</div>
+                                                    <div className="subtotal-values">(수입: {grouped[m].income.toLocaleString()} / 지출: {grouped[m].expense.toLocaleString()} / 저축: {grouped[m].savings.toLocaleString()})</div>
+                                                </td>
+                                            </tr>
+                                            {grouped[m].txs.map(t => (
+                                                <tr key={t.id} onClick={() => { setEdit(t); setShowModal(true); }} className="list-item">
+                                                    <td>{t.date.substring(8)}일</td>
+                                                    <td className={`type-${t.type.toLowerCase()}`} style={{ fontWeight: 600 }}>{t.type === 'Expense' ? '-' : '+'}{Number(t.amount).toLocaleString()}</td>
+                                                    <td>{data.categories.find(c => c.id === t.categoryId)?.name}</td>
+                                                    <td>{data.assets.find(a => a.id === t.assetId)?.name}</td>
+                                                    <td>{t.memo}</td>
+                                                </tr>
+                                            ))}
+                                        </React.Fragment>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                );
+            }
+
+            function AssetManagementPage({ data }) {
+                const groups = (data.groups || []).sort((a, b) => (a.order || 0) - (b.order || 0)).map(g => {
+                    const assets = data.assets.filter(a => a.groupId === g.id);
+                    const total = assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions), 0);
+                    return { ...g, assets, total };
+                });
+                return (
+                    <div className="fade-in">
+                        <div className="asset-total-card">
+                            <div><div style={{ fontSize: '0.85rem', opacity: 0.9 }}>전체 자산 합계</div><div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{groups.reduce((s, g) => s + g.total, 0).toLocaleString()}원</div></div>
+                            <Icon name="wallet" size={32} style={{ opacity: 0.4 }} />
+                        </div>
+                        <div className="card">
+                            {groups.map(g => (
+                                <div key={g.id} style={{ marginBottom: '1.5rem' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '1rem' }}><h3>{g.name}</h3><span>{g.total.toLocaleString()}원</span></div>
+                                    {g.assets.map(a => (
+                                        <div key={a.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 1rem' }}>
+                                            <span>{a.name}</span>
+                                            <span>{calculateAssetBalance(a.id, data.assets, data.transactions).toLocaleString()}원</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+
+            function App() {
+                const [data, setData] = useState(() => {
+                    try {
+                        const saved = localStorage.getItem(STORAGE_KEY);
+                        return saved ? JSON.parse(saved) : initialData;
+                    } catch (e) {
+                        return initialData;
+                    }
+                });
+                const [tab, setTab] = useState('transactions');
+                const [sidebarOpen, setSidebarOpen] = useState(false);
+                const [user, setUser] = useState(null);
+                const [fbConfig, setFbConfig] = useState(() => {
+                    try {
+                        const saved = localStorage.getItem(FIREBASE_CONFIG_KEY);
+                        return saved ? JSON.parse(saved) : null;
+                    } catch (e) {
+                        return null;
+                    }
+                });
+                const [showModal, setShowModal] = useState(false);
+                const [edit, setEdit] = useState(null);
+
+                const isConnected = !!user && !!fbConfig;
+                const syncToCloud = (d) => { if (isConnected && window.firebase) firebase.firestore().collection('shared_data').doc(localStorage.getItem(SHARED_ID_KEY) || user.uid).set(d); };
+
+                useEffect(() => {
+                    if (fbConfig && window.firebase && !firebase.apps.length) {
+                        firebase.initializeApp(fbConfig);
+                        firebase.auth().onAuthStateChanged(u => setUser(u));
+                    }
+                }, [fbConfig]);
+
+                useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }, [data]);
+
+                return (
+                    <React.Fragment>
+                        <div className="mobile-header">
+                            <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'var(--text-primary)' }}><Icon name="menu" size={24} /></button>
+                            <h2 style={{ flex: 1, textAlign: 'center' }}>가계부</h2>
+                            <button onClick={() => location.reload()} style={{ background: 'transparent', color: 'var(--text-primary)' }}><Icon name="refresh-cw" size={22} /></button>
+                        </div>
+                        <div className={`sidebar ${sidebarOpen ? 'mobile-open' : ''}`}>
+                            <div className="nav-item" onClick={() => { setTab('dashboard'); setSidebarOpen(false); }}><Icon name="layout-dashboard" /> 대시보드</div>
+                            <div className="nav-item" onClick={() => { setTab('transactions'); setSidebarOpen(false); }}><Icon name="list" /> 거래 내역</div>
+                            <div className="nav-item" onClick={() => { setTab('assets'); setSidebarOpen(false); }}><Icon name="wallet" /> 자산 현황</div>
+                        </div>
+                        <div className="main-content">
+                            {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} />}
+                            {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} user={user} syncToCloud={syncToCloud} />}
+                            {tab === 'assets' && <AssetManagementPage data={data} />}
+                        </div>
+                    </React.Fragment>
+                );
+            }
+
+            const rootElement = document.getElementById('root');
+            if (rootElement) {
+                ReactDOM.createRoot(rootElement).render(<App />);
+            }
+        })();
     </script>
 </body>
 </html>
