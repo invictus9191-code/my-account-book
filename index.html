@@ -1,33 +1,23 @@
 <!DOCTYPE html>
 <html lang="ko">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Finance - 가계부</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-    <!-- Scripts -->
-    <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/prop-types/prop-types.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <script src="https://cdn.jsdelivr.net/npm/react-apexcharts@1.4.1/dist/react-apexcharts.iife.min.js"></script>
-
-    <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
 </head>
-
 <body>
-    <div id="root">
-        <div style="color: white; padding: 20px; font-family: sans-serif;">화면을 불러오는 중입니다... (잠시만 기다려 주세요)</div>
-    </div>
-
+    <div id="root"><div style="color: #24292f; padding: 20px; font-family: sans-serif;">화면을 불러오는 중입니다. 잠시만 기다려 주세요...</div></div>
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
@@ -57,7 +47,7 @@
             transactions: []
         };
 
-        const Icon = ({ name, size = 18, className = "", style = {}, color }) => {
+        const Icon = ({ name, size = 18, className = "", style = {} }) => {
             useEffect(() => { 
                 if (window.lucide) {
                     window.lucide.createIcons();
@@ -65,7 +55,7 @@
                     setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 100);
                 }
             }, [name]);
-            return <i data-lucide={name} className={className} style={{ width: size, height: size, display: 'inline-block', color: color || 'inherit', ...style }}></i>;
+            return <i data-lucide={name} className={className} style={{ width: size, height: size, display: 'inline-block', ...style }}></i>;
         };
 
         const calculateAssetBalance = (assetId, assets, transactions, upToDate) => {
@@ -89,26 +79,11 @@
         };
 
         function Dashboard({ data, setEdit, setShowModal, setEditAsset, setShowAssetModal }) {
-            const [categoryType, setCategoryType] = useState('Expense');
-            const [selectedCategory, setSelectedCategory] = useState(() => {
-                const cats = data.categories ? data.categories.filter(c => c.type === 'Expense') : [];
-                return cats.length > 0 ? cats[0].id : '';
-            });
-
-            useEffect(() => {
-                const cats = data.categories.filter(c => c.type === categoryType);
-                if (cats.length > 0 && !cats.find(c => c.id === selectedCategory)) {
-                    setSelectedCategory(cats[0].id);
-                }
-            }, [categoryType, data.categories, selectedCategory]);
-
             const [selectedMonth, setSelectedMonth] = useState(() => {
                 const now = new Date();
                 return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             });
             const [view, setView] = useState('main');
-            const [selectedId, setSelectedId] = useState(null);
-            const [chartType, setChartType] = useState('income_expense');
 
             const availableMonths = useMemo(() => {
                 const months = new Set();
@@ -122,114 +97,20 @@
                 const [year, month] = selectedMonth.split('-').map(Number);
                 const currentMonthT = data.transactions.filter(t => t.date.startsWith(selectedMonth));
                 const savingsCategories = data.categories.filter(c => c.name === '저축' || c.name.includes('저축')).map(c => c.id);
-
                 const income = currentMonthT.filter(t => t.type === 'Income').reduce((s, t) => s + Number(t.amount), 0);
                 const rawExpense = currentMonthT.filter(t => t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0);
                 const savings = currentMonthT.filter(t => (t.type === 'Expense' || t.type === 'Transfer') && savingsCategories.includes(t.categoryId)).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
                 const expense = rawExpense - currentMonthT.filter(t => t.type === 'Expense' && savingsCategories.includes(t.categoryId)).reduce((s, t) => s + Number(t.amount), 0);
 
-                const prevDate = new Date(year, month - 2, 1);
-                const prevMonthStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
-                const prevMonthT = data.transactions.filter(t => t.date.startsWith(prevMonthStr));
-                const prevIncome = prevMonthT.filter(t => t.type === 'Income').reduce((s, t) => s + Number(t.amount), 0);
-                const prevRawExpense = prevMonthT.filter(t => t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0);
-                const prevExpense = prevRawExpense - prevMonthT.filter(t => t.type === 'Expense' && savingsCategories.includes(t.categoryId)).reduce((s, t) => s + Number(t.amount), 0);
-
-                const totalAssets = data.assets.reduce((sum, a) => {
-                    const initial = Number(a.initialBalance || 0);
-                    const history = data.transactions.filter(t => t.date <= `${selectedMonth}-31` && (t.assetId === a.id || t.toAssetId === a.id));
-                    return sum + history.reduce((s, t) => {
-                        const amt = Number(t.amount || 0);
-                        if (t.type === 'Income' && t.assetId === a.id) return s + amt;
-                        if (t.type === 'Expense' && t.assetId === a.id) return s - amt;
-                        if (t.type === 'Transfer') {
-                            if (t.assetId === a.id) return s - amt;
-                            if (t.toAssetId === a.id) return s + amt;
-                        }
-                        return s;
-                    }, initial);
-                }, 0);
-
-                return { income, expense, savings, totalAssets, prevIncome, prevExpense };
+                const totalAssets = data.assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions, `${selectedMonth}-31`), 0);
+                return { income, expense, savings, totalAssets };
             }, [selectedMonth, data.transactions, data.assets]);
 
-            const annualData = useMemo(() => {
-                const [year, month] = selectedMonth.split('-').map(Number);
-                const labels = Array.from({ length: 12 }, (_, i) => {
-                    const d = new Date(year, month - 1 - (11 - i), 1);
-                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                });
-                const incomeData = labels.map(m => data.transactions.filter(t => t.date.startsWith(m) && t.type === 'Income').reduce((s, t) => s + Number(t.amount), 0));
-                const savingsCategories = data.categories.filter(c => c.name === '저축' || c.name.includes('저축')).map(c => c.id);
-                const savingsData = labels.map(m => data.transactions.filter(t => t.date.startsWith(m) && (t.type === 'Expense' || t.type === 'Transfer') && savingsCategories.includes(t.categoryId)).reduce((s, t) => s + Math.abs(Number(t.amount)), 0));
-                const expenseData = labels.map(m => {
-                    const rawExp = data.transactions.filter(t => t.date.startsWith(m) && t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0);
-                    const sav = data.transactions.filter(t => t.date.startsWith(m) && t.type === 'Expense' && savingsCategories.includes(t.categoryId)).reduce((s, t) => s + Number(t.amount), 0);
-                    return rawExp - sav;
-                });
-                const assetData = labels.map(m => {
-                    return data.assets.reduce((sum, a) => {
-                        const initial = Number(a.initialBalance || 0);
-                        const history = data.transactions.filter(t => t.date <= `${m}-31` && (t.assetId === a.id || t.toAssetId === a.id));
-                        return sum + history.reduce((s, t) => {
-                            const amt = Number(t.amount || 0);
-                            if (t.type === 'Income' && t.assetId === a.id) return s + amt;
-                            if (t.type === 'Expense' && t.assetId === a.id) return s - amt;
-                            if (t.type === 'Transfer') {
-                                if (t.assetId === a.id) return s - amt;
-                                if (t.toAssetId === a.id) return s + amt;
-                            }
-                            return s;
-                        }, initial);
-                    }, 0);
-                });
-                return { labels: labels.map(m => `${m.substring(5)}월`), incomeData, expenseData, savingsData, assetData };
-            }, [selectedMonth, data.transactions, data.assets]);
-
-            const getChartOptions = (id) => ({
-                chart: { type: 'bar', id, toolbar: { show: false }, background: 'transparent' },
-                xaxis: { categories: annualData.labels },
-                yaxis: { labels: { formatter: (val) => Math.floor(val).toLocaleString() } },
-                dataLabels: { enabled: false },
-                tooltip: { theme: 'dark', y: { formatter: (val) => Math.floor(val).toLocaleString() + '원' } }
-            });
-
-            if (view === 'income_detail' || view === 'expense_detail' || view === 'savings_detail') {
-                const type = view === 'income_detail' ? 'Income' : 'Expense';
-                const savingsCategories = data.categories.filter(c => c.name === '저축' || c.name.includes('저축')).map(c => c.id);
-                const monthT = data.transactions.filter(t => {
-                    if (!t.date.startsWith(selectedMonth)) return false;
-                    if (view === 'savings_detail') return (t.type === 'Expense' || t.type === 'Transfer') && savingsCategories.includes(t.categoryId);
-                    if (view === 'expense_detail') return t.type === 'Expense' && !savingsCategories.includes(t.categoryId);
-                    return t.type === type;
-                });
-                const catGrouped = data.categories.filter(c => {
-                    if (view === 'savings_detail') return savingsCategories.includes(c.id);
-                    if (view === 'expense_detail') return c.type === 'Expense' && !savingsCategories.includes(c.id);
-                    return c.type === type;
-                }).map(c => ({
-                    ...c,
-                    amount: monthT.filter(t => t.categoryId === c.id).reduce((s, t) => s + Number(t.amount), 0)
-                })).filter(c => c.amount > 0).sort((a, b) => b.amount - a.amount);
-
-                return (
-                    <div className="fade-in">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem' }}><button onClick={() => setView('main')} className="icon-btn"><Icon name="arrow-left" /></button><h1>{view === 'income_detail' ? '수입' : view === 'expense_detail' ? '지출' : '저축'} 상세보기</h1></div>
-                        <div className="card">
-                            {catGrouped.map(c => (
-                                <div key={c.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem', borderBottom: '1px solid var(--border-color)' }}>
-                                    <span>{c.name}</span>
-                                    <span style={{ fontWeight: 600 }}>{c.amount.toLocaleString()}원</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                );
-            }
+            if (view !== 'main') return <div className="fade-in"><button onClick={() => setView('main')} className="icon-btn"><Icon name="arrow-left" /></button>상세보기 준비 중...</div>;
 
             return (
                 <div className="fade-in">
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
                         <select className="month-select" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}>
                             {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
                         </select>
@@ -240,20 +121,6 @@
                         <div className="card stat-card interactive" onClick={() => setView('savings_detail')}><span className="stat-label">저축</span><span className="stat-value">{stats.savings.toLocaleString()}원</span></div>
                         <div className="card stat-card"><span className="stat-label">자산 총액</span><span className="stat-value">{stats.totalAssets.toLocaleString()}원</span></div>
                     </div>
-                    <div className="dashboard-grid" style={{ marginTop: '1.5rem' }}>
-                        <div className="card">
-                            <h3>연간 흐름</h3>
-                            {window.ReactApexChart ? (
-                                <window.ReactApexChart options={{ ...getChartOptions('flow'), colors: ['var(--income-color)', 'var(--expense-color)'] }} series={[{ name: '수입', data: annualData.incomeData }, { name: '지출', data: annualData.expenseData }]} type="bar" height={280} />
-                            ) : "로딩 중..."}
-                        </div>
-                        <div className="card">
-                            <h3>자산 추이</h3>
-                            {window.ReactApexChart ? (
-                                <window.ReactApexChart options={{ ...getChartOptions('assets'), colors: ['var(--accent-color)'] }} series={[{ name: '자산', data: annualData.assetData }]} type="bar" height={280} />
-                            ) : "로딩 중..."}
-                        </div>
-                    </div>
                 </div>
             );
         }
@@ -261,9 +128,8 @@
         function TransactionPage({ data, setData, setEdit, setShowModal, isConnected, user, searchTerm, setSearchTerm, authorFilter, setAuthorFilter, syncToCloud }) {
             const filtered = data.transactions.filter(t => {
                 if (authorFilter !== 'ALL' && t.authorEmail !== authorFilter) return false;
-                if (!searchTerm) return true;
-                const term = searchTerm.toLowerCase();
-                return t.memo?.toLowerCase().includes(term) || data.categories.find(c => c.id === t.categoryId)?.name.toLowerCase().includes(term);
+                if (searchTerm && !t.memo?.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+                return true;
             });
             const grouped = filtered.sort((a, b) => b.date.localeCompare(a.date)).reduce((acc, t) => {
                 const m = t.date.substring(0, 7);
@@ -280,10 +146,7 @@
                 <div className="fade-in">
                     <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0 }}>
                         <h1 className="page-title">거래 내역</h1>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                            <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}><div className="connection-dot"></div><span>{isConnected ? '연동됨' : '미연동'}</span></div>
-                            <button className="primary header-add-btn" onClick={() => { setEdit(null); setShowModal(true); }}><Icon name="plus" size={16} /> 거래 추가</button>
-                        </div>
+                        <button className="primary header-add-btn" onClick={() => { setEdit(null); setShowModal(true); }}><Icon name="plus" size={16} /> 거래 추가</button>
                     </div>
                     <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
                         <table className="transaction-table">
@@ -321,11 +184,10 @@
                 const total = assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions), 0);
                 return { ...g, assets, total };
             });
-            const grandTotal = groups.reduce((s, g) => s + g.total, 0);
             return (
                 <div className="fade-in">
                     <div className="asset-total-card">
-                        <div><div style={{ fontSize: '0.85rem', opacity: 0.9 }}>전체 자산 합계</div><div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{grandTotal.toLocaleString()}원</div></div>
+                        <div><div style={{ fontSize: '0.85rem', opacity: 0.9 }}>전체 자산 합계</div><div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{groups.reduce((s, g) => s + g.total, 0).toLocaleString()}원</div></div>
                         <Icon name="wallet" size={32} style={{ opacity: 0.4 }} />
                     </div>
                     <div className="card">
@@ -353,8 +215,6 @@
             const [fbConfig, setFbConfig] = useState(() => JSON.parse(localStorage.getItem(FIREBASE_CONFIG_KEY) || 'null'));
             const [showModal, setShowModal] = useState(false);
             const [edit, setEdit] = useState(null);
-            const [searchTerm, setSearchTerm] = useState('');
-            const [authorFilter, setAuthorFilter] = useState('ALL');
 
             const isConnected = !!user && !!fbConfig;
             const syncToCloud = (d) => { if (isConnected) firebase.firestore().collection('shared_data').doc(localStorage.getItem(SHARED_ID_KEY) || user.uid).set(d); };
@@ -372,32 +232,24 @@
                 <React.Fragment>
                     <div className="mobile-header">
                         <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'var(--text-primary)' }}><Icon name="menu" size={24} /></button>
-                        <h2>가계부</h2>
+                        <h2 style={{ flex: 1, textAlign: 'center' }}>가계부</h2>
                         <button onClick={() => location.reload()} style={{ background: 'transparent', color: 'var(--text-primary)' }}><Icon name="refresh-cw" size={22} /></button>
                     </div>
                     <div className={`sidebar ${sidebarOpen ? 'mobile-open' : ''}`}>
                         <div className="nav-item" onClick={() => { setTab('dashboard'); setSidebarOpen(false); }}><Icon name="layout-dashboard" /> 대시보드</div>
                         <div className="nav-item" onClick={() => { setTab('transactions'); setSidebarOpen(false); }}><Icon name="list" /> 거래 내역</div>
                         <div className="nav-item" onClick={() => { setTab('assets'); setSidebarOpen(false); }}><Icon name="wallet" /> 자산 현황</div>
-                        <div className="user-profile">{user ? <button onClick={() => firebase.auth().signOut()}>로그아웃</button> : <button onClick={() => firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider())}>로그인</button>}</div>
                     </div>
                     <div className="main-content">
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} />}
-                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} user={user} searchTerm={searchTerm} setSearchTerm={setSearchTerm} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} syncToCloud={syncToCloud} />}
+                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} user={user} syncToCloud={syncToCloud} />}
                         {tab === 'assets' && <AssetManagementPage data={data} />}
                     </div>
                 </React.Fragment>
             );
         }
 
-        class ErrorBoundary extends React.Component {
-            constructor(props) { super(props); this.state = { hasError: false }; }
-            static getDerivedStateFromError() { return { hasError: true }; }
-            render() { return this.state.hasError ? <div>오류 발생</div> : this.props.children; }
-        }
-
-        ReactDOM.createRoot(document.getElementById('root')).render(<ErrorBoundary><App /></ErrorBoundary>);
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
-
 </html>
