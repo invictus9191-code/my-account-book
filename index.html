@@ -1407,7 +1407,19 @@ service cloud.firestore {
                                     className="mobile-only"
                                     value={authorFilter} 
                                     onChange={e => setAuthorFilter(e.target.value)}
-                                    style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #30363d', background: '#21262d', color: 'white', fontWeight: 'bold', fontSize: '0.85rem', marginLeft: 'auto', maxWidth: '80px' }}
+                                    style={{ 
+                                        padding: '4px 12px', 
+                                        borderRadius: '15px', 
+                                        border: '1px solid #484f58', 
+                                        background: '#30363d', 
+                                        color: '#c9d1d9', 
+                                        fontWeight: '600', 
+                                        fontSize: '0.8rem', 
+                                        marginLeft: 'auto', 
+                                        maxWidth: '100px',
+                                        textAlign: 'center',
+                                        textAlignLast: 'center'
+                                    }}
                                 >
                                     <option value="ALL">전체</option>
                                     {Array.from(new Set((data.transactions || []).map(t => t.authorEmail).filter(Boolean))).map(email => {
@@ -1470,6 +1482,19 @@ service cloud.firestore {
                     <div className="main-content"><div className="container">
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} />}
                         {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} />}
+                        {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} />}
+                        {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} />}
+                    </div></div>
+                    {showModal && <TransactionModal data={data} setData={setData} onClose={() => { setShowModal(false); setEdit(null); }} editItem={edit} syncToCloud={syncToCloud} isConnected={isConnected} user={user} />}
+                    {showAssetModal && <AssetModal data={data} setData={setData} onClose={() => { setShowAssetModal(false); setEditAsset(null); }} editItem={editAsset} syncToCloud={syncToCloud} />}
+                </React.Fragment>
+            );
+        }
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
+} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} />}
                     </div></div>
