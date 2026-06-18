@@ -31,7 +31,7 @@
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-body {
+html, body {
   background-color: var(--bg-color);
   color: var(--text-primary);
   overflow-x: hidden;

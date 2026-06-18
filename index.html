@@ -847,7 +847,7 @@
                                     {g.assets.map(a => {
                                         const bal = calculateAssetBalance(a.id, data.assets, data.transactions);
                                         return (
-                                            <div key={a.id} onClick={() => setSelectedAsset(a)} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 1rem', background: 'rgba(22, 27, 34, 0.4)', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s' }} className="list-item">
+                                            <div key={a.id} onClick={() => setSelectedAsset(a)} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 1rem', background: 'rgba(9, 105, 218, 0.1)', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s' }} className="list-item">
                                                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     {a.name}
                                                     <Icon name="chevron-right" size={14} style={{ color: '#58a6ff', opacity: 0.7 }} />
