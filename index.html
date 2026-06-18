@@ -17,7 +17,69 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
 </head>
 <body>
-    <div id="root"><div style="color: #24292f; padding: 20px; font-family: sans-serif;">화면을 불러오는 중입니다. 잠시만 기다려 주세요...</div></div>
+    <div id="pull-to-refresh-indicator" style="position: fixed; top: -60px; left: 0; width: 100%; height: 60px; display: flex; align-items: center; justify-content: center; background: #f6f8fa; color: #57606a; z-index: 2000; transition: transform 0.2s; font-size: 0.9rem; font-weight: 500; border-bottom: 1px solid rgba(208, 215, 222, 0.8);">
+        <span id="pull-to-refresh-text">↓ 당겨서 새로고침</span>
+    </div>
+    <div id="root">
+        <div style="color: #24292f; padding: 20px; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center;">
+            <div id="loading-text">화면을 불러오는 중입니다. 잠시만 기다려 주세요...</div>
+            <button id="manual-reload" style="display: none; margin-top: 20px; padding: 10px 20px; background: #0969da; color: white; border-radius: 8px; border: none; font-weight: 600; cursor: pointer;" onclick="location.reload()">새로고침 하기</button>
+        </div>
+    </div>
+    <script>
+        (function() {
+            let startY = 0;
+            let pulling = false;
+            const threshold = 100;
+            const indicator = document.getElementById('pull-to-refresh-indicator');
+            const text = document.getElementById('pull-to-refresh-text');
+
+            window.addEventListener('touchstart', (e) => {
+                if (window.scrollY === 0) {
+                    startY = e.touches[0].pageY;
+                    pulling = true;
+                }
+            }, { passive: true });
+
+            window.addEventListener('touchmove', (e) => {
+                if (!pulling) return;
+                const currentY = e.touches[0].pageY;
+                const diff = currentY - startY;
+
+                if (diff > 0 && window.scrollY === 0) {
+                    const translateY = Math.min(diff * 0.5, threshold + 20);
+                    indicator.style.transform = `translateY(${translateY}px)`;
+                    
+                    if (diff * 0.5 > threshold) {
+                        text.innerText = '↺ 놓아서 새로고침';
+                    } else {
+                        text.innerText = '↓ 당겨서 새로고침';
+                    }
+                }
+            }, { passive: true });
+
+            window.addEventListener('touchend', (e) => {
+                if (!pulling) return;
+                const diff = e.changedTouches[0].pageY - startY;
+                
+                if (diff * 0.5 > threshold && window.scrollY === 0) {
+                    text.innerText = '새로고침 중...';
+                    location.reload();
+                } else {
+                    indicator.style.transform = 'translateY(0)';
+                }
+                pulling = false;
+            });
+
+            // 5초 후에도 로딩 중이면 새로고침 버튼 표시
+            setTimeout(() => {
+                const btn = document.getElementById('manual-reload');
+                if (btn && document.getElementById('loading-text')) {
+                    btn.style.display = 'block';
+                }
+            }, 5000);
+        })();
+    </script>
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
