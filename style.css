@@ -280,7 +280,7 @@ th,
 td {
   padding: 1rem;
   text-align: left;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: none;
 }
 
 th {
@@ -718,23 +718,7 @@ select {
 
   /* Floating Action Button (FAB) */
   .fab-add-transaction {
-    display: flex !important;
-    position: fixed;
-    right: 1.5rem;
-    bottom: 2rem;
-    width: 60px;
-    height: 60px;
-    background: var(--accent-color);
-    color: white;
-    border-radius: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-    z-index: 90;
-    transition: transform 0.2s, background 0.2s;
-    border: none;
-    cursor: pointer;
+    display: none !important;
   }
 
   .fab-add-transaction:active {

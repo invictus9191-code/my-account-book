@@ -648,7 +648,7 @@
                             onChange={e => setAuthorFilter(e.target.value)}
                             style={{ 
                                 padding: '0', 
-                                borderRadius: '28px', 
+                                borderRadius: '12px', 
                                 border: '2px solid #0969da', 
                                 background: 'white', 
                                 color: 'black', 
@@ -678,7 +678,7 @@
                             style={{ 
                                 width: '56px', 
                                 height: '56px', 
-                                borderRadius: '28px', 
+                                borderRadius: '12px', 
                                 display: 'flex', 
                                 alignItems: 'center', 
                                 justifyContent: 'center',
@@ -690,22 +690,22 @@
                         </button>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', margin: '20px 0', fontSize: '1.2rem', fontWeight: 'bold' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', margin: '5px 0 15px 0', fontSize: '1.2rem', fontWeight: 'bold' }}>
                         <button onClick={() => changeMonth(-1)} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Icon name="chevron-left" size={24} /></button>
                         <span>{selectedMonth.split('-')[0]}년 {selectedMonth.split('-')[1]}월</span>
                         <button onClick={() => changeMonth(1)} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Icon name="chevron-right" size={24} /></button>
                     </div>
 
-                    <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
-                        <table className="transaction-table">
+                    <div className="card" style={{ overflowX: 'auto', padding: 0, border: 'none', boxShadow: 'none' }}>
+                        <table className="transaction-table" style={{ borderCollapse: 'collapse' }}>
                             <tbody>
                                 {sortedMonths.map(month => {
                                     const [y, m] = month.split('-');
                                     const { transactions, income, expense } = grouped[month];
                                     return (
                                         <React.Fragment key={month}>
-                                            <tr className="subtotal-row" style={{ background: 'none' }}>
-                                                <td colSpan="6" style={{ background: 'none' }}>
+                                            <tr className="subtotal-row" style={{ background: 'none', border: 'none' }}>
+                                                <td colSpan="6" style={{ background: 'none', border: 'none', padding: '5px 10px' }}>
                                                     <div className="subtotal-values" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px', justifyContent: 'space-between' }}>
                                                         <div style={{ background: 'var(--income-color)', color: 'white', padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '2px', flex: 1, minWidth: '80px' }}>
                                                             <span>수입</span>
@@ -723,32 +723,22 @@
                                                 </td>
                                             </tr>
                                             {transactions.map(t => (
-                                                <tr key={t.id} onClick={() => { setEdit(t); setShowModal(true); }} style={{ cursor: 'pointer' }}>
-                                                    <td style={{ fontWeight: '500' }}>{new Date(t.date).getDate()}일</td>
-                                                    <td className={`type-${t.type.toLowerCase()} mobile-hide`}>{t.type === 'Income' ? '수입' : t.type === 'Expense' ? '지출' : '이체'}</td>
-                                                    <td className="mobile-hide">{data.categories.find(c => c.id === t.categoryId)?.name || '-'}</td>
-                                                    <td style={{ fontWeight: '600' }} className={`type-${t.type.toLowerCase()}`}>{t.type === 'Expense' ? '-' : t.type === 'Income' ? '+' : ''}{Number(t.amount).toLocaleString()}</td>
-                                                    <td className="mobile-hide">{t.type === 'Transfer' ? <span>{data.assets.find(a => a.id === t.assetId)?.name} → {data.assets.find(a => a.id === t.toAssetId)?.name}</span> : <span>{data.assets.find(a => a.id === t.assetId)?.name}</span>}</td>
-                                                    <td><div style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.memo}</div></td>
+                                                <tr key={t.id} onClick={() => { setEdit(t); setShowModal(true); }} style={{ cursor: 'pointer', borderBottom: 'none' }}>
+                                                    <td style={{ fontWeight: '500', border: 'none' }}>{new Date(t.date).getDate()}일</td>
+                                                    <td className={`type-${t.type.toLowerCase()} mobile-hide`} style={{ border: 'none' }}>{t.type === 'Income' ? '수입' : t.type === 'Expense' ? '지출' : '이체'}</td>
+                                                    <td className="mobile-hide" style={{ border: 'none' }}>{data.categories.find(c => c.id === t.categoryId)?.name || '-'}</td>
+                                                    <td style={{ fontWeight: '600', border: 'none' }} className={`type-${t.type.toLowerCase()}`}>{t.type === 'Expense' ? '-' : t.type === 'Income' ? '+' : ''}{Number(t.amount).toLocaleString()}</td>
+                                                    <td className="mobile-hide" style={{ border: 'none' }}>{t.type === 'Transfer' ? <span>{data.assets.find(a => a.id === t.assetId)?.name} → {data.assets.find(a => a.id === t.toAssetId)?.name}</span> : <span>{data.assets.find(a => a.id === t.assetId)?.name}</span>}</td>
+                                                    <td style={{ border: 'none' }}><div style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.memo}</div></td>
                                                 </tr>
                                             ))}
                                         </React.Fragment>
                                     );
                                 })}
-                                {filteredTransactions.length === 0 && <tr><td colSpan="6" style={{ textAlign: 'center', padding: '3rem', color: '#8b949e' }}>해당 월의 거래 내역이 없습니다.</td></tr>}
+                                {filteredTransactions.length === 0 && <tr><td colSpan="6" style={{ textAlign: 'center', padding: '3rem', color: '#8b949e', border: 'none' }}>해당 월의 거래 내역이 없습니다.</td></tr>}
                             </tbody>
                         </table>
                     </div>
-                    <button 
-                        className={`fab-add-transaction ${!isConnected ? 'btn-disabled' : ''}`} 
-                        onClick={() => { 
-                            if(!isConnected) { alert('Firebase 연동이 필요합니다.'); return; }
-                            setEdit(null); setShowModal(true); 
-                        }} 
-                        style={{ display: 'none' }}
-                    >
-                        <Icon name="plus" size={32} />
-                    </button>
                 </div>
             );
         }
