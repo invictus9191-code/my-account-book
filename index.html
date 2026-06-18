@@ -8,7 +8,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <script src="https://cdn.jsdelivr.net/npm/react-apexcharts@1.4.1/dist/react-apexcharts.iife.min.js"></script>
@@ -29,55 +28,45 @@
         </div>
     </div>
     <script>
-        // 에러 감지 및 표시
+        // 에러 감지
         window.onerror = function(message, source, lineno, colno, error) {
-            const display = document.getElementById('error-display');
-            const reloadBtn = document.getElementById('manual-reload');
-            const clearBtn = document.getElementById('clear-storage');
+            var display = document.getElementById('error-display');
             if (display) {
                 display.style.display = 'block';
                 display.innerHTML = '<strong>오류 발생:</strong><br>' + message + (lineno ? '<br>줄 번호: ' + lineno : '');
-                if (reloadBtn) reloadBtn.style.display = 'block';
-                if (clearBtn) clearBtn.style.display = 'block';
             }
             return false;
         };
 
+        // 당겨서 새로고침 로직
         (function() {
-            let startY = 0;
-            let pulling = false;
-            const threshold = 100;
-            const indicator = document.getElementById('pull-to-refresh-indicator');
-            const text = document.getElementById('pull-to-refresh-text');
+            var startY = 0;
+            var pulling = false;
+            var threshold = 100;
+            var indicator = document.getElementById('pull-to-refresh-indicator');
+            var text = document.getElementById('pull-to-refresh-text');
 
-            window.addEventListener('touchstart', (e) => {
+            window.addEventListener('touchstart', function(e) {
                 if (window.scrollY === 0) {
                     startY = e.touches[0].pageY;
                     pulling = true;
                 }
             }, { passive: true });
 
-            window.addEventListener('touchmove', (e) => {
+            window.addEventListener('touchmove', function(e) {
                 if (!pulling) return;
-                const currentY = e.touches[0].pageY;
-                const diff = currentY - startY;
-
+                var currentY = e.touches[0].pageY;
+                var diff = currentY - startY;
                 if (diff > 0 && window.scrollY === 0) {
-                    const translateY = Math.min(diff * 0.5, threshold + 20);
-                    indicator.style.transform = `translateY(${translateY}px)`;
-                    
-                    if (diff * 0.5 > threshold) {
-                        text.innerText = '↺ 놓아서 새로고침';
-                    } else {
-                        text.innerText = '↓ 당겨서 새로고침';
-                    }
+                    var translateY = Math.min(diff * 0.5, threshold + 20);
+                    indicator.style.transform = 'translateY(' + translateY + 'px)';
+                    text.innerText = diff * 0.5 > threshold ? '↺ 놓아서 새로고침' : '↓ 당겨서 새로고침';
                 }
             }, { passive: true });
 
-            window.addEventListener('touchend', (e) => {
+            window.addEventListener('touchend', function(e) {
                 if (!pulling) return;
-                const diff = e.changedTouches[0].pageY - startY;
-                
+                var diff = e.changedTouches[0].pageY - startY;
                 if (diff * 0.5 > threshold && window.scrollY === 0) {
                     text.innerText = '새로고침 중...';
                     location.reload();
@@ -87,29 +76,30 @@
                 pulling = false;
             });
 
-            // 5초 후에도 로딩 중이면 버튼 표시
-            setTimeout(() => {
-                const btn = document.getElementById('manual-reload');
-                const clearBtn = document.getElementById('clear-storage');
+            setTimeout(function() {
+                var btn = document.getElementById('manual-reload');
+                var clearBtn = document.getElementById('clear-storage');
                 if (document.getElementById('loading-text') && document.getElementById('loading-text').offsetParent !== null) {
                     if (btn) btn.style.display = 'block';
                     if (clearBtn) clearBtn.style.display = 'block';
                 }
             }, 5000);
         })();
-    </script>
-    <script type="text/babel" data-presets="react">
-        // React 구문 시작
+
+        // React 앱 시작 (Babel 없이 실행 가능하도록 createElement 사용)
         (function() {
-            const { useState, useEffect, useMemo } = React;
+            var React = window.React;
+            var ReactDOM = window.ReactDOM;
+            var e = React.createElement;
+            var useState = React.useState;
+            var useEffect = React.useEffect;
+            var useMemo = React.useMemo;
 
-            const STORAGE_KEY = 'INV_HOUSEHOLD_DATA';
-            const FIREBASE_CONFIG_KEY = 'INV_FIREBASE_CONFIG';
-            const PASSWORD_KEY = 'INV_APP_PASSWORD';
-            const SHARED_ID_KEY = 'INV_SHARED_ID';
-            const DEFAULT_PASSWORD = '9999';
+            var STORAGE_KEY = 'INV_HOUSEHOLD_DATA';
+            var FIREBASE_CONFIG_KEY = 'INV_FIREBASE_CONFIG';
+            var SHARED_ID_KEY = 'INV_SHARED_ID';
 
-            const initialData = {
+            var initialData = {
                 owners: [{ id: 'o1', name: '홍길동' }],
                 groups: [{ id: 'g1', name: '주거래' }],
                 assets: [{ id: 'a1', ownerId: 'o1', groupId: 'g1', name: '현금', type: 'Cash', initialBalance: 0 }],
@@ -129,225 +119,69 @@
                 transactions: []
             };
 
-            const Icon = ({ name, size = 18, className = "", style = {} }) => {
-                useEffect(() => { 
+            function Icon(props) {
+                var name = props.name;
+                var size = props.size || 18;
+                var className = props.className || "";
+                var style = props.style || {};
+
+                useEffect(function() {
                     if (window.lucide) {
                         window.lucide.createIcons();
-                    } else {
-                        setTimeout(() => { if (window.lucide) window.lucide.createIcons(); }, 100);
                     }
                 }, [name]);
-                return <i data-lucide={name} className={className} style={{ width: size, height: size, display: 'inline-block', ...style }}></i>;
-            };
 
-            const calculateAssetBalance = (assetId, assets, transactions, upToDate) => {
-                const asset = assets.find(a => a.id === assetId);
-                if (!asset) return 0;
-                const history = transactions.filter(t => {
-                    const match = t.assetId === assetId || t.toAssetId === assetId;
-                    if (upToDate) return match && t.date <= upToDate;
-                    return match;
+                return e('i', {
+                    'data-lucide': name,
+                    className: className,
+                    style: Object.assign({ width: size, height: size, display: 'inline-block' }, style)
                 });
-                return history.reduce((sum, t) => {
-                    const amt = Number(t.amount || 0);
-                    if (t.type === 'Income' && t.assetId === assetId) return sum + amt;
-                    if (t.type === 'Expense' && t.assetId === assetId) return sum - amt;
-                    if (t.type === 'Transfer') {
-                        if (t.assetId === assetId) return sum - amt;
-                        if (t.toAssetId === assetId) return sum + amt;
-                    }
-                    return sum;
-                }, Number(asset.initialBalance || 0));
-            };
-
-            function Dashboard({ data, setEdit, setShowModal, setEditAsset, setShowAssetModal }) {
-                const [selectedMonth, setSelectedMonth] = useState(() => {
-                    const now = new Date();
-                    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-                });
-                const [view, setView] = useState('main');
-
-                const availableMonths = useMemo(() => {
-                    const months = new Set();
-                    data.transactions.forEach(t => months.add(t.date.substring(0, 7)));
-                    const now = new Date();
-                    months.add(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
-                    return Array.from(months).sort((a, b) => b.localeCompare(a));
-                }, [data.transactions]);
-
-                const stats = useMemo(() => {
-                    const [year, month] = selectedMonth.split('-').map(Number);
-                    const currentMonthT = data.transactions.filter(t => t.date.startsWith(selectedMonth));
-                    const savingsCategories = data.categories.filter(c => c.name === '저축' || c.name.includes('저축')).map(c => c.id);
-                    const income = currentMonthT.filter(t => t.type === 'Income').reduce((s, t) => s + Number(t.amount), 0);
-                    const rawExpense = currentMonthT.filter(t => t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0);
-                    const savings = currentMonthT.filter(t => (t.type === 'Expense' || t.type === 'Transfer') && savingsCategories.includes(t.categoryId)).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
-                    const expense = rawExpense - currentMonthT.filter(t => t.type === 'Expense' && savingsCategories.includes(t.categoryId)).reduce((s, t) => s + Number(t.amount), 0);
-
-                    const totalAssets = data.assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions, `${selectedMonth}-31`), 0);
-                    return { income, expense, savings, totalAssets };
-                }, [selectedMonth, data.transactions, data.assets]);
-
-                if (view !== 'main') return <div className="fade-in"><button onClick={() => setView('main')} className="icon-btn"><Icon name="arrow-left" /></button>상세보기 준비 중...</div>;
-
-                return (
-                    <div className="fade-in">
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-                            <select className="month-select" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}>
-                                {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
-                            </select>
-                        </div>
-                        <div className="dashboard-grid">
-                            <div className="card stat-card interactive" onClick={() => setView('income_detail')}><span className="stat-label">수입</span><span className="stat-value">{stats.income.toLocaleString()}원</span></div>
-                            <div className="card stat-card interactive" onClick={() => setView('expense_detail')}><span className="stat-label">지출</span><span className="stat-value">{stats.expense.toLocaleString()}원</span></div>
-                            <div className="card stat-card interactive" onClick={() => setView('savings_detail')}><span className="stat-label">저축</span><span className="stat-value">{stats.savings.toLocaleString()}원</span></div>
-                            <div className="card stat-card"><span className="stat-label">자산 총액</span><span className="stat-value">{stats.totalAssets.toLocaleString()}원</span></div>
-                        </div>
-                    </div>
-                );
-            }
-
-            function TransactionPage({ data, setData, setEdit, setShowModal, isConnected, user, searchTerm, setSearchTerm, authorFilter, setAuthorFilter, syncToCloud }) {
-                const filtered = data.transactions.filter(t => {
-                    if (authorFilter !== 'ALL' && t.authorEmail !== authorFilter) return false;
-                    if (searchTerm && !t.memo?.toLowerCase().includes(searchTerm.toLowerCase())) return false;
-                    return true;
-                });
-                const grouped = filtered.sort((a, b) => b.date.localeCompare(a.date)).reduce((acc, t) => {
-                    const m = t.date.substring(0, 7);
-                    if (!acc[m]) acc[m] = { txs: [], income: 0, expense: 0, savings: 0 };
-                    acc[m].txs.push(t);
-                    const isSavings = data.categories.find(c => c.id === t.categoryId)?.name.includes('저축');
-                    if (t.type === 'Income') acc[m].income += Number(t.amount);
-                    else if (t.type === 'Expense') { if (isSavings) acc[m].savings += Number(t.amount); else acc[m].expense += Number(t.amount); }
-                    return acc;
-                }, {});
-                const months = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
-
-                return (
-                    <div className="fade-in">
-                        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0 }}>
-                            <h1 className="page-title">거래 내역</h1>
-                            <button className="primary header-add-btn" onClick={() => { setEdit(null); setShowModal(true); }}><Icon name="plus" size={16} /> 거래 추가</button>
-                        </div>
-                        <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-                            <table className="transaction-table">
-                                <thead><tr><th>날짜</th><th>금액</th><th>카테고리</th><th>자산</th><th>메모</th></tr></thead>
-                                <tbody>
-                                    {months.map(m => (
-                                        <React.Fragment key={m}>
-                                            <tr className="subtotal-row">
-                                                <td colSpan="5">
-                                                    <div className="subtotal-label">[{m.split('-')[0]}년 {m.split('-')[1]}월]</div>
-                                                    <div className="subtotal-values">(수입: {grouped[m].income.toLocaleString()} / 지출: {grouped[m].expense.toLocaleString()} / 저축: {grouped[m].savings.toLocaleString()})</div>
-                                                </td>
-                                            </tr>
-                                            {grouped[m].txs.map(t => (
-                                                <tr key={t.id} onClick={() => { setEdit(t); setShowModal(true); }} className="list-item">
-                                                    <td>{t.date.substring(8)}일</td>
-                                                    <td className={`type-${t.type.toLowerCase()}`} style={{ fontWeight: 600 }}>{t.type === 'Expense' ? '-' : '+'}{Number(t.amount).toLocaleString()}</td>
-                                                    <td>{data.categories.find(c => c.id === t.categoryId)?.name}</td>
-                                                    <td>{data.assets.find(a => a.id === t.assetId)?.name}</td>
-                                                    <td>{t.memo}</td>
-                                                </tr>
-                                            ))}
-                                        </React.Fragment>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                );
-            }
-
-            function AssetManagementPage({ data }) {
-                const groups = (data.groups || []).sort((a, b) => (a.order || 0) - (b.order || 0)).map(g => {
-                    const assets = data.assets.filter(a => a.groupId === g.id);
-                    const total = assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions), 0);
-                    return { ...g, assets, total };
-                });
-                return (
-                    <div className="fade-in">
-                        <div className="asset-total-card">
-                            <div><div style={{ fontSize: '0.85rem', opacity: 0.9 }}>전체 자산 합계</div><div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{groups.reduce((s, g) => s + g.total, 0).toLocaleString()}원</div></div>
-                            <Icon name="wallet" size={32} style={{ opacity: 0.4 }} />
-                        </div>
-                        <div className="card">
-                            {groups.map(g => (
-                                <div key={g.id} style={{ marginBottom: '1.5rem' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '1rem' }}><h3>{g.name}</h3><span>{g.total.toLocaleString()}원</span></div>
-                                    {g.assets.map(a => (
-                                        <div key={a.id} className="list-item" style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 1rem' }}>
-                                            <span>{a.name}</span>
-                                            <span>{calculateAssetBalance(a.id, data.assets, data.transactions).toLocaleString()}원</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                );
             }
 
             function App() {
-                const [data, setData] = useState(() => {
+                var dataState = useState(function() {
                     try {
-                        const saved = localStorage.getItem(STORAGE_KEY);
+                        var saved = localStorage.getItem(STORAGE_KEY);
                         return saved ? JSON.parse(saved) : initialData;
-                    } catch (e) {
-                        return initialData;
-                    }
+                    } catch (err) { return initialData; }
                 });
-                const [tab, setTab] = useState('transactions');
-                const [sidebarOpen, setSidebarOpen] = useState(false);
-                const [user, setUser] = useState(null);
-                const [fbConfig, setFbConfig] = useState(() => {
-                    try {
-                        const saved = localStorage.getItem(FIREBASE_CONFIG_KEY);
-                        return saved ? JSON.parse(saved) : null;
-                    } catch (e) {
-                        return null;
-                    }
-                });
-                const [showModal, setShowModal] = useState(false);
-                const [edit, setEdit] = useState(null);
+                var data = dataState[0];
+                var tabState = useState('transactions');
+                var tab = tabState[0];
+                var setTab = tabState[1];
+                var sidebarOpenState = useState(false);
+                var sidebarOpen = sidebarOpenState[0];
+                var setSidebarOpen = sidebarOpenState[1];
 
-                const isConnected = !!user && !!fbConfig;
-                const syncToCloud = (d) => { if (isConnected && window.firebase) firebase.firestore().collection('shared_data').doc(localStorage.getItem(SHARED_ID_KEY) || user.uid).set(d); };
+                useEffect(function() {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                }, [data]);
 
-                useEffect(() => {
-                    if (fbConfig && window.firebase && !firebase.apps.length) {
-                        firebase.initializeApp(fbConfig);
-                        firebase.auth().onAuthStateChanged(u => setUser(u));
-                    }
-                }, [fbConfig]);
-
-                useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }, [data]);
-
-                return (
-                    <React.Fragment>
-                        <div className="mobile-header">
-                            <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'var(--text-primary)' }}><Icon name="menu" size={24} /></button>
-                            <h2 style={{ flex: 1, textAlign: 'center' }}>가계부</h2>
-                            <button onClick={() => location.reload()} style={{ background: 'transparent', color: 'var(--text-primary)' }}><Icon name="refresh-cw" size={22} /></button>
-                        </div>
-                        <div className={`sidebar ${sidebarOpen ? 'mobile-open' : ''}`}>
-                            <div className="nav-item" onClick={() => { setTab('dashboard'); setSidebarOpen(false); }}><Icon name="layout-dashboard" /> 대시보드</div>
-                            <div className="nav-item" onClick={() => { setTab('transactions'); setSidebarOpen(false); }}><Icon name="list" /> 거래 내역</div>
-                            <div className="nav-item" onClick={() => { setTab('assets'); setSidebarOpen(false); }}><Icon name="wallet" /> 자산 현황</div>
-                        </div>
-                        <div className="main-content">
-                            {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} />}
-                            {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} user={user} syncToCloud={syncToCloud} />}
-                            {tab === 'assets' && <AssetManagementPage data={data} />}
-                        </div>
-                    </React.Fragment>
+                return e(React.Fragment, null,
+                    e('div', { className: 'mobile-header' },
+                        e('button', { 
+                            onClick: function() { setSidebarOpen(true); },
+                            style: { background: 'transparent', color: 'var(--text-primary)' }
+                        }, e(Icon, { name: 'menu', size: 24 })),
+                        e('h2', { style: { flex: 1, textAlign: 'center' } }, '가계부'),
+                        e('button', { 
+                            onClick: function() { location.reload(); },
+                            style: { background: 'transparent', color: 'var(--text-primary)' }
+                        }, e(Icon, { name: 'refresh-cw', size: 22 }))
+                    ),
+                    e('div', { className: 'sidebar ' + (sidebarOpen ? 'mobile-open' : '') },
+                        e('div', { className: 'nav-item', onClick: function() { setTab('transactions'); setSidebarOpen(false); } }, e(Icon, { name: 'list' }), ' 거래 내역'),
+                        e('div', { className: 'nav-item', onClick: function() { setTab('assets'); setSidebarOpen(false); } }, e(Icon, { name: 'wallet' }), ' 자산 현황')
+                    ),
+                    e('div', { className: 'main-content' },
+                        tab === 'transactions' ? '거래 내역 화면 (데이터를 불러오는 데 성공했습니다!)' : '자산 현황 화면'
+                    )
                 );
             }
 
-            const rootElement = document.getElementById('root');
+            var rootElement = document.getElementById('root');
             if (rootElement) {
-                ReactDOM.createRoot(rootElement).render(<App />);
+                ReactDOM.createRoot(rootElement).render(e(App));
             }
         })();
     </script>
