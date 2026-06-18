@@ -640,9 +640,11 @@
                                         <React.Fragment key={month}>
                                             <tr className="subtotal-row">
                                                 <td colSpan="6">
-                                                    <div className="subtotal-label">[{y}년 {m}월]</div>
-                                                    <div className="subtotal-values">
-                                                        (수입: {income.toLocaleString()} / 지출: {expense.toLocaleString()} / 저축: {grouped[month].savings.toLocaleString()})
+                                                    <div className="subtotal-label">[{y.substring(2)}년{m}월]</div>
+                                                    <div className="subtotal-values" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                                                        <span style={{ background: 'var(--income-color)', color: 'white', padding: '2px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600' }}>수입: {income.toLocaleString()}</span>
+                                                        <span style={{ background: 'var(--expense-color)', color: 'white', padding: '2px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600' }}>지출: {expense.toLocaleString()}</span>
+                                                        <span style={{ background: 'var(--transfer-color)', color: 'white', padding: '2px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600' }}>저축: {grouped[month].savings.toLocaleString()}</span>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -1410,13 +1412,13 @@ service cloud.firestore {
                                     style={{ 
                                         padding: '4px 12px', 
                                         borderRadius: '15px', 
-                                        border: '1px solid #484f58', 
-                                        background: '#30363d', 
-                                        color: '#c9d1d9', 
+                                        border: 'none', 
+                                        background: '#0969da', 
+                                        color: 'white', 
                                         fontWeight: '600', 
                                         fontSize: '0.8rem', 
                                         marginLeft: 'auto', 
-                                        maxWidth: '100px',
+                                        width: '66.6%',
                                         textAlign: 'center',
                                         textAlignLast: 'center'
                                     }}
