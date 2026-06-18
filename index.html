@@ -642,9 +642,9 @@
                                                 <td colSpan="6">
                                                     <div className="subtotal-label">[{y.substring(2)}년{m}월]</div>
                                                     <div className="subtotal-values" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
-                                                        <span style={{ background: 'var(--income-color)', color: 'white', padding: '2px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600' }}>수입: {income.toLocaleString()}</span>
-                                                        <span style={{ background: 'var(--expense-color)', color: 'white', padding: '2px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600' }}>지출: {expense.toLocaleString()}</span>
-                                                        <span style={{ background: 'var(--transfer-color)', color: 'white', padding: '2px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600' }}>저축: {grouped[month].savings.toLocaleString()}</span>
+                                                        <span style={{ background: 'var(--income-color)', color: 'white', padding: '2px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600' }}>{income.toLocaleString()}</span>
+                                                        <span style={{ background: 'var(--expense-color)', color: 'white', padding: '2px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600' }}>{expense.toLocaleString()}</span>
+                                                        <span style={{ background: 'var(--transfer-color)', color: 'white', padding: '2px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600' }}>{grouped[month].savings.toLocaleString()}</span>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -1403,14 +1403,14 @@ service cloud.firestore {
                         <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem' }}><Icon name="menu" size={24} /></button>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                             <Icon name={tab === 'dashboard' ? 'layout-dashboard' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
-                            <h2>{tabTitles[tab] || 'Smart Finance'}</h2>
+                            <h2 style={{ fontSize: '1.2rem' }}>{tabTitles[tab] || 'Smart Finance'}</h2>
                             {tab === 'transactions' && (
                                 <select 
                                     className="mobile-only"
                                     value={authorFilter} 
                                     onChange={e => setAuthorFilter(e.target.value)}
                                     style={{ 
-                                        padding: '4px 12px', 
+                                        padding: '2px 8px', 
                                         borderRadius: '15px', 
                                         border: 'none', 
                                         background: '#0969da', 
@@ -1418,7 +1418,7 @@ service cloud.firestore {
                                         fontWeight: '600', 
                                         fontSize: '0.8rem', 
                                         marginLeft: 'auto', 
-                                        width: '66.6%',
+                                        width: '45%',
                                         textAlign: 'center',
                                         textAlignLast: 'center'
                                     }}
