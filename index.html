@@ -601,7 +601,7 @@
 
             return (
                 <div className="fade-in">
-                    <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0', alignItems: 'center', flexWrap: 'wrap', gap: '10px', position: 'sticky', top: '53px', background: 'var(--bg-color)', zIndex: 10, padding: '10px 0' }}>
+                    <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0', alignItems: 'center', flexWrap: 'wrap', gap: '10px', position: 'sticky', top: '53px', background: 'var(--bg-color)', zIndex: 10, padding: '5px 0', border: 'none', boxShadow: 'none' }}>
                         <h1 className="page-title mobile-hide">거래 내역</h1>
                         <div className="header-actions mobile-hide" style={{ display: 'flex', gap: '8px', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
                             <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'} mobile-hide`}>
@@ -642,13 +642,13 @@
                     </div>
 
                     {/* 모바일 하단 고정 버튼 레이어 */}
-                    <div className="mobile-only" style={{ position: 'fixed', bottom: '80px', right: '20px', zIndex: 1000, display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'flex-end' }}>
+                    <div className="mobile-only" style={{ position: 'fixed', bottom: '80px', right: '20px', zIndex: 1000, display: 'flex', flexDirection: 'row', gap: '10px', alignItems: 'center' }}>
                         <select 
                             value={authorFilter} 
                             onChange={e => setAuthorFilter(e.target.value)}
                             style={{ 
-                                padding: '10px 15px', 
-                                borderRadius: '25px', 
+                                padding: '0', 
+                                borderRadius: '28px', 
                                 border: '2px solid #0969da', 
                                 background: 'white', 
                                 color: 'black', 
@@ -657,7 +657,8 @@
                                 boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                                 appearance: 'none',
                                 textAlign: 'center',
-                                minWidth: '80px'
+                                width: '56px',
+                                height: '56px'
                             }}
                         >
                             <option value="ALL">전체</option>
@@ -705,16 +706,16 @@
                                         <React.Fragment key={month}>
                                             <tr className="subtotal-row" style={{ background: 'none' }}>
                                                 <td colSpan="6" style={{ background: 'none' }}>
-                                                    <div className="subtotal-values" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
-                                                        <div style={{ background: 'var(--income-color)', color: 'white', padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '80px' }}>
+                                                    <div className="subtotal-values" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px', justifyContent: 'space-between' }}>
+                                                        <div style={{ background: 'var(--income-color)', color: 'white', padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '2px', flex: 1, minWidth: '80px' }}>
                                                             <span>수입</span>
                                                             <span>{income.toLocaleString()}</span>
                                                         </div>
-                                                        <div style={{ background: 'var(--expense-color)', color: 'white', padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '80px' }}>
+                                                        <div style={{ background: 'var(--expense-color)', color: 'white', padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '2px', flex: 1, minWidth: '80px' }}>
                                                             <span>지출</span>
                                                             <span>{expense.toLocaleString()}</span>
                                                         </div>
-                                                        <div style={{ background: 'var(--transfer-color)', color: 'white', padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '80px' }}>
+                                                        <div style={{ background: 'var(--transfer-color)', color: 'white', padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '2px', flex: 1, minWidth: '80px' }}>
                                                             <span>저축</span>
                                                             <span>{grouped[month].savings.toLocaleString()}</span>
                                                         </div>
@@ -1529,19 +1530,6 @@ service cloud.firestore {
                     <div className="main-content"><div className="container">
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} />}
                         {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} />}
-                        {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} />}
-                        {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} />}
-                    </div></div>
-                    {showModal && <TransactionModal data={data} setData={setData} onClose={() => { setShowModal(false); setEdit(null); }} editItem={edit} syncToCloud={syncToCloud} isConnected={isConnected} user={user} />}
-                    {showAssetModal && <AssetModal data={data} setData={setData} onClose={() => { setShowAssetModal(false); setEditAsset(null); }} editItem={editAsset} syncToCloud={syncToCloud} />}
-                </React.Fragment>
-            );
-        }
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-    </script>
-</body>
-</html>
-} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} />}
                     </div></div>
