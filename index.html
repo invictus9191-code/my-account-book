@@ -607,7 +607,7 @@
 
             return (
                 <div className="fade-in">
-                    <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0', alignItems: 'center', flexWrap: 'wrap', gap: '10px', position: 'sticky', top: '53px', background: 'var(--bg-color)', zIndex: 10, padding: '5px 0', border: 'none', boxShadow: 'none' }}>
+                    <div className="page-header mobile-hide" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0', alignItems: 'center', flexWrap: 'wrap', gap: '10px', position: 'sticky', top: '53px', background: 'var(--bg-color)', zIndex: 10, padding: '5px 0', border: 'none', boxShadow: 'none' }}>
                         <h1 className="page-title mobile-hide">거래 내역</h1>
                         <div className="header-actions mobile-hide" style={{ display: 'flex', gap: '8px', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
                             {/* ... (Desktop Header Actions Unchanged) ... */}
@@ -635,7 +635,11 @@
                                 textAlignLast: 'center',
                                 width: '56px',
                                 height: '56px',
-                                lineHeight: '52px'
+                                minWidth: '56px',
+                                minHeight: '56px',
+                                flexShrink: 0,
+                                lineHeight: '52px',
+                                boxSizing: 'border-box'
                             }}
                         >
                             <option value="ALL">전체</option>
@@ -655,12 +659,16 @@
                             style={{ 
                                 width: '56px', 
                                 height: '56px', 
+                                minWidth: '56px',
+                                minHeight: '56px',
+                                flexShrink: 0,
                                 borderRadius: '12px', 
                                 display: 'flex', 
                                 alignItems: 'center', 
                                 justifyContent: 'center',
                                 boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                                padding: 0
+                                padding: 0,
+                                boxSizing: 'border-box'
                             }}
                         >
                             <Icon name="plus" size={28} />
@@ -695,10 +703,10 @@
                                     const { day, name } = getDayLabel(dayStr);
                                     return (
                                         <React.Fragment key={dayStr}>
-                                            <tr style={{ background: 'rgba(208, 215, 222, 0.1)', borderBottom: '1px solid var(--border-color)' }}>
+                                            <tr style={{ background: 'rgba(208, 215, 222, 0.1)', borderBottom: 'none' }}>
                                                 <td colSpan="6" style={{ padding: '8px 12px' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        <span style={{ fontSize: '1.1rem', fontWeight: '900' }}>{day}</span>
+                                                        <span style={{ fontSize: 'calc(1.1rem + 3pt)', fontWeight: '900' }}>{day}</span>
                                                         <span style={{ background: '#21262d', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600' }}>{name}</span>
                                                         <div style={{ marginLeft: 'auto', display: 'flex', gap: '12px', fontSize: '0.85rem', fontWeight: '600' }}>
                                                             {income > 0 && <span style={{ color: 'var(--income-color)' }}>+{income.toLocaleString()}</span>}
@@ -710,12 +718,12 @@
                                             {transactions.map(t => (
                                                 <tr key={t.id} onClick={() => { setEdit(t); setShowModal(true); }} style={{ cursor: 'pointer', borderBottom: '1px solid rgba(208, 215, 222, 0.3)' }}>
                                                     <td className="mobile-hide" style={{ border: 'none' }}>{t.type === 'Income' ? '수입' : t.type === 'Expense' ? '지출' : '이체'}</td>
-                                                    <td style={{ border: 'none', fontWeight: '600', fontSize: '0.95rem' }}>{data.categories.find(c => c.id === t.categoryId)?.name || '-'}</td>
+                                                    <td style={{ border: 'none', color: '#8b949e', fontSize: '0.85rem' }}>{data.categories.find(c => c.id === t.categoryId)?.name || '-'}</td>
+                                                    <td style={{ border: 'none', color: 'var(--text-primary)', fontWeight: '600', fontSize: '0.95rem' }}><div style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.memo}</div></td>
                                                     <td style={{ fontWeight: '700', border: 'none', textAlign: 'right' }} className={`type-${t.type.toLowerCase()}`}>
                                                         {t.type === 'Expense' ? '-' : t.type === 'Income' ? '+' : ''}{Number(t.amount).toLocaleString()}
                                                     </td>
                                                     <td className="mobile-hide" style={{ border: 'none' }}>{t.type === 'Transfer' ? <span>{data.assets.find(a => a.id === t.assetId)?.name} → {data.assets.find(a => a.id === t.toAssetId)?.name}</span> : <span>{data.assets.find(a => a.id === t.assetId)?.name}</span>}</td>
-                                                    <td style={{ border: 'none', color: '#8b949e', fontSize: '0.85rem' }}><div style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.memo}</div></td>
                                                 </tr>
                                             ))}
                                         </React.Fragment>

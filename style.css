@@ -36,6 +36,7 @@ body {
   color: var(--text-primary);
   overflow-x: hidden;
   height: 100vh;
+  overscroll-behavior-y: none;
 }
 
 #root {
@@ -348,7 +349,7 @@ input[type="date"],
 input[type="number"],
 input[type="text"],
 select {
-  height: 42px !important;
+  height: 42px;
   /* Set a standard height */
   line-height: 1.2;
 }
@@ -637,7 +638,7 @@ select {
   input[type="number"],
   input[type="text"],
   select {
-    height: 44px !important;
+    height: 44px;
     font-size: 1.1rem;
   }
 
