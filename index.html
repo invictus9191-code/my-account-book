@@ -429,13 +429,30 @@
 
             return (
                 <div className="fade-in">
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1.5rem' }}>
-                        <select className="month-select" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} style={{ padding: '0.5rem', borderRadius: '6px', background: '#21262d', color: 'white', border: '1px solid #30363d' }}>
-                            {availableMonths.map(m => {
-                                const [y, mon] = m.split('-');
-                                return <option key={m} value={m}>{y}년 {mon}월</option>;
-                            })}
-                        </select>
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '1.5rem', gap: '1rem', fontSize: '1.2rem', fontWeight: 'bold' }}>
+                        <button 
+                            onClick={() => {
+                                const [y, m] = selectedMonth.split('-').map(Number);
+                                const d = new Date(y, m - 2, 1);
+                                setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+                            }}
+                            style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.2rem', padding: '0.5rem' }}
+                        >
+                            &lt;
+                        </button>
+                        <span>
+                            {selectedMonth.split('-')[0]}년 {selectedMonth.split('-')[1]}월
+                        </span>
+                        <button 
+                            onClick={() => {
+                                const [y, m] = selectedMonth.split('-').map(Number);
+                                const d = new Date(y, m, 1);
+                                setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+                            }}
+                            style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.2rem', padding: '0.5rem' }}
+                        >
+                            &gt;
+                        </button>
                     </div>
 
                     <div className="dashboard-grid">
