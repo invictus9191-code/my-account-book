@@ -506,7 +506,7 @@ select {
   background: var(--header-bg);
   padding: 0.5rem 1rem;
   /* Reduced for 3/4 height */
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: none;
   justify-content: flex-start;
   /* For left-aligned menu button */
   gap: 1rem;
