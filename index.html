@@ -6,11 +6,11 @@
     <title>Smart Finance - 가계부</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/lucide@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.4/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.284.0/dist/umd/lucide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.41.0/dist/apexcharts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/react-apexcharts@1.4.1/dist/react-apexcharts.iife.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
@@ -1043,8 +1043,8 @@
                 alert(`신규 공유 ID가 생성되었습니다: ${newId}\n'저장' 버튼을 눌러야 적용됩니다.`);
             };
 
-            const exportData = () => { const now = new Date(); const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000); const todayKST = kst.toISOString().split('T')[0]; const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `household_backup_${todayKST}.json`; a.click(); };
-            const importData = (e) => { 
+            const handleExportData = () => { const now = new Date(); const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000); const todayKST = kst.toISOString().split('T')[0]; const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `household_backup_${todayKST}.json`; a.click(); };
+            const handleImportData = (e) => { 
                 const file = e.target.files[0]; 
                 if (!file) return; 
                 const reader = new FileReader(); 
@@ -1129,8 +1129,8 @@
                                         <div style={{ borderTop: '1px solid #30363d', paddingTop: '1.5rem' }}>
                                             <h3>💾 데이터 백업 및 복구</h3>
                                             <div style={{ display: 'flex', gap: '12px', marginTop: '1rem' }}>
-                                                <button onClick={exportData} style={{ background: '#30363d', color: 'white', flex: 1 }}><Icon name="download" size={16} /> JSON 저장</button>
-                                                <label className="auth-btn login" style={{ textAlign: 'center', cursor: 'pointer', margin: 0, flex: 1 }}><Icon name="upload" size={16} /> 복구 <input type="file" accept=".json" onChange={importData} style={{ display: 'none' }} /></label>
+                                                <button onClick={handleExportData} style={{ background: '#30363d', color: 'white', flex: 1 }}><Icon name="download" size={16} /> JSON 저장</button>
+                                                <label className="auth-btn login" style={{ textAlign: 'center', cursor: 'pointer', margin: 0, flex: 1 }}><Icon name="upload" size={16} /> 복구 <input type="file" accept=".json" onChange={handleImportData} style={{ display: 'none' }} /></label>
                                             </div>
                                         </div>
                                     </div>
