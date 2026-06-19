@@ -146,6 +146,68 @@
             }, Number(asset.initialBalance || 0));
         };
 
+        // ApexCharts를 useRef + useEffect로 직접 렌더링하는 컴포넌트
+        function ChartBar({ chartId, series, colors, labels, height }) {
+            const ref = React.useRef(null);
+            const chartRef = React.useRef(null);
+
+            React.useEffect(() => {
+                if (!ref.current || !window.ApexCharts) return;
+
+                const options = {
+                    chart: {
+                        type: 'bar',
+                        height: height || 280,
+                        toolbar: { show: false },
+                        background: 'transparent',
+                        animations: { enabled: true, speed: 400 }
+                    },
+                    theme: { mode: 'light' },
+                    series: series,
+                    colors: colors,
+                    xaxis: {
+                        categories: labels,
+                        labels: { style: { colors: '#57606a', fontSize: '11px' } },
+                        axisBorder: { color: '#d0d7de' },
+                        axisTicks: { color: '#d0d7de' }
+                    },
+                    yaxis: {
+                        labels: {
+                            formatter: (v) => typeof v === 'number' && !isNaN(v) ? Math.floor(v).toLocaleString() : v,
+                            style: { colors: '#57606a' }
+                        },
+                        forceNiceScale: true,
+                        decimalsInFloat: 0
+                    },
+                    dataLabels: { enabled: false },
+                    grid: { borderColor: '#e1e4e8', strokeDashArray: 3 },
+                    tooltip: {
+                        theme: 'light',
+                        y: { formatter: (v) => typeof v === 'number' && !isNaN(v) ? Math.floor(v).toLocaleString() + '원' : v + '원' }
+                    },
+                    plotOptions: { bar: { borderRadius: 3, columnWidth: '60%' } },
+                    legend: { show: series.length > 1, position: 'top', labels: { colors: '#57606a' } }
+                };
+
+                if (chartRef.current) {
+                    chartRef.current.updateOptions(options, true, true);
+                    chartRef.current.updateSeries(series);
+                } else {
+                    chartRef.current = new window.ApexCharts(ref.current, options);
+                    chartRef.current.render();
+                }
+
+                return () => {
+                    if (chartRef.current) {
+                        chartRef.current.destroy();
+                        chartRef.current = null;
+                    }
+                };
+            }, [series, labels, colors, height]);
+
+            return React.createElement('div', { ref: ref, id: chartId });
+        }
+
         function Dashboard({ data, setEdit, setShowModal, setEditAsset, setShowAssetModal }) {
             const [categoryType, setCategoryType] = useState('Expense');
             const [selectedCategory, setSelectedCategory] = useState(() => {
@@ -270,31 +332,7 @@
                 return { labels: labels.map(m => `${m.substring(5)}월`), categoryData };
             }, [selectedMonth, selectedCategory, data.transactions]);
 
-            const getChartOptions = (id) => ({
-                chart: { type: 'bar', id: id, toolbar: { show: false }, background: 'transparent' },
-                theme: { mode: 'light' },
-                xaxis: {
-                    categories: annualData.labels,
-                    labels: { style: { colors: '#57606a', fontSize: '12px' } },
-                    axisBorder: { color: '#d0d7de' },
-                    axisTicks: { color: '#d0d7de' }
-                },
-                yaxis: { 
-                    labels: {
-                        formatter: (value) => typeof value === 'number' && !isNaN(value) ? Math.floor(value).toLocaleString() : value,
-                        style: { colors: '#57606a' }
-                    },
-                    forceNiceScale: true,
-                    decimalsInFloat: 0
-                },
-                dataLabels: { enabled: false },
-                grid: { borderColor: '#d0d7de', strokeDashArray: 3 },
-                tooltip: {
-                    theme: 'light',
-                    y: { formatter: (value) => typeof value === 'number' && !isNaN(value) ? Math.floor(value).toLocaleString() + '원' : value + '원' }
-                },
-                plotOptions: { bar: { borderRadius: 4 } }
-            });
+
 
             const renderDiff = (curr, prev) => {
                 const diff = curr - prev;
@@ -547,35 +585,36 @@
                                     >저축</button>
                                 </div>
                             </div>
-
-                            {window.ReactApexChart ? (
-                                chartType === 'income_expense' ? (
-                                    <window.ReactApexChart
-                                        options={{ ...getChartOptions('chart-income-expense'), colors: ['#238636', '#da3633'] }}
-                                        series={[
-                                            { name: '수입', data: annualData.incomeData },
-                                            { name: '지출', data: annualData.expenseData }
-                                        ]}
-                                        type="bar" height={280}
-                                    />
-                                ) : (
-                                    <window.ReactApexChart
-                                        options={{ ...getChartOptions('chart-savings'), colors: ['#1f6feb'] }}
-                                        series={[{ name: '저축', data: annualData.savingsData }]}
-                                        type="bar" height={280}
-                                    />
-                                )
-                            ) : "차트 로딩 중..."}
+                            {chartType === 'income_expense' ? (
+                                <ChartBar
+                                    chartId="chart-income-expense"
+                                    series={[
+                                        { name: '수입', data: annualData.incomeData },
+                                        { name: '지출', data: annualData.expenseData }
+                                    ]}
+                                    colors={['#1a7f37', '#cf222e']}
+                                    labels={annualData.labels}
+                                    height={260}
+                                />
+                            ) : (
+                                <ChartBar
+                                    chartId="chart-savings"
+                                    series={[{ name: '저축', data: annualData.savingsData }]}
+                                    colors={['#0969da']}
+                                    labels={annualData.labels}
+                                    height={260}
+                                />
+                            )}
                         </div>
                         <div className="card">
-                            <h3>연간 자산 흐름</h3>
-                            {window.ReactApexChart ? (
-                                <window.ReactApexChart
-                                    options={{ ...getChartOptions('chart-assets'), colors: ['#58a6ff'] }}
-                                    series={[{ name: '자산액', data: annualData.assetData }]}
-                                    type="bar" height={280}
-                                />
-                            ) : "차트 로딩 중..."}
+                            <h3 style={{ marginBottom: '1rem' }}>연간 자산 흐름</h3>
+                            <ChartBar
+                                chartId="chart-assets"
+                                series={[{ name: '자산액', data: annualData.assetData }]}
+                                colors={['#0969da']}
+                                labels={annualData.labels}
+                                height={260}
+                            />
                         </div>
                     </div>
 
@@ -583,8 +622,8 @@
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                             <h3>카테고리별 연간 흐름</h3>
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <select 
-                                    value={categoryType} 
+                                <select
+                                    value={categoryType}
                                     onChange={e => setCategoryType(e.target.value)}
                                     style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', background: 'rgba(9, 105, 218, 0.08)', color: '#0969da', border: '1px solid rgba(9, 105, 218, 0.35)', fontSize: '0.85rem', fontWeight: '500', cursor: 'pointer', outline: 'none' }}
                                 >
@@ -592,8 +631,8 @@
                                     <option value="Income">수입</option>
                                     <option value="Transfer">이체/저축</option>
                                 </select>
-                                <select 
-                                    value={selectedCategory} 
+                                <select
+                                    value={selectedCategory}
                                     onChange={e => setSelectedCategory(e.target.value)}
                                     style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', background: 'rgba(9, 105, 218, 0.08)', color: '#0969da', border: '1px solid rgba(9, 105, 218, 0.35)', maxWidth: '150px', fontSize: '0.85rem', fontWeight: '500', cursor: 'pointer', outline: 'none' }}
                                 >
@@ -601,13 +640,13 @@
                                 </select>
                             </div>
                         </div>
-                        {window.ReactApexChart ? (
-                            <window.ReactApexChart
-                                options={{ ...getChartOptions('chart-category'), colors: ['#a371f7'] }}
-                                series={[{ name: '금액', data: annualCategoryData.categoryData }]}
-                                type="bar" height={280}
-                            />
-                        ) : "차트 로딩 중..."}
+                        <ChartBar
+                            chartId="chart-category"
+                            series={[{ name: '금액', data: annualCategoryData.categoryData }]}
+                            colors={['#8250df']}
+                            labels={annualCategoryData.labels}
+                            height={260}
+                        />
                     </div>
                 </div>
             );
