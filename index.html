@@ -272,19 +272,28 @@
 
             const getChartOptions = (id) => ({
                 chart: { type: 'bar', id: id, toolbar: { show: false }, background: 'transparent' },
-                theme: { mode: 'dark' },
-                xaxis: { categories: annualData.labels },
+                theme: { mode: 'light' },
+                xaxis: {
+                    categories: annualData.labels,
+                    labels: { style: { colors: '#57606a', fontSize: '12px' } },
+                    axisBorder: { color: '#d0d7de' },
+                    axisTicks: { color: '#d0d7de' }
+                },
                 yaxis: { 
-                    labels: { formatter: (value) => typeof value === 'number' && !isNaN(value) ? Math.floor(value).toLocaleString() : value },
+                    labels: {
+                        formatter: (value) => typeof value === 'number' && !isNaN(value) ? Math.floor(value).toLocaleString() : value,
+                        style: { colors: '#57606a' }
+                    },
                     forceNiceScale: true,
                     decimalsInFloat: 0
                 },
                 dataLabels: { enabled: false },
-                grid: { borderColor: '#30363d' },
+                grid: { borderColor: '#d0d7de', strokeDashArray: 3 },
                 tooltip: {
-                    theme: 'dark',
+                    theme: 'light',
                     y: { formatter: (value) => typeof value === 'number' && !isNaN(value) ? Math.floor(value).toLocaleString() + '원' : value + '원' }
-                }
+                },
+                plotOptions: { bar: { borderRadius: 4 } }
             });
 
             const renderDiff = (curr, prev) => {
@@ -429,30 +438,24 @@
 
             return (
                 <div className="fade-in">
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '1.5rem', gap: '1rem', fontSize: '1.2rem', fontWeight: 'bold' }}>
-                        <button 
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', margin: '0 0 1.5rem 0', fontSize: '1.2rem', fontWeight: 'bold' }}>
+                        <button
                             onClick={() => {
                                 const [y, m] = selectedMonth.split('-').map(Number);
                                 const d = new Date(y, m - 2, 1);
                                 setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
                             }}
-                            style={{ background: 'none', border: 'none', color: '#000', cursor: 'pointer', fontSize: '1.4rem', padding: '0.5rem', fontWeight: '700', lineHeight: 1 }}
-                        >
-                            &lt;
-                        </button>
-                        <span style={{ color: '#000', fontSize: '1.1rem' }}>
-                            {selectedMonth.split('-')[0]}년 {selectedMonth.split('-')[1]}월
-                        </span>
-                        <button 
+                            style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                        ><Icon name="chevron-left" size={24} /></button>
+                        <span>{selectedMonth.split('-')[0]}년 {selectedMonth.split('-')[1]}월</span>
+                        <button
                             onClick={() => {
                                 const [y, m] = selectedMonth.split('-').map(Number);
                                 const d = new Date(y, m, 1);
                                 setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
                             }}
-                            style={{ background: 'none', border: 'none', color: '#000', cursor: 'pointer', fontSize: '1.4rem', padding: '0.5rem', fontWeight: '700', lineHeight: 1 }}
-                        >
-                            &gt;
-                        </button>
+                            style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                        ><Icon name="chevron-right" size={24} /></button>
                     </div>
 
                     <div className="card" style={{ padding: '0', overflow: 'hidden', marginBottom: '1.5rem' }}>
@@ -533,14 +536,14 @@
                         <div className="card">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                                 <h3>연간 흐름</h3>
-                                <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(22, 27, 34, 0.4)', padding: '4px', borderRadius: '8px' }}>
+                                <div style={{ display: 'flex', gap: '0.4rem', background: 'rgba(9, 105, 218, 0.08)', padding: '4px', borderRadius: '8px', border: '1px solid rgba(9, 105, 218, 0.2)' }}>
                                     <button
                                         onClick={() => setChartType('income_expense')}
-                                        style={{ background: chartType === 'income_expense' ? '#30363d' : 'transparent', color: chartType === 'income_expense' ? 'white' : '#8b949e', padding: '0.3rem 0.6rem', fontSize: '0.85rem' }}
+                                        style={{ background: chartType === 'income_expense' ? '#0969da' : 'transparent', color: chartType === 'income_expense' ? 'white' : '#0969da', padding: '0.3rem 0.7rem', fontSize: '0.82rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: chartType === 'income_expense' ? '600' : '400', transition: 'all 0.2s' }}
                                     >수입/지출</button>
                                     <button
                                         onClick={() => setChartType('savings')}
-                                        style={{ background: chartType === 'savings' ? '#30363d' : 'transparent', color: chartType === 'savings' ? 'white' : '#8b949e', padding: '0.3rem 0.6rem', fontSize: '0.85rem' }}
+                                        style={{ background: chartType === 'savings' ? '#0969da' : 'transparent', color: chartType === 'savings' ? 'white' : '#0969da', padding: '0.3rem 0.7rem', fontSize: '0.82rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: chartType === 'savings' ? '600' : '400', transition: 'all 0.2s' }}
                                     >저축</button>
                                 </div>
                             </div>
@@ -583,7 +586,7 @@
                                 <select 
                                     value={categoryType} 
                                     onChange={e => setCategoryType(e.target.value)}
-                                    style={{ padding: '0.4rem', borderRadius: '6px', background: '#21262d', color: 'white', border: '1px solid #30363d', fontSize: '0.9rem' }}
+                                    style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', background: 'rgba(9, 105, 218, 0.08)', color: '#0969da', border: '1px solid rgba(9, 105, 218, 0.35)', fontSize: '0.85rem', fontWeight: '500', cursor: 'pointer', outline: 'none' }}
                                 >
                                     <option value="Expense">지출</option>
                                     <option value="Income">수입</option>
@@ -592,7 +595,7 @@
                                 <select 
                                     value={selectedCategory} 
                                     onChange={e => setSelectedCategory(e.target.value)}
-                                    style={{ padding: '0.4rem', borderRadius: '6px', background: '#21262d', color: 'white', border: '1px solid #30363d', maxWidth: '150px', fontSize: '0.9rem' }}
+                                    style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', background: 'rgba(9, 105, 218, 0.08)', color: '#0969da', border: '1px solid rgba(9, 105, 218, 0.35)', maxWidth: '150px', fontSize: '0.85rem', fontWeight: '500', cursor: 'pointer', outline: 'none' }}
                                 >
                                     {data.categories.filter(c => c.type === categoryType).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                 </select>
