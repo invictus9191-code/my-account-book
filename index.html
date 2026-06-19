@@ -436,11 +436,11 @@
                                 const d = new Date(y, m - 2, 1);
                                 setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
                             }}
-                            style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.2rem', padding: '0.5rem' }}
+                            style={{ background: 'none', border: 'none', color: '#000', cursor: 'pointer', fontSize: '1.4rem', padding: '0.5rem', fontWeight: '700', lineHeight: 1 }}
                         >
                             &lt;
                         </button>
-                        <span>
+                        <span style={{ color: '#000', fontSize: '1.1rem' }}>
                             {selectedMonth.split('-')[0]}년 {selectedMonth.split('-')[1]}월
                         </span>
                         <button 
@@ -449,36 +449,83 @@
                                 const d = new Date(y, m, 1);
                                 setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
                             }}
-                            style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontSize: '1.2rem', padding: '0.5rem' }}
+                            style={{ background: 'none', border: 'none', color: '#000', cursor: 'pointer', fontSize: '1.4rem', padding: '0.5rem', fontWeight: '700', lineHeight: 1 }}
                         >
                             &gt;
                         </button>
                     </div>
 
-                    <div className="dashboard-grid">
-                        <div className="card stat-card interactive" onClick={() => setView('income_detail')}>
-                            <span className="stat-label stat-title-white">수입</span>
-                            <span className="stat-value">{stats.income.toLocaleString()}원</span>
-                            {renderDiff(stats.income, stats.prevIncome)}
+                    <div className="card" style={{ padding: '0', overflow: 'hidden', marginBottom: '1.5rem' }}>
+                        <div style={{ display: 'flex', borderBottom: '2px solid var(--border-color)' }}>
+                            <div 
+                                onClick={() => setCategoryType('Income')} 
+                                style={{
+                                    flex: 1,
+                                    textAlign: 'center',
+                                    padding: '0.85rem 1rem',
+                                    cursor: 'pointer',
+                                    borderBottom: categoryType === 'Income' ? '3px solid var(--income-color)' : '3px solid transparent',
+                                    color: categoryType === 'Income' ? 'var(--income-color)' : 'var(--text-secondary)',
+                                    fontWeight: categoryType === 'Income' ? '700' : '400',
+                                    background: categoryType === 'Income' ? 'rgba(26, 127, 55, 0.06)' : 'transparent',
+                                    fontSize: '0.95rem',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                수입
+                            </div>
+                            <div 
+                                onClick={() => setCategoryType('Expense')} 
+                                style={{
+                                    flex: 1,
+                                    textAlign: 'center',
+                                    padding: '0.85rem 1rem',
+                                    cursor: 'pointer',
+                                    borderBottom: categoryType === 'Expense' ? '3px solid var(--expense-color)' : '3px solid transparent',
+                                    color: categoryType === 'Expense' ? 'var(--expense-color)' : 'var(--text-secondary)',
+                                    fontWeight: categoryType === 'Expense' ? '700' : '400',
+                                    background: categoryType === 'Expense' ? 'rgba(207, 34, 46, 0.06)' : 'transparent',
+                                    fontSize: '0.95rem',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                지출
+                            </div>
                         </div>
-                        <div className="card stat-card interactive" onClick={() => setView('expense_detail')}>
-                            <span className="stat-label stat-title-white">지출</span>
-                            <span className="stat-value">{stats.expense.toLocaleString()}원</span>
-                            {renderDiff(stats.expense, stats.prevExpense)}
-                        </div>
-                        <div className="card stat-card interactive" onClick={() => setView('savings_detail')}>
-                            <span className="stat-label stat-title-white">저축</span>
-                            <span className="stat-value">{stats.savings.toLocaleString()}원</span>
-                            {stats.prevSavings !== undefined && (
-                                <div className={`stat-change ${stats.savings >= stats.prevSavings ? 'plus' : 'minus'}`}>
-                                    전월 대비 {Math.abs(stats.savings - stats.prevSavings).toLocaleString()}원 {stats.savings >= stats.prevSavings ? '증가' : '감소'}
-                                </div>
-                            )}
-                        </div>
-                        <div className="card stat-card interactive" onClick={() => setView('asset_detail')}>
-                            <span className="stat-label">자산 총액</span>
-                            <span className="stat-value">{stats.totalAssets.toLocaleString()}원</span>
-                            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{selectedMonth.split('-')[1]}월 말 기준</div>
+                        <div style={{ padding: '0.5rem 1rem 1rem' }}>
+                            {(() => {
+                                const monthT = data.transactions.filter(t => t.date.startsWith(selectedMonth) && t.type === categoryType);
+                                const totalAmount = monthT.reduce((sum, t) => sum + Number(t.amount), 0);
+
+                                const catGrouped = data.categories.filter(c => c.type === categoryType).map(c => {
+                                    const amount = monthT.filter(t => t.categoryId === c.id).reduce((sum, t) => sum + Number(t.amount), 0);
+                                    return { ...c, amount };
+                                }).filter(c => c.amount > 0).sort((a, b) => b.amount - a.amount);
+
+                                if (catGrouped.length === 0) {
+                                    return <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-secondary)' }}>데이터가 없습니다.</div>;
+                                }
+
+                                const accentColor = categoryType === 'Income' ? 'var(--income-color)' : 'var(--expense-color)';
+
+                                return catGrouped.map((c, idx) => {
+                                    const percent = totalAmount > 0 ? Math.round((c.amount / totalAmount) * 100) : 0;
+                                    return (
+                                        <div key={c.id} style={{ padding: '0.75rem 0', borderBottom: idx < catGrouped.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                                    <span style={{ minWidth: '38px', fontSize: '0.82rem', color: accentColor, fontWeight: '600', textAlign: 'right' }}>{percent}%</span>
+                                                    <span style={{ fontWeight: '500', color: 'var(--text-primary)', fontSize: '0.95rem' }}>{c.name}</span>
+                                                </div>
+                                                <span style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '0.95rem' }}>{c.amount.toLocaleString()}원</span>
+                                            </div>
+                                            <div style={{ height: '4px', background: 'var(--border-color)', borderRadius: '2px', overflow: 'hidden', marginLeft: '44px' }}>
+                                                <div style={{ height: '100%', width: `${percent}%`, background: accentColor, borderRadius: '2px', transition: 'width 0.4s ease' }} />
+                                            </div>
+                                        </div>
+                                    );
+                                });
+                            })()}
                         </div>
                     </div>
 
