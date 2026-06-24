@@ -208,7 +208,7 @@
             return React.createElement('div', { ref: ref, id: chartId });
         }
 
-        function Dashboard({ data, setEdit, setShowModal, setEditAsset, setShowAssetModal }) {
+        function Dashboard({ data, setEdit, setShowModal, setEditAsset, setShowAssetModal, setTab, setSearchTerm }) {
             const [categoryType, setCategoryType] = useState('Expense');
             const [selectedCategory, setSelectedCategory] = useState(() => {
                 const cats = data.categories ? data.categories.filter(c => c.type === 'Expense') : [];
@@ -558,7 +558,10 @@
                                                     <span style={{ minWidth: '38px', fontSize: '0.82rem', color: accentColor, fontWeight: '600', textAlign: 'right' }}>{percent}%</span>
                                                     <span style={{ fontWeight: '500', color: 'var(--text-primary)', fontSize: '0.95rem' }}>{c.name}</span>
                                                 </div>
-                                                <span style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '0.95rem' }}>{c.amount.toLocaleString()}원</span>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <span style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '0.95rem' }}>{c.amount.toLocaleString()}원</span>
+                                                    <button onClick={(e) => { e.stopPropagation(); setSearchTerm(c.name); setTab('transactions'); }} style={{ padding: '2px 6px', fontSize: '0.75rem', background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer' }}>상세보기</button>
+                                                </div>
                                             </div>
                                             <div style={{ height: '4px', background: 'var(--border-color)', borderRadius: '2px', overflow: 'hidden', marginLeft: '44px' }}>
                                                 <div style={{ height: '100%', width: `${percent}%`, background: accentColor, borderRadius: '2px', transition: 'width 0.4s ease' }} />
@@ -843,7 +846,7 @@
             );
         }
 
-        function AssetManagementPage({ data, setEdit, setShowModal }) {
+        function AssetManagementPage({ data, setEdit, setShowModal, setTab, setSearchTerm }) {
             const [selectedAsset, setSelectedAsset] = useState(null);
 
             const groupGrouped = (data.groups || [])
@@ -953,7 +956,7 @@
                                     {g.assets.map(a => {
                                         const bal = calculateAssetBalance(a.id, data.assets, data.transactions);
                                         return (
-                                            <div key={a.id} onClick={() => setSelectedAsset(a)} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 1rem', background: 'rgba(9, 105, 218, 0.1)', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s' }} className="list-item">
+                                            <div key={a.id} onClick={() => { setSearchTerm(a.name); setTab('transactions'); }} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 1rem', background: 'rgba(9, 105, 218, 0.1)', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s' }} className="list-item">
                                                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     {a.name}
                                                     <Icon name="chevron-right" size={14} style={{ color: '#58a6ff', opacity: 0.7 }} />
@@ -1618,9 +1621,9 @@ service cloud.firestore {
                         <div className="user-profile">{user ? <button onClick={() => firebase.auth().signOut()} className="auth-btn" style={{ background: 'transparent', color: '#8b949e' }}><Icon name="log-out" size={16} /> 로그아웃</button> : <button className="auth-btn login" onClick={() => { if (!fbConfig) setTab('settings'); else firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); }}><Icon name="log-in" size={16} /> 로그인</button>}</div>
                     </div>
                     <div className="main-content"><div className="container">
-                        {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} />}
+                        {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} />}
                         {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} />}
-                        {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} />}
+                        {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} />}
                     </div></div>
                     {showModal && <TransactionModal data={data} setData={setData} onClose={() => { setShowModal(false); setEdit(null); }} editItem={edit} syncToCloud={syncToCloud} isConnected={isConnected} user={user} />}
