@@ -790,6 +790,18 @@
                         <button onClick={() => changeMonth(1)} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Icon name="chevron-right" size={24} /></button>
                     </div>
 
+                    {searchTerm && (
+                        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px', marginBottom: '5px' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', background: 'rgba(9, 105, 218, 0.1)', color: '#58a6ff', padding: '6px 14px', borderRadius: '16px', fontSize: '0.85rem', fontWeight: '600', gap: '6px', border: '1px solid rgba(88, 166, 255, 0.3)', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}>
+                                <Icon name="filter" size={14} />
+                                <span>{searchTerm}</span>
+                                <button onClick={() => setSearchTerm('')} style={{ background: 'transparent', color: '#58a6ff', border: 'none', padding: '0 0 0 4px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                                    <Icon name="x" size={16} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     <div style={{ padding: '5px 10px 10px 10px' }}>
                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'space-between' }}>
                             <div style={{ background: 'var(--income-color)', color: 'white', padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
