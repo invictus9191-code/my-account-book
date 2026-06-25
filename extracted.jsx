@@ -140,7 +140,7 @@
 
                 const savingsCategories = data.categories.filter(c => c.name === '저축' || c.name.includes('저축')).map(c => c.id);
 
-                const savingsData = labels.map(m => data.transactions.filter(t => t.date.startsWith(m) && (t.type === 'Expense' || t.type === 'Transfer') && savingsCategories.includes(t.categoryId)).reduce((s, t) => s + Math.abs(Number(t.amount)), 0));
+                const savingsData = labels.map(m => data.transactions.filter(t => t.date.startsWith(m) && (t.type === 'Expense' || t.type === 'Transfer') && savingsCategories.includes(c.id)).reduce((s, t) => s + Math.abs(Number(t.amount)), 0));
 
                 const expenseData = labels.map(m => {
                     const rawExp = data.transactions.filter(t => t.date.startsWith(m) && t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0);
@@ -476,7 +476,7 @@
             );
         }
 
-        function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm, isConnected, authorFilter, setAuthorFilter }) {
+        function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm, isConnected, authorFilter, setAuthorFilter, selectedMonth }) {
 
             const del = (id) => {
                 if (confirm('삭제하시겠습니까?')) {
@@ -487,6 +487,7 @@
             };
 
             const filteredTransactions = data.transactions.filter(t => {
+                if (!searchTerm && t.date.substring(0, 7) !== selectedMonth) return false;
                 if (authorFilter !== 'ALL' && t.authorEmail !== authorFilter) return false;
                 if (!searchTerm) return true;
                 const term = searchTerm.toLowerCase();
@@ -497,26 +498,23 @@
                 return memoMatch || categoryMatch || assetMatch || toAssetMatch;
             });
 
-            const grouped = filteredTransactions.sort((a, b) => new Date(b.date) - new Date(a.date)).reduce((acc, t) => {
-                const month = t.date.substring(0, 7); // YYYY-MM
-                if (!acc[month]) acc[month] = { transactions: [], income: 0, expense: 0, savings: 0 };
-                acc[month].transactions.push(t);
+            const groupedByDay = filteredTransactions.sort((a, b) => new Date(b.date) - new Date(a.date)).reduce((acc, t) => {
+                if (!acc[t.date]) acc[t.date] = { transactions: [], income: 0, expense: 0, savings: 0 };
+                acc[t.date].transactions.push(t);
 
                 const savingsCategories = data.categories.filter(c => c.name === '저축' || c.name.includes('저축')).map(c => c.id);
 
-                if (t.type === 'Income') acc[month].income += Number(t.amount);
-
+                if (t.type === 'Income') acc[t.date].income += Number(t.amount);
                 if ((t.type === 'Expense' || t.type === 'Transfer') && savingsCategories.includes(t.categoryId)) {
-                    acc[month].savings += Math.abs(Number(t.amount));
+                    acc[t.date].savings += Math.abs(Number(t.amount));
                 }
-
                 if (t.type === 'Expense' && !savingsCategories.includes(t.categoryId)) {
-                    acc[month].expense += Number(t.amount);
+                    acc[t.date].expense += Number(t.amount);
                 }
                 return acc;
             }, {});
 
-            const sortedMonths = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+            const sortedDays = Object.keys(groupedByDay).sort((a, b) => b.localeCompare(a));
 
             return (
                 <div className="fade-in">
@@ -563,9 +561,9 @@
                         <table className="transaction-table">
                             <thead><tr><th>날짜</th><th className="mobile-hide">구분</th><th className="mobile-hide">카테고리</th><th>금액</th><th className="mobile-hide">자산</th><th>메모</th></tr></thead>
                             <tbody>
-                                {sortedMonths.map(month => {
-                                    const [y, m] = month.split('-');
-                                    const { transactions, income, expense } = grouped[month];
+                                {sortedDays.map(dayStr => {
+                                    const { transactions, income, expense, savings } = groupedByDay[dayStr];
+                                    const { year, month, day, name } = getDayLabel(dayStr);
                                     return (
                                         <React.Fragment key={month}>
                                             <tr className="subtotal-row">

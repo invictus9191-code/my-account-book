@@ -676,7 +676,7 @@
             };
 
             const filteredTransactions = data.transactions.filter(t => {
-                if (t.date.substring(0, 7) !== selectedMonth) return false;
+                if (!searchTerm && t.date.substring(0, 7) !== selectedMonth) return false;
                 if (authorFilter !== 'ALL' && t.authorEmail !== authorFilter) return false;
                 if (!searchTerm) return true;
                 const term = searchTerm.toLowerCase();
@@ -709,6 +709,8 @@
                 const d = new Date(dateStr);
                 const dayNames = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
                 return {
+                    year: d.getFullYear(),
+                    month: d.getMonth() + 1,
                     day: d.getDate(),
                     name: dayNames[d.getDay()]
                 };
@@ -821,12 +823,13 @@
                             <tbody>
                                 {sortedDays.map(dayStr => {
                                     const { transactions, income, expense } = groupedByDay[dayStr];
-                                    const { day, name } = getDayLabel(dayStr);
+                                    const { year, month, day, name } = getDayLabel(dayStr);
                                     return (
                                         <React.Fragment key={dayStr}>
                                             <tr style={{ background: 'rgba(208, 215, 222, 0.1)', borderBottom: 'none' }}>
                                                 <td colSpan="6" style={{ padding: '8px 12px' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                        {searchTerm && <span style={{ fontSize: '0.9rem', color: '#8b949e', fontWeight: 'bold' }}>{year}년 {month}월</span>}
                                                         <span style={{ fontSize: 'calc(1.1rem + 3pt)', fontWeight: '900' }}>{day}</span>
                                                         <span style={{ background: '#21262d', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600' }}>{name}</span>
                                                         <div style={{ marginLeft: 'auto', display: 'flex', gap: '12px', fontSize: '0.85rem', fontWeight: '600' }}>
