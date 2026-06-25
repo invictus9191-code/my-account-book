@@ -786,11 +786,13 @@
                         </button>
                     </div>
 
+                    {!searchTerm && (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', margin: '0', fontSize: '1.2rem', fontWeight: 'bold' }}>
                         <button onClick={() => changeMonth(-1)} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Icon name="chevron-left" size={24} /></button>
                         <span>{selectedMonth.split('-')[0]}년 {selectedMonth.split('-')[1]}월</span>
                         <button onClick={() => changeMonth(1)} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Icon name="chevron-right" size={24} /></button>
                     </div>
+                    )}
 
                     {searchTerm && (
                         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px', marginBottom: '5px' }}>
