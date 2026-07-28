@@ -1203,6 +1203,7 @@
             const [newDefaultGroupId, setNewDefaultGroupId] = useState('');
             const [newGroup, setNewGroup] = useState('');
             const [newCat, setNewCat] = useState({ name: '', type: 'Expense' });
+            const [editingAbbr, setEditingAbbr] = useState(null); // 수정 중인 약칭 email
             const [editingAsset, setEditingAsset] = useState(null);
             const [showAssetModal, setShowAssetModal] = useState(false);
             const [tempSharedId, setTempSharedId] = useState(localStorage.getItem(SHARED_ID_KEY) || '');
@@ -1287,11 +1288,22 @@
                 setData(newData);
                 syncToCloud(newData);
             };
+            const startEditAbbr = (a) => {
+                setEditingAbbr(a.email);
+                setNewEmail(a.email);
+                setNewAbbr(a.abbr);
+                setNewDefaultGroupId(a.defaultGroupId || '');
+            };
+            const cancelEditAbbr = () => {
+                setEditingAbbr(null);
+                setNewEmail(''); setNewAbbr(''); setNewDefaultGroupId('');
+            };
             const delAbbr = (email) => {
                 if (confirm('이 약칭을 삭제하시겠습니까?')) {
                     const newData = { ...data, authorAbbreviations: (data.authorAbbreviations || []).filter(a => a.email !== email) };
                     setData(newData);
                     syncToCloud(newData);
+                    if (editingAbbr === email) cancelEditAbbr();
                 }
             };
 
@@ -1315,7 +1327,7 @@
                         </div>
                         <div style={{ padding: '1.5rem' }}>
                             {activeTab === 'general' && (
-                                <div className="dashboard-grid">
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: '1.5rem' }}>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                                         <div>
                                             <h3>🔑 비밀번호 변경</h3>
@@ -1389,25 +1401,29 @@ service cloud.firestore {
                                 <div>
                                     <h3>작성자 약칭 관리</h3>
                                     <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>거래내역 필터에 표시될 이메일별 약칭과 거래 작성 시 기본 지정될 초기그룹을 설정합니다.</p>
-                                    <div style={{ display: 'flex', gap: '8px', margin: '1rem 0', maxWidth: '650px', flexWrap: 'wrap' }}>
-                                        <select value={newEmail} onChange={e => setNewEmail(e.target.value)} style={{ padding: '8px', borderRadius: '6px', background: '#0d1117', color: 'white', border: '1px solid #30363d', flex: 2, minWidth: '160px' }}>
-                                            <option value="">이메일 선택</option>
-                                            {Array.from(new Set([...data.transactions.map(t => t.authorEmail).filter(Boolean), user?.email].filter(Boolean))).map(email => (
-                                                <option key={email} value={email}>{email}</option>
-                                            ))}
-                                        </select>
-                                        <input value={newAbbr} onChange={e => setNewAbbr(e.target.value)} placeholder="약칭 (예: TS)" style={{ width: '100px' }} />
-                                        <select value={newDefaultGroupId} onChange={e => setNewDefaultGroupId(e.target.value)} style={{ padding: '8px', borderRadius: '6px', background: '#0d1117', color: 'white', border: '1px solid #30363d', flex: 2, minWidth: '130px' }}>
-                                            <option value="">초기그룹 선택 (선택사항)</option>
-                                            {(data.groups || []).map(g => (
-                                                <option key={g.id} value={g.id}>{g.name}</option>
-                                            ))}
-                                        </select>
-                                        <button className="primary" onClick={addAbbr}>추가</button>
+                                    <div style={{ background: editingAbbr ? 'rgba(88,166,255,0.07)' : 'transparent', border: editingAbbr ? '1px solid #388bfd' : '1px solid transparent', borderRadius: '8px', padding: editingAbbr ? '12px' : '0', marginBottom: '1rem', transition: 'all 0.2s' }}>
+                                        {editingAbbr && <p style={{ color: '#58a6ff', fontSize: '0.82rem', marginBottom: '8px', fontWeight: '600' }}>✏️ 약칭 수정 중: <span style={{ color: '#e6edf3' }}>{editingAbbr}</span></p>}
+                                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', maxWidth: '650px' }}>
+                                            <select value={newEmail} onChange={e => !editingAbbr && setNewEmail(e.target.value)} disabled={!!editingAbbr} style={{ padding: '8px', borderRadius: '6px', background: '#0d1117', color: editingAbbr ? '#8b949e' : 'white', border: '1px solid #30363d', flex: 2, minWidth: '160px', opacity: editingAbbr ? 0.6 : 1 }}>
+                                                <option value="">이메일 선택</option>
+                                                {Array.from(new Set([...data.transactions.map(t => t.authorEmail).filter(Boolean), user?.email].filter(Boolean))).map(email => (
+                                                    <option key={email} value={email}>{email}</option>
+                                                ))}
+                                            </select>
+                                            <input value={newAbbr} onChange={e => setNewAbbr(e.target.value)} placeholder="약칭 (예: TS)" style={{ width: '100px' }} />
+                                            <select value={newDefaultGroupId} onChange={e => setNewDefaultGroupId(e.target.value)} style={{ padding: '8px', borderRadius: '6px', background: '#0d1117', color: 'white', border: '1px solid #30363d', flex: 2, minWidth: '130px' }}>
+                                                <option value="">초기그룹 선택 (선택사항)</option>
+                                                {(data.groups || []).map(g => (
+                                                    <option key={g.id} value={g.id}>{g.name}</option>
+                                                ))}
+                                            </select>
+                                            <button className="primary" onClick={addAbbr}>{editingAbbr ? '저장' : '추가'}</button>
+                                            {editingAbbr && <button onClick={cancelEditAbbr} style={{ background: '#30363d', color: 'white' }}>취소</button>}
+                                        </div>
                                     </div>
                                     <div style={{ maxWidth: '650px' }}>
                                         {(data.authorAbbreviations || []).map(a => (
-                                            <div key={a.email} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #30363d', gap: '10px' }}>
+                                            <div key={a.email} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #30363d', gap: '10px', background: editingAbbr === a.email ? 'rgba(88,166,255,0.05)' : 'transparent', borderRadius: '4px', transition: 'background 0.2s' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, flexWrap: 'wrap' }}>
                                                     <span style={{ fontWeight: '500' }}>{a.email} <span style={{ color: '#58a6ff', marginLeft: '6px' }}>[{a.abbr}]</span></span>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1424,7 +1440,10 @@ service cloud.firestore {
                                                         </select>
                                                     </div>
                                                 </div>
-                                                <button onClick={() => delAbbr(a.email)} style={{ background: 'transparent', color: '#da3633', fontSize: '0.85rem' }}>삭제</button>
+                                                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                                                    <button onClick={() => startEditAbbr(a)} style={{ background: 'transparent', color: '#58a6ff', fontSize: '0.85rem', border: '1px solid #388bfd', borderRadius: '4px', padding: '3px 8px' }}>수정</button>
+                                                    <button onClick={() => delAbbr(a.email)} style={{ background: 'transparent', color: '#da3633', fontSize: '0.85rem' }}>삭제</button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
