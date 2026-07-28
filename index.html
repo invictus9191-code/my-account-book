@@ -1072,10 +1072,17 @@
             const [form, setForm] = useState(() => {
                 const groups = data.groups || [];
                 const firstGroup = groups.length > 0 ? groups[0].id : '';
-                const getTodayKST = () => { const now = new Date(); const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000); return kst.toISOString().split('T')[0]; };
-                const initial = editItem || { date: getTodayKST(), type: 'Expense', amount: '', categoryId: '', groupId: firstGroup, assetId: data.assets[0]?.id || '', toGroupId: firstGroup, toAssetId: '', memo: '' };
+                
+                // 작성자 약칭 설정에서 현재 로그인이메일의 초기그룹 찾기
+                const userEmail = user?.email;
+                const authorAbbr = (data.authorAbbreviations || []).find(a => a.email === userEmail);
+                const authorDefaultGroup = authorAbbr?.defaultGroupId;
+                const defaultGroup = (authorDefaultGroup && groups.some(g => g.id === authorDefaultGroup)) ? authorDefaultGroup : firstGroup;
 
-                // For editing existing records, determine group from asset
+                const getTodayKST = () => { const now = new Date(); const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000); return kst.toISOString().split('T')[0]; };
+                const initial = editItem || { date: getTodayKST(), type: 'Expense', amount: '', categoryId: '', groupId: defaultGroup, assetId: '', toGroupId: firstGroup, toAssetId: '', memo: '' };
+
+                // 기존 기록 수정인 경우 자산 정보로부터 그룹 가져오기
                 if (editItem) {
                     const fromAsset = data.assets.find(a => a.id === editItem.assetId);
                     if (fromAsset) initial.groupId = fromAsset.groupId || '';
@@ -1084,7 +1091,12 @@
                         if (toAsset) initial.toGroupId = toAsset.groupId || '';
                     }
                 }
-                return { ...initial, groupId: initial.groupId || firstGroup, toGroupId: initial.toGroupId || firstGroup };
+                const initialGroup = initial.groupId || defaultGroup;
+                const matchedAssets = data.assets.filter(a => initialGroup ? a.groupId === initialGroup : true);
+                if (!initial.assetId && matchedAssets.length > 0) {
+                    initial.assetId = matchedAssets[0].id;
+                }
+                return { ...initial, groupId: initialGroup, toGroupId: initial.toGroupId || firstGroup };
             });
             const filteredAssets = data.assets.filter(a => form.groupId ? a.groupId === form.groupId : true);
             const filteredToAssets = data.assets.filter(a => (form.toGroupId ? a.groupId === form.toGroupId : true) && a.id !== form.assetId);
@@ -1188,6 +1200,7 @@
             const [newOwner, setNewOwner] = useState('');
             const [newEmail, setNewEmail] = useState('');
             const [newAbbr, setNewAbbr] = useState('');
+            const [newDefaultGroupId, setNewDefaultGroupId] = useState('');
             const [newGroup, setNewGroup] = useState('');
             const [newCat, setNewCat] = useState({ name: '', type: 'Expense' });
             const [editingAsset, setEditingAsset] = useState(null);
@@ -1261,10 +1274,18 @@
 
             const addAbbr = () => {
                 if (!newEmail || !newAbbr) return;
-                const newData = { ...data, authorAbbreviations: [...(data.authorAbbreviations || []).filter(a => a.email !== newEmail), { email: newEmail, abbr: newAbbr }] };
+                const newData = { ...data, authorAbbreviations: [...(data.authorAbbreviations || []).filter(a => a.email !== newEmail), { email: newEmail, abbr: newAbbr, defaultGroupId: newDefaultGroupId }] };
                 setData(newData);
                 syncToCloud(newData);
-                setNewEmail(''); setNewAbbr('');
+                setNewEmail(''); setNewAbbr(''); setNewDefaultGroupId('');
+            };
+            const updateAbbrGroup = (email, defaultGroupId) => {
+                const newData = { 
+                    ...data, 
+                    authorAbbreviations: (data.authorAbbreviations || []).map(a => a.email === email ? { ...a, defaultGroupId } : a) 
+                };
+                setData(newData);
+                syncToCloud(newData);
             };
             const delAbbr = (email) => {
                 if (confirm('이 약칭을 삭제하시겠습니까?')) {
@@ -1285,9 +1306,9 @@
             return (
                 <div className="fade-in">
                     <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: '1.5rem' }}>
-                        <div style={{ display: 'flex', borderBottom: '1px solid #30363d', background: 'rgba(22, 27, 34, 0.5)', overflowX: 'auto' }}>
+                        <div style={{ display: 'flex', borderBottom: '1px solid #30363d', background: 'rgba(22, 27, 34, 0.5)', overflowX: 'auto', padding: '6px' }}>
                             {[{ id: 'general', label: '일반/백업' }, { id: 'owners', label: '소유자' }, { id: 'groups', label: '자산 그룹' }, { id: 'assets', label: '자산 목록' }, { id: 'categories', label: '카테고리' }, { id: 'authors', label: '작성자 약칭' }].map(t => (
-                                <button key={t.id} onClick={() => setActiveTab(t.id)} style={{ padding: '1rem 1.5rem', background: 'transparent', color: activeTab === t.id ? '#ffffff' : '#8b949e', borderBottom: activeTab === t.id ? '2px solid #ffffff' : '2px solid transparent', borderRadius: 0, whiteSpace: 'nowrap', fontWeight: activeTab === t.id ? '600' : 'normal' }}>
+                                <button key={t.id} onClick={() => setActiveTab(t.id)} style={{ padding: '0.6rem 1.2rem', margin: '0 4px', background: activeTab === t.id ? '#ffffff' : 'transparent', color: activeTab === t.id ? '#000000' : '#ffffff', border: 'none', borderRadius: '6px', whiteSpace: 'nowrap', fontWeight: activeTab === t.id ? '700' : '500', transition: 'all 0.2s ease' }}>
                                     {t.label}
                                 </button>
                             ))}
@@ -1367,21 +1388,42 @@ service cloud.firestore {
                             {activeTab === 'authors' && (
                                 <div>
                                     <h3>작성자 약칭 관리</h3>
-                                    <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>거래내역 필터에 표시될 이메일별 약칭을 설정합니다.</p>
-                                    <div style={{ display: 'flex', gap: '8px', margin: '1rem 0', maxWidth: '500px' }}>
-                                        <select value={newEmail} onChange={e => setNewEmail(e.target.value)} style={{ padding: '8px', borderRadius: '6px', background: '#0d1117', color: 'white', border: '1px solid #30363d', flex: 1 }}>
+                                    <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>거래내역 필터에 표시될 이메일별 약칭과 거래 작성 시 기본 지정될 초기그룹을 설정합니다.</p>
+                                    <div style={{ display: 'flex', gap: '8px', margin: '1rem 0', maxWidth: '650px', flexWrap: 'wrap' }}>
+                                        <select value={newEmail} onChange={e => setNewEmail(e.target.value)} style={{ padding: '8px', borderRadius: '6px', background: '#0d1117', color: 'white', border: '1px solid #30363d', flex: 2, minWidth: '160px' }}>
                                             <option value="">이메일 선택</option>
-                                            {Array.from(new Set(data.transactions.map(t => t.authorEmail).filter(Boolean))).map(email => (
+                                            {Array.from(new Set([...data.transactions.map(t => t.authorEmail).filter(Boolean), user?.email].filter(Boolean))).map(email => (
                                                 <option key={email} value={email}>{email}</option>
                                             ))}
                                         </select>
                                         <input value={newAbbr} onChange={e => setNewAbbr(e.target.value)} placeholder="약칭 (예: TS)" style={{ width: '100px' }} />
+                                        <select value={newDefaultGroupId} onChange={e => setNewDefaultGroupId(e.target.value)} style={{ padding: '8px', borderRadius: '6px', background: '#0d1117', color: 'white', border: '1px solid #30363d', flex: 2, minWidth: '130px' }}>
+                                            <option value="">초기그룹 선택 (선택사항)</option>
+                                            {(data.groups || []).map(g => (
+                                                <option key={g.id} value={g.id}>{g.name}</option>
+                                            ))}
+                                        </select>
                                         <button className="primary" onClick={addAbbr}>추가</button>
                                     </div>
-                                    <div style={{ maxWidth: '500px' }}>
+                                    <div style={{ maxWidth: '650px' }}>
                                         {(data.authorAbbreviations || []).map(a => (
-                                            <div key={a.email} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #30363d' }}>
-                                                <span>{a.email} <span style={{ color: '#58a6ff', marginLeft: '10px' }}>[{a.abbr}]</span></span>
+                                            <div key={a.email} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #30363d', gap: '10px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, flexWrap: 'wrap' }}>
+                                                    <span style={{ fontWeight: '500' }}>{a.email} <span style={{ color: '#58a6ff', marginLeft: '6px' }}>[{a.abbr}]</span></span>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{ fontSize: '0.8rem', color: '#8b949e' }}>초기그룹:</span>
+                                                        <select 
+                                                            value={a.defaultGroupId || ''} 
+                                                            onChange={e => updateAbbrGroup(a.email, e.target.value)}
+                                                            style={{ padding: '4px 8px', borderRadius: '6px', background: '#0d1117', color: 'white', border: '1px solid #30363d', fontSize: '0.85rem' }}
+                                                        >
+                                                            <option value="">미지정</option>
+                                                            {(data.groups || []).map(g => (
+                                                                <option key={g.id} value={g.id}>{g.name}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                </div>
                                                 <button onClick={() => delAbbr(a.email)} style={{ background: 'transparent', color: '#da3633', fontSize: '0.85rem' }}>삭제</button>
                                             </div>
                                         ))}
