@@ -208,7 +208,7 @@
             return React.createElement('div', { ref: ref, id: chartId });
         }
 
-        function Dashboard({ data, setEdit, setShowModal, setEditAsset, setShowAssetModal, setTab, setSearchTerm }) {
+        function Dashboard({ data, setEdit, setShowModal, setEditAsset, setShowAssetModal, setTab, setSearchTerm, setTransactionMonth }) {
             const [categoryType, setCategoryType] = useState('Expense');
             const [selectedCategory, setSelectedCategory] = useState(() => {
                 const cats = data.categories ? data.categories.filter(c => c.type === 'Expense') : [];
@@ -503,7 +503,7 @@
                                 style={{
                                     flex: 1,
                                     textAlign: 'center',
-                                    padding: '0.85rem 1rem',
+                                    padding: '0.7rem 1rem',
                                     cursor: 'pointer',
                                     borderBottom: categoryType === 'Income' ? '3px solid var(--income-color)' : '3px solid transparent',
                                     color: categoryType === 'Income' ? 'var(--income-color)' : 'var(--text-secondary)',
@@ -513,14 +513,17 @@
                                     transition: 'all 0.2s'
                                 }}
                             >
-                                수입
+                                <div>수입</div>
+                                <div style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--income-color)', opacity: 0.85, marginTop: '2px' }}>
+                                    {data.transactions.filter(t => t.date.startsWith(selectedMonth) && t.type === 'Income').reduce((s, t) => s + Number(t.amount), 0).toLocaleString()}원
+                                </div>
                             </div>
                             <div 
                                 onClick={() => setCategoryType('Expense')} 
                                 style={{
                                     flex: 1,
                                     textAlign: 'center',
-                                    padding: '0.85rem 1rem',
+                                    padding: '0.7rem 1rem',
                                     cursor: 'pointer',
                                     borderBottom: categoryType === 'Expense' ? '3px solid var(--expense-color)' : '3px solid transparent',
                                     color: categoryType === 'Expense' ? 'var(--expense-color)' : 'var(--text-secondary)',
@@ -530,7 +533,10 @@
                                     transition: 'all 0.2s'
                                 }}
                             >
-                                지출
+                                <div>지출</div>
+                                <div style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--expense-color)', opacity: 0.85, marginTop: '2px' }}>
+                                    {data.transactions.filter(t => t.date.startsWith(selectedMonth) && t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0).toLocaleString()}원
+                                </div>
                             </div>
                         </div>
                         <div style={{ padding: '0.5rem 1rem 1rem' }}>
@@ -560,7 +566,7 @@
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                     <span style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '0.95rem' }}>{c.amount.toLocaleString()}원</span>
-                                                    <button onClick={(e) => { e.stopPropagation(); setSearchTerm(c.name); setTab('transactions'); }} style={{ padding: '2px 6px', fontSize: '0.75rem', background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer' }}>상세보기</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); setSearchTerm(c.name); setTransactionMonth(selectedMonth); setTab('transactions'); }} style={{ padding: '2px 6px', fontSize: '0.75rem', background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer' }}>상세보기</button>
                                                 </div>
                                             </div>
                                             <div style={{ height: '4px', background: 'var(--border-color)', borderRadius: '2px', overflow: 'hidden', marginLeft: '44px' }}>
@@ -655,11 +661,20 @@
             );
         }
 
-        function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm, isConnected, authorFilter, setAuthorFilter }) {
+        function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm, isConnected, authorFilter, setAuthorFilter, transactionMonth, setTransactionMonth }) {
             const [selectedMonth, setSelectedMonth] = useState(() => {
+                if (transactionMonth) return transactionMonth;
                 const now = new Date();
                 return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             });
+
+            // transactionMonth prop이 바뀌면 selectedMonth 동기화
+            useEffect(() => {
+                if (transactionMonth) {
+                    setSelectedMonth(transactionMonth);
+                    setTransactionMonth(null); // 한번 적용 후 초기화
+                }
+            }, [transactionMonth]);
 
             const changeMonth = (offset) => {
                 const [y, m] = selectedMonth.split('-').map(Number);
@@ -676,7 +691,7 @@
             };
 
             const filteredTransactions = data.transactions.filter(t => {
-                if (!searchTerm && t.date.substring(0, 7) !== selectedMonth) return false;
+                if (t.date.substring(0, 7) !== selectedMonth) return false;
                 if (authorFilter !== 'ALL' && t.authorEmail !== authorFilter) return false;
                 if (!searchTerm) return true;
                 const term = searchTerm.toLowerCase();
@@ -719,7 +734,6 @@
             return (
                 <div className="fade-in">
                     <div className="page-header mobile-hide" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0', alignItems: 'center', flexWrap: 'wrap', gap: '10px', position: 'sticky', top: '53px', background: 'var(--bg-color)', zIndex: 10, padding: '5px 0', border: 'none', boxShadow: 'none' }}>
-                        <h1 className="page-title mobile-hide">거래 내역</h1>
                         <div className="header-actions mobile-hide" style={{ display: 'flex', gap: '8px', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
                             {/* ... (Desktop Header Actions Unchanged) ... */}
                         </div>
@@ -786,23 +800,32 @@
                         </button>
                     </div>
 
-                    {!searchTerm && (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', margin: '0', fontSize: '1.2rem', fontWeight: 'bold' }}>
                         <button onClick={() => changeMonth(-1)} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Icon name="chevron-left" size={24} /></button>
                         <span>{selectedMonth.split('-')[0]}년 {selectedMonth.split('-')[1]}월</span>
                         <button onClick={() => changeMonth(1)} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Icon name="chevron-right" size={24} /></button>
                     </div>
-                    )}
 
-                    {searchTerm && (
-                        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px', marginBottom: '5px' }}>
-                            <div style={{ display: 'inline-flex', alignItems: 'center', background: 'rgba(9, 105, 218, 0.1)', color: '#58a6ff', padding: '6px 14px', borderRadius: '16px', fontSize: '0.85rem', fontWeight: '600', gap: '6px', border: '1px solid rgba(88, 166, 255, 0.3)', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}>
-                                <Icon name="filter" size={14} />
-                                <span>{searchTerm}</span>
-                                <button onClick={() => setSearchTerm('')} style={{ background: 'transparent', color: '#58a6ff', border: 'none', padding: '0 0 0 4px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                                    <Icon name="x" size={16} />
-                                </button>
-                            </div>
+                    {(searchTerm || authorFilter !== 'ALL') && (
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '10px', marginBottom: '5px', flexWrap: 'wrap' }}>
+                            {searchTerm && (
+                                <div style={{ display: 'inline-flex', alignItems: 'center', background: 'rgba(9, 105, 218, 0.1)', color: '#58a6ff', padding: '6px 14px', borderRadius: '16px', fontSize: '0.85rem', fontWeight: '600', gap: '6px', border: '1px solid rgba(88, 166, 255, 0.3)', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}>
+                                    <Icon name="filter" size={14} />
+                                    <span>{searchTerm}</span>
+                                    <button onClick={() => setSearchTerm('')} style={{ background: 'transparent', color: '#58a6ff', border: 'none', padding: '0 0 0 4px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                                        <Icon name="x" size={16} />
+                                    </button>
+                                </div>
+                            )}
+                            {authorFilter !== 'ALL' && (
+                                <div style={{ display: 'inline-flex', alignItems: 'center', background: 'rgba(26, 127, 55, 0.1)', color: '#3fb950', padding: '6px 14px', borderRadius: '16px', fontSize: '0.85rem', fontWeight: '600', gap: '6px', border: '1px solid rgba(63, 185, 80, 0.3)', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}>
+                                    <Icon name="user" size={14} />
+                                    <span>{(() => { const found = (data.authorAbbreviations || []).find(a => a.email === authorFilter); return found ? found.abbr : authorFilter; })()}</span>
+                                    <button onClick={() => setAuthorFilter('ALL')} style={{ background: 'transparent', color: '#3fb950', border: 'none', padding: '0 0 0 4px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                                        <Icon name="x" size={16} />
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -831,7 +854,7 @@
                                             <tr style={{ background: 'rgba(208, 215, 222, 0.1)', borderBottom: 'none' }}>
                                                 <td colSpan="6" style={{ padding: '8px 12px' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        {searchTerm && <span style={{ fontSize: '0.9rem', color: '#8b949e', fontWeight: 'bold' }}>{year}년 {month}월</span>}
+                                                        {false && <span style={{ fontSize: '0.9rem', color: '#8b949e', fontWeight: 'bold' }}>{year}년 {month}월</span>}
                                                         <span style={{ fontSize: 'calc(1.1rem + 3pt)', fontWeight: '900' }}>{day}</span>
                                                         <span style={{ background: '#21262d', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600' }}>{name}</span>
                                                         <div style={{ marginLeft: 'auto', display: 'flex', gap: '12px', fontSize: '0.85rem', fontWeight: '600' }}>
@@ -1556,6 +1579,7 @@ service cloud.firestore {
 
             const [sidebarOpen, setSidebarOpen] = useState(false);
             const [searchTerm, setSearchTerm] = useState('');
+            const [transactionMonth, setTransactionMonth] = useState(null); // 대시보드 카테고리 상세보기 시 월 필터
             const [showMobileSearch, setShowMobileSearch] = useState(false);
 
             const isConnected = useMemo(() => {
@@ -1699,8 +1723,8 @@ service cloud.firestore {
                         <div className="user-profile">{user ? <button onClick={() => firebase.auth().signOut()} className="auth-btn" style={{ background: 'transparent', color: '#8b949e' }}><Icon name="log-out" size={16} /> 로그아웃</button> : <button className="auth-btn login" onClick={() => { if (!fbConfig) setTab('settings'); else firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); }}><Icon name="log-in" size={16} /> 로그인</button>}</div>
                     </div>
                     <div className="main-content"><div className="container">
-                        {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} />}
-                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} />}
+                        {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionMonth={setTransactionMonth} />}
+                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} />}
                     </div></div>
