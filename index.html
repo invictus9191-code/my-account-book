@@ -496,7 +496,86 @@
                         ><Icon name="chevron-right" size={24} /></button>
                     </div>
 
-                    <div className="card" style={{ padding: '0', overflow: 'hidden', marginBottom: '1.5rem' }}>
+                    <div className="dashboard-grid" style={{ marginTop: '1.5rem' }}>
+                        <div className="card">
+                            <h3 style={{ marginBottom: '1rem' }}>연간 자산 흐름</h3>
+                            <ChartBar
+                                chartId="chart-assets"
+                                series={[{ name: '자산액', data: annualData.assetData }]}
+                                colors={['#0969da']}
+                                labels={annualData.labels}
+                                height={260}
+                            />
+                        </div>
+                        <div className="card">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                <h3>연간 흐름</h3>
+                                <div style={{ display: 'flex', gap: '0.4rem', background: 'rgba(9, 105, 218, 0.08)', padding: '4px', borderRadius: '8px', border: '1px solid rgba(9, 105, 218, 0.2)' }}>
+                                    <button
+                                        onClick={() => setChartType('income_expense')}
+                                        style={{ background: chartType === 'income_expense' ? '#0969da' : 'transparent', color: chartType === 'income_expense' ? 'white' : '#0969da', padding: '0.3rem 0.7rem', fontSize: '0.82rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: chartType === 'income_expense' ? '600' : '400', transition: 'all 0.2s' }}
+                                    >수입/지출</button>
+                                    <button
+                                        onClick={() => setChartType('savings')}
+                                        style={{ background: chartType === 'savings' ? '#0969da' : 'transparent', color: chartType === 'savings' ? 'white' : '#0969da', padding: '0.3rem 0.7rem', fontSize: '0.82rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: chartType === 'savings' ? '600' : '400', transition: 'all 0.2s' }}
+                                    >저축</button>
+                                </div>
+                            </div>
+                            {chartType === 'income_expense' ? (
+                                <ChartBar
+                                    chartId="chart-income-expense"
+                                    series={[
+                                        { name: '수입', data: annualData.incomeData },
+                                        { name: '지출', data: annualData.expenseData }
+                                    ]}
+                                    colors={['#1a7f37', '#cf222e']}
+                                    labels={annualData.labels}
+                                    height={260}
+                                />
+                            ) : (
+                                <ChartBar
+                                    chartId="chart-savings"
+                                    series={[{ name: '저축', data: annualData.savingsData }]}
+                                    colors={['#0969da']}
+                                    labels={annualData.labels}
+                                    height={260}
+                                />
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="card" style={{ marginTop: '1.5rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <h3>카테고리별<br/>연간 흐름</h3>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <select
+                                    value={categoryType}
+                                    onChange={e => setCategoryType(e.target.value)}
+                                    style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', background: 'rgba(9, 105, 218, 0.08)', color: '#0969da', border: '1px solid rgba(9, 105, 218, 0.35)', fontSize: '0.85rem', fontWeight: '500', cursor: 'pointer', outline: 'none' }}
+                                >
+                                    <option value="Expense">지출</option>
+                                    <option value="Income">수입</option>
+                                    <option value="Transfer">이체/저축</option>
+                                </select>
+                                <select
+                                    value={selectedCategory}
+                                    onChange={e => setSelectedCategory(e.target.value)}
+                                    style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', background: 'rgba(9, 105, 218, 0.08)', color: '#0969da', border: '1px solid rgba(9, 105, 218, 0.35)', maxWidth: '150px', fontSize: '0.85rem', fontWeight: '500', cursor: 'pointer', outline: 'none' }}
+                                >
+                                    {data.categories.filter(c => c.type === categoryType).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                        <ChartBar
+                            chartId="chart-category"
+                            series={[{ name: '금액', data: annualCategoryData.categoryData }]}
+                            colors={['#8250df']}
+                            labels={annualCategoryData.labels}
+                            height={260}
+                        />
+                    </div>
+
+                    <div className="card" style={{ padding: '0', overflow: 'hidden', marginTop: '1.5rem' }}>
                         <div style={{ display: 'flex', borderBottom: '2px solid var(--border-color)' }}>
                             <div 
                                 onClick={() => setCategoryType('Income')} 
@@ -577,85 +656,6 @@
                                 });
                             })()}
                         </div>
-                    </div>
-
-                    <div className="dashboard-grid" style={{ marginTop: '1.5rem' }}>
-                        <div className="card">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                <h3>연간 흐름</h3>
-                                <div style={{ display: 'flex', gap: '0.4rem', background: 'rgba(9, 105, 218, 0.08)', padding: '4px', borderRadius: '8px', border: '1px solid rgba(9, 105, 218, 0.2)' }}>
-                                    <button
-                                        onClick={() => setChartType('income_expense')}
-                                        style={{ background: chartType === 'income_expense' ? '#0969da' : 'transparent', color: chartType === 'income_expense' ? 'white' : '#0969da', padding: '0.3rem 0.7rem', fontSize: '0.82rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: chartType === 'income_expense' ? '600' : '400', transition: 'all 0.2s' }}
-                                    >수입/지출</button>
-                                    <button
-                                        onClick={() => setChartType('savings')}
-                                        style={{ background: chartType === 'savings' ? '#0969da' : 'transparent', color: chartType === 'savings' ? 'white' : '#0969da', padding: '0.3rem 0.7rem', fontSize: '0.82rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: chartType === 'savings' ? '600' : '400', transition: 'all 0.2s' }}
-                                    >저축</button>
-                                </div>
-                            </div>
-                            {chartType === 'income_expense' ? (
-                                <ChartBar
-                                    chartId="chart-income-expense"
-                                    series={[
-                                        { name: '수입', data: annualData.incomeData },
-                                        { name: '지출', data: annualData.expenseData }
-                                    ]}
-                                    colors={['#1a7f37', '#cf222e']}
-                                    labels={annualData.labels}
-                                    height={260}
-                                />
-                            ) : (
-                                <ChartBar
-                                    chartId="chart-savings"
-                                    series={[{ name: '저축', data: annualData.savingsData }]}
-                                    colors={['#0969da']}
-                                    labels={annualData.labels}
-                                    height={260}
-                                />
-                            )}
-                        </div>
-                        <div className="card">
-                            <h3 style={{ marginBottom: '1rem' }}>연간 자산 흐름</h3>
-                            <ChartBar
-                                chartId="chart-assets"
-                                series={[{ name: '자산액', data: annualData.assetData }]}
-                                colors={['#0969da']}
-                                labels={annualData.labels}
-                                height={260}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="card" style={{ marginTop: '1.5rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                            <h3>카테고리별 연간 흐름</h3>
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <select
-                                    value={categoryType}
-                                    onChange={e => setCategoryType(e.target.value)}
-                                    style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', background: 'rgba(9, 105, 218, 0.08)', color: '#0969da', border: '1px solid rgba(9, 105, 218, 0.35)', fontSize: '0.85rem', fontWeight: '500', cursor: 'pointer', outline: 'none' }}
-                                >
-                                    <option value="Expense">지출</option>
-                                    <option value="Income">수입</option>
-                                    <option value="Transfer">이체/저축</option>
-                                </select>
-                                <select
-                                    value={selectedCategory}
-                                    onChange={e => setSelectedCategory(e.target.value)}
-                                    style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', background: 'rgba(9, 105, 218, 0.08)', color: '#0969da', border: '1px solid rgba(9, 105, 218, 0.35)', maxWidth: '150px', fontSize: '0.85rem', fontWeight: '500', cursor: 'pointer', outline: 'none' }}
-                                >
-                                    {data.categories.filter(c => c.type === categoryType).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                </select>
-                            </div>
-                        </div>
-                        <ChartBar
-                            chartId="chart-category"
-                            series={[{ name: '금액', data: annualCategoryData.categoryData }]}
-                            colors={['#8250df']}
-                            labels={annualCategoryData.labels}
-                            height={260}
-                        />
                     </div>
                 </div>
             );
