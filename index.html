@@ -1014,12 +1014,21 @@
         }
 
         function AssetModal({ data, setData, onClose, editItem, syncToCloud }) {
-            const [form, setForm] = useState(editItem || { name: '', ownerId: data.owners[0]?.id || '', groupId: data.groups?.[0]?.id || '', type: 'Bank', initialBalance: 0 });
+            const [form, setForm] = useState(() => {
+                if (editItem) {
+                    return {
+                        ...editItem,
+                        priority: editItem.priority !== undefined ? editItem.priority : ''
+                    };
+                }
+                return { name: '', ownerId: data.owners[0]?.id || '', groupId: data.groups?.[0]?.id || '', type: 'Bank', initialBalance: 0, priority: '' };
+            });
 
             const handleSubmit = (e) => {
                 e.preventDefault();
                 if (!form.name || !form.ownerId) return;
-                const newData = { ...data, assets: editItem ? data.assets.map(a => a.id === editItem.id ? { ...form, initialBalance: Number(form.initialBalance || 0) } : a) : [...data.assets, { ...form, id: Date.now().toString(), initialBalance: Number(form.initialBalance || 0) }] };
+                const formattedPriority = form.priority !== '' ? Number(form.priority) : 9999;
+                const newData = { ...data, assets: editItem ? data.assets.map(a => a.id === editItem.id ? { ...form, initialBalance: Number(form.initialBalance || 0), priority: formattedPriority } : a) : [...data.assets, { ...form, id: Date.now().toString(), initialBalance: Number(form.initialBalance || 0), priority: formattedPriority }] };
                 setData(newData);
                 syncToCloud(newData);
                 onClose();
@@ -1040,6 +1049,7 @@
                         <h2 style={{ marginBottom: '1.5rem', fontSize: '1.5rem' }}>자산 {editItem ? '수정' : '추가'}</h2>
                         <form onSubmit={handleSubmit}>
                             <div className="form-row"><label>자산명</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required /></div>
+                            <div className="form-row"><label>우선순위</label><input type="number" value={form.priority !== undefined ? form.priority : ''} onChange={e => setForm({ ...form, priority: e.target.value })} placeholder="예: 1 (낮은 숫자 우선)" /></div>
                             <div className="form-row"><label>소유자</label><select value={form.ownerId} onChange={e => setForm({ ...form, ownerId: e.target.value })} required><option value="">선택</option>{data.owners.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>
                             <div className="form-row"><label>그룹</label><select value={form.groupId} onChange={e => setForm({ ...form, groupId: e.target.value })}><option value="">선택 (선택사항)</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
                             <div className="form-row"><label>자산 유형</label><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}><option value="Cash">현금</option><option value="Bank">은행</option><option value="Card">카드</option></select></div>
@@ -1114,14 +1124,14 @@
                     }
                 }
                 const initialGroup = initial.groupId || defaultGroup;
-                const matchedAssets = data.assets.filter(a => initialGroup ? a.groupId === initialGroup : true);
+                const matchedAssets = data.assets.filter(a => initialGroup ? a.groupId === initialGroup : true).sort((a, b) => Number(a.priority || 9999) - Number(b.priority || 9999));
                 if (!initial.assetId && matchedAssets.length > 0) {
                     initial.assetId = matchedAssets[0].id;
                 }
                 return { ...initial, groupId: initialGroup, toGroupId: initial.toGroupId || firstGroup };
             });
-            const filteredAssets = data.assets.filter(a => form.groupId ? a.groupId === form.groupId : true);
-            const filteredToAssets = data.assets.filter(a => (form.toGroupId ? a.groupId === form.toGroupId : true) && a.id !== form.assetId);
+            const filteredAssets = data.assets.filter(a => form.groupId ? a.groupId === form.groupId : true).sort((a, b) => Number(a.priority || 9999) - Number(b.priority || 9999));
+            const filteredToAssets = data.assets.filter(a => (form.toGroupId ? a.groupId === form.toGroupId : true) && a.id !== form.assetId).sort((a, b) => Number(a.priority || 9999) - Number(b.priority || 9999));
             const filteredCategories = data.categories.filter(c => c.type === form.type);
             useEffect(() => {
                 if (filteredAssets.length > 0 && !filteredAssets.find(a => a.id === form.assetId)) setForm(f => ({ ...f, assetId: filteredAssets[0].id }));
@@ -1510,9 +1520,9 @@ service cloud.firestore {
                                     </div>
                                     <div style={{ overflowX: 'auto' }}>
                                         <table>
-                                            <thead><tr><th>자산명</th><th>소유자</th><th>그룹</th><th>유형</th><th>초기금액</th><th>현재금액</th><th>관리</th></tr></thead>
+                                            <thead><tr><th>자산명</th><th>우선순위</th><th>소유자</th><th>그룹</th><th>유형</th><th>초기금액</th><th>현재금액</th><th>관리</th></tr></thead>
                                             <tbody>
-                                                {data.assets.map(a => {
+                                                {data.assets.slice().sort((a, b) => Number(a.priority || 9999) - Number(b.priority || 9999)).map(a => {
                                                     const bal = data.transactions.reduce((s, t) => {
                                                         const amt = Number(t.amount || 0);
                                                         if (t.type === 'Income' && t.assetId === a.id) return s + amt;
@@ -1526,6 +1536,7 @@ service cloud.firestore {
                                                     return (
                                                         <tr key={a.id}>
                                                             <td style={{ fontWeight: 500 }}>{a.name}</td>
+                                                            <td>{a.priority !== undefined && a.priority !== 9999 ? a.priority : '-'}</td>
                                                             <td>{data.owners.find(o => o.id === a.ownerId)?.name}</td>
                                                             <td>{data.groups?.find(g => g.id === a.groupId)?.name || '-'}</td>
                                                             <td>{a.type === 'Cash' ? '현금' : a.type === 'Bank' ? '은행' : '카드'}</td>
@@ -1537,7 +1548,7 @@ service cloud.firestore {
                                                         </tr>
                                                     );
                                                 })}
-                                                {data.assets.length === 0 && <tr><td colSpan="7" style={{ textAlign: 'center', padding: '2rem' }}>등록된 자산이 없습니다.</td></tr>}
+                                                {data.assets.length === 0 && <tr><td colSpan="8" style={{ textAlign: 'center', padding: '2rem' }}>등록된 자산이 없습니다.</td></tr>}
                                             </tbody>
                                         </table>
                                     </div>
