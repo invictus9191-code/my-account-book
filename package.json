@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "sync": "powershell -ExecutionPolicy Bypass -File ./scripts/git-sync.ps1",
+    "watch": "powershell -ExecutionPolicy Bypass -File ./scripts/git-sync.ps1 -Watch"
+  },
   "dependencies": {
     "@babel/core": "^8.0.0",
     "@babel/preset-react": "^8.0.0"
