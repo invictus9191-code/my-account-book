@@ -699,11 +699,12 @@
                 }
             };
 
+            const isGlobalSearch = searchTerm.trim().length > 0;
             const filteredTransactions = data.transactions.filter(t => {
-                if (t.date.substring(0, 7) !== selectedMonth) return false;
+                if (!isGlobalSearch && t.date.substring(0, 7) !== selectedMonth) return false;
                 if (authorFilter !== 'ALL' && t.authorEmail !== authorFilter) return false;
-                if (!searchTerm) return true;
-                const term = searchTerm.toLowerCase();
+                if (!isGlobalSearch) return true;
+                const term = searchTerm.trim().toLowerCase();
                 const memoMatch = t.memo?.toLowerCase().includes(term);
                 const categoryMatch = data.categories.find(c => c.id === t.categoryId)?.name?.toLowerCase().includes(term);
                 const assetMatch = data.assets.find(a => a.id === t.assetId)?.name?.toLowerCase().includes(term);
@@ -745,7 +746,7 @@
 
                     <div className="page-header">
                         <div>
-                            <p className="page-eyebrow">월별 기록</p>
+                            <p className="page-eyebrow">{isGlobalSearch ? '전체 기간 검색 결과' : '월별 기록'}</p>
                             <h1 className="page-title">거래 내역</h1>
                         </div>
                         <button
@@ -819,11 +820,11 @@
                         </button>
                     </div>
 
-                    <div className="month-switcher" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', margin: '0', fontSize: '1.2rem', fontWeight: 'bold' }}>
+                    {!isGlobalSearch && <div className="month-switcher" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', margin: '0', fontSize: '1.2rem', fontWeight: 'bold' }}>
                         <button onClick={() => changeMonth(-1)} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Icon name="chevron-left" size={24} /></button>
                         <span>{selectedMonth.split('-')[0]}년 {selectedMonth.split('-')[1]}월</span>
                         <button onClick={() => changeMonth(1)} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Icon name="chevron-right" size={24} /></button>
-                    </div>
+                    </div>}
 
                     {(searchTerm || authorFilter !== 'ALL') && (
                         <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '10px', marginBottom: '5px', flexWrap: 'wrap' }}>
@@ -873,7 +874,7 @@
                                             <tr className="transaction-day-row" style={{ background: 'rgba(208, 215, 222, 0.1)', borderBottom: 'none' }}>
                                                 <td colSpan="6" style={{ padding: '8px 12px' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        {false && <span style={{ fontSize: '0.9rem', color: '#8b949e', fontWeight: 'bold' }}>{year}년 {month}월</span>}
+                                                        {isGlobalSearch && <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: '600' }}>{year}년 {month}월</span>}
                                                         <span style={{ fontSize: 'calc(1.1rem + 3pt)', fontWeight: '900' }}>{day}</span>
                                                         <span className="day-chip" style={{ background: '#21262d', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600' }}>{name}</span>
                                                         <div style={{ marginLeft: 'auto', display: 'flex', gap: '12px', fontSize: '0.85rem', fontWeight: '600' }}>
