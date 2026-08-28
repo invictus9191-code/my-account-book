@@ -475,7 +475,13 @@
             }
 
             return (
-                <div className="fade-in">
+                <div className="fade-in page-shell dashboard-page">
+                    <div className="page-header dashboard-header">
+                        <div>
+                            <p className="page-eyebrow">월간 자금 흐름</p>
+                            <h1 className="page-title">대시보드</h1>
+                        </div>
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', margin: '0 0 1.5rem 0', fontSize: '1.2rem', fontWeight: 'bold' }}>
                         <button
                             onClick={() => {
@@ -735,7 +741,21 @@
             };
 
             return (
-                <div className="fade-in">
+                <div className="fade-in page-shell transaction-page">
+
+                    <div className="page-header">
+                        <div>
+                            <p className="page-eyebrow">월별 기록</p>
+                            <h1 className="page-title">거래 내역</h1>
+                        </div>
+                        <button
+                            className={`primary header-add-btn ${!isConnected ? 'btn-disabled' : ''}`}
+                            onClick={() => {
+                                if (!isConnected) { alert('Firebase 연동이 필요합니다.'); return; }
+                                setEdit(null); setShowModal(true);
+                            }}
+                        ><Icon name="plus" size={18} /> 거래 추가</button>
+                    </div>
 
 
                     {/* 모바일 하단 고정 버튼 레이어 */}
@@ -799,7 +819,7 @@
                         </button>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', margin: '0', fontSize: '1.2rem', fontWeight: 'bold' }}>
+                    <div className="month-switcher" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', margin: '0', fontSize: '1.2rem', fontWeight: 'bold' }}>
                         <button onClick={() => changeMonth(-1)} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Icon name="chevron-left" size={24} /></button>
                         <span>{selectedMonth.split('-')[0]}년 {selectedMonth.split('-')[1]}월</span>
                         <button onClick={() => changeMonth(1)} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Icon name="chevron-right" size={24} /></button>
@@ -828,15 +848,15 @@
                         </div>
                     )}
 
-                    <div style={{ padding: '5px 10px 10px 10px' }}>
+                    <div className="month-summary" style={{ padding: '5px 10px 10px 10px' }}>
                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'space-between' }}>
-                            <div style={{ background: 'var(--income-color)', color: 'white', padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <div className="summary-stat income" style={{ background: 'var(--income-color)', color: 'white', padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                 <span>수입</span><span>{monthStats.income.toLocaleString()}</span>
                             </div>
-                            <div style={{ background: 'var(--expense-color)', color: 'white', padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <div className="summary-stat expense" style={{ background: 'var(--expense-color)', color: 'white', padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                 <span>지출</span><span>{monthStats.expense.toLocaleString()}</span>
                             </div>
-                            <div style={{ background: 'var(--transfer-color)', color: 'white', padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <div className="summary-stat savings" style={{ background: 'var(--transfer-color)', color: 'white', padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                 <span>저축</span><span>{monthStats.savings.toLocaleString()}</span>
                             </div>
                         </div>
@@ -850,12 +870,12 @@
                                     const { year, month, day, name } = getDayLabel(dayStr);
                                     return (
                                         <React.Fragment key={dayStr}>
-                                            <tr style={{ background: 'rgba(208, 215, 222, 0.1)', borderBottom: 'none' }}>
+                                            <tr className="transaction-day-row" style={{ background: 'rgba(208, 215, 222, 0.1)', borderBottom: 'none' }}>
                                                 <td colSpan="6" style={{ padding: '8px 12px' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                         {false && <span style={{ fontSize: '0.9rem', color: '#8b949e', fontWeight: 'bold' }}>{year}년 {month}월</span>}
                                                         <span style={{ fontSize: 'calc(1.1rem + 3pt)', fontWeight: '900' }}>{day}</span>
-                                                        <span style={{ background: '#21262d', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600' }}>{name}</span>
+                                                        <span className="day-chip" style={{ background: '#21262d', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600' }}>{name}</span>
                                                         <div style={{ marginLeft: 'auto', display: 'flex', gap: '12px', fontSize: '0.85rem', fontWeight: '600' }}>
                                                             {income > 0 && <span style={{ color: 'var(--income-color)' }}>+{income.toLocaleString()}</span>}
                                                             {expense > 0 && <span style={{ color: 'var(--expense-color)' }}>-{expense.toLocaleString()}</span>}
@@ -1718,7 +1738,7 @@ service cloud.firestore {
                     <div className={`sidebar ${sidebarOpen ? 'mobile-open' : ''}`}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Icon name="activity" size={24} /><h2>Smart Finance</h2></div>
-                            <button className="mobile-only" onClick={() => setSidebarOpen(false)} style={{ background: 'transparent', color: 'white', display: window.innerWidth <= 768 ? 'block' : 'none' }}><Icon name="x" size={24} /></button>
+                            <button className="mobile-only" onClick={() => setSidebarOpen(false)} style={{ background: 'transparent', color: 'var(--text-primary)', display: window.innerWidth <= 768 ? 'block' : 'none' }}><Icon name="x" size={24} /></button>
                         </div>
                         <div style={{ marginBottom: '1rem', padding: '0 0.5rem' }}>
                             <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
