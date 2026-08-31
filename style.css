@@ -1057,6 +1057,11 @@ textarea:focus {
     margin-bottom: 1rem !important;
   }
 
+  /* The hidden transaction header should not leave a large gap above the month selector. */
+  .transaction-page .page-header {
+    margin-bottom: 0.25rem !important;
+  }
+
   .page-eyebrow,
   .page-title,
   .transaction-page .header-add-btn {
