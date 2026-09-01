@@ -41,6 +41,23 @@
 
         // 당겨서 새로고침
         (function() {
+            var touchStartY = 0;
+
+            document.addEventListener('touchstart', function(e) {
+                touchStartY = e.touches[0].clientY;
+            }, { passive: true });
+
+            document.addEventListener('touchmove', function(e) {
+                var content = document.querySelector('.main-content');
+                var isPullingDown = e.touches[0].clientY > touchStartY;
+
+                if (content && content.scrollTop <= 0 && isPullingDown) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
+        })();
+
+        (function() {
             var startY = 0;
             var pulling = false;
             var threshold = 100;
@@ -1755,7 +1772,7 @@ service cloud.firestore {
                         <div className={`nav-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => menuClick('settings')}><Icon name="settings" /> 설정</div>
                         <div className="user-profile">{user ? <button onClick={() => firebase.auth().signOut()} className="auth-btn" style={{ background: 'transparent', color: '#8b949e' }}><Icon name="log-out" size={16} /> 로그아웃</button> : <button className="auth-btn login" onClick={() => { if (!fbConfig) setTab('settings'); else firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); }}><Icon name="log-in" size={16} /> 로그인</button>}</div>
                     </div>
-                    <div className="main-content"><div className="container">
+                    <div className={`main-content ${tab === 'dashboard' ? 'dashboard-content' : ''}`}><div className="container">
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionMonth={setTransactionMonth} />}
                         {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} />}

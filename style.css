@@ -1064,7 +1064,11 @@ textarea:focus {
   }
 
   .dashboard-page .page-header {
-    margin-bottom: 0.5rem !important;
+    margin-bottom: 0.25rem !important;
+  }
+
+  .main-content.dashboard-content {
+    padding-top: 0.5rem;
   }
 
   .dashboard-month-switcher {
