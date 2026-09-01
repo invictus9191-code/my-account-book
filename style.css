@@ -142,6 +142,7 @@ html, body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior-y: none;
   padding: 0.2rem 2rem 4rem 2rem; /* Greatly reduced top padding */
   transition: all 0.3s ease;
 }
@@ -1060,6 +1061,14 @@ textarea:focus {
   /* The hidden transaction header should not leave a large gap above the month selector. */
   .transaction-page .page-header {
     margin-bottom: 0.25rem !important;
+  }
+
+  .dashboard-page .page-header {
+    margin-bottom: 0.5rem !important;
+  }
+
+  .dashboard-month-switcher {
+    margin: 0 0 0.75rem !important;
   }
 
   .page-eyebrow,
