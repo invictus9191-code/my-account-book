@@ -168,27 +168,124 @@
         };
 
         const formatLocalDate = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        const parseLocalDate = dateString => {
+            const [year, month, day] = dateString.split('-').map(Number);
+            return new Date(year, month - 1, day);
+        };
+        const addLocalDays = (date, days) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+        const koreanHolidayCache = new Map();
 
-        const getRecurringDateForMonth = (recurring, month) => {
-            const [year, monthNumber] = month.split('-').map(Number);
-            const lastDay = new Date(year, monthNumber, 0).getDate();
-            const day = Math.min(Math.max(Number(recurring.day || 1), 1), lastDay);
-            return `${month}-${String(day).padStart(2, '0')}`;
+        const getKoreanHolidays = year => {
+            if (koreanHolidayCache.has(year)) return koreanHolidayCache.get(year);
+            const holidays = new Set();
+            const substituteGroups = [];
+            const addFixed = (month, day, substitute = false) => {
+                const value = formatLocalDate(new Date(year, month - 1, day));
+                holidays.add(value);
+                if (substitute) substituteGroups.push([value]);
+            };
+
+            addFixed(1, 1);
+            addFixed(3, 1, true);
+            addFixed(5, 1); // 근로자의 날(금융 영업일 기준)
+            addFixed(5, 5, true);
+            addFixed(6, 6);
+            addFixed(8, 15, true);
+            addFixed(10, 3, true);
+            addFixed(10, 9, true);
+            addFixed(12, 25, year >= 2023);
+
+            try {
+                const lunarFormatter = new Intl.DateTimeFormat('en-u-ca-chinese', { month: 'numeric', day: 'numeric' });
+                const lunarGroups = { seollal: [], buddha: [], chuseok: [] };
+                for (let date = new Date(year, 0, 1); date.getFullYear() === year; date = addLocalDays(date, 1)) {
+                    const parts = lunarFormatter.formatToParts(date);
+                    const month = Number(parts.find(part => part.type === 'month')?.value);
+                    const day = Number(parts.find(part => part.type === 'day')?.value);
+                    const value = formatLocalDate(date);
+                    if ((month === 12 && day >= 29) || (month === 1 && day <= 2)) lunarGroups.seollal.push(value);
+                    if (month === 4 && day === 8) lunarGroups.buddha.push(value);
+                    if (month === 8 && day >= 14 && day <= 16) lunarGroups.chuseok.push(value);
+                }
+                Object.values(lunarGroups).forEach(group => group.forEach(value => holidays.add(value)));
+                if (lunarGroups.seollal.length) substituteGroups.push(lunarGroups.seollal);
+                if (lunarGroups.chuseok.length) substituteGroups.push(lunarGroups.chuseok);
+                if (year >= 2023 && lunarGroups.buddha.length) substituteGroups.push(lunarGroups.buddha);
+            } catch (error) {
+                console.warn('음력 공휴일 계산을 지원하지 않는 브라우저입니다.', error);
+            }
+
+            substituteGroups.forEach(group => {
+                const needsSubstitute = group.some(value => {
+                    const day = parseLocalDate(value).getDay();
+                    return day === 0 || day === 6;
+                });
+                if (!needsSubstitute) return;
+                let substitute = addLocalDays(parseLocalDate(group[group.length - 1]), 1);
+                while (substitute.getDay() === 0 || substitute.getDay() === 6 || holidays.has(formatLocalDate(substitute))) substitute = addLocalDays(substitute, 1);
+                holidays.add(formatLocalDate(substitute));
+            });
+
+            koreanHolidayCache.set(year, holidays);
+            return holidays;
+        };
+
+        const isBusinessDay = date => date.getDay() !== 0 && date.getDay() !== 6 && !getKoreanHolidays(date.getFullYear()).has(formatLocalDate(date));
+        const adjustToBusinessDay = (dateString, direction) => {
+            if (!direction) return dateString;
+            let date = parseLocalDate(dateString);
+            const step = direction === 'before' ? -1 : 1;
+            while (!isBusinessDay(date)) date = addLocalDays(date, step);
+            return formatLocalDate(date);
+        };
+
+        const getRecurringOccurrences = (recurring, untilDate, maxOccurrences = 5000) => {
+            if (!recurring.startDate) return [];
+            const frequency = recurring.frequency || 'monthly';
+            const start = parseLocalDate(recurring.startDate);
+            const until = parseLocalDate(untilDate);
+            const rawLimit = addLocalDays(until, 14);
+            const occurrences = [];
+            const addOccurrence = rawDate => {
+                const rawDateString = formatLocalDate(rawDate);
+                if (rawDateString < recurring.startDate || rawDate > rawLimit) return;
+                const scheduledDate = adjustToBusinessDay(rawDateString, recurring.businessDayDirection || '');
+                if (recurring.endDate && scheduledDate > recurring.endDate) return;
+                const occurrenceKey = frequency === 'monthly' ? rawDateString.substring(0, 7) : rawDateString;
+                occurrences.push({ rawDate: rawDateString, scheduledDate, occurrenceKey });
+            };
+
+            if (frequency === 'weekly') {
+                const weekday = Number.isInteger(Number(recurring.weekday)) ? Number(recurring.weekday) : start.getDay();
+                let cursor = addLocalDays(start, (weekday - start.getDay() + 7) % 7);
+                while (cursor <= rawLimit && occurrences.length < maxOccurrences) {
+                    addOccurrence(cursor);
+                    cursor = addLocalDays(cursor, 7);
+                }
+            } else if (frequency === 'yearly') {
+                const month = Math.min(Math.max(Number(recurring.month || start.getMonth() + 1), 1), 12);
+                for (let year = start.getFullYear(); year <= rawLimit.getFullYear() && occurrences.length < maxOccurrences; year += 1) {
+                    const lastDay = new Date(year, month, 0).getDate();
+                    addOccurrence(new Date(year, month - 1, Math.min(Math.max(Number(recurring.day || start.getDate()), 1), lastDay)));
+                }
+            } else {
+                let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+                while (cursor <= rawLimit && occurrences.length < maxOccurrences) {
+                    const lastDay = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+                    const day = Math.min(Math.max(Number(recurring.day || start.getDate()), 1), lastDay);
+                    addOccurrence(new Date(cursor.getFullYear(), cursor.getMonth(), day));
+                    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+                }
+            }
+            return occurrences;
         };
 
         const getNextRecurringDate = recurring => {
-            if (!recurring.active) return null;
-            const today = new Date();
-            const todayString = formatLocalDate(today);
-            for (let offset = 0; offset < 24; offset += 1) {
-                const date = new Date(today.getFullYear(), today.getMonth() + offset, 1);
-                const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                const scheduledDate = getRecurringDateForMonth(recurring, month);
-                if (scheduledDate < recurring.startDate || scheduledDate < todayString) continue;
-                if (recurring.endDate && scheduledDate > recurring.endDate) return null;
-                return scheduledDate;
-            }
-            return null;
+            if (recurring.active === false) return null;
+            const todayString = formatLocalDate(new Date());
+            const limit = new Date();
+            limit.setFullYear(limit.getFullYear() + 5);
+            return getRecurringOccurrences(recurring, formatLocalDate(limit)).find(occurrence => occurrence.scheduledDate >= todayString)?.scheduledDate || null;
         };
 
         // ApexCharts를 useRef + useEffect로 직접 렌더링하는 컴포넌트
@@ -1049,7 +1146,13 @@
         function RecurringModal({ data, setData, syncToCloud, editItem, user, onClose }) {
             const today = formatLocalDate(new Date());
             const [viewportStyle, setViewportStyle] = useState({});
-            const [form, setForm] = useState(() => editItem ? { ...editItem } : {
+            const [form, setForm] = useState(() => editItem ? {
+                ...editItem,
+                frequency: editItem.frequency || 'monthly',
+                businessDayDirection: editItem.businessDayDirection || '',
+                month: editItem.month || Number(editItem.startDate?.substring(5, 7)) || new Date().getMonth() + 1,
+                weekday: editItem.weekday ?? parseLocalDate(editItem.startDate || today).getDay()
+            } : {
                 type: 'Expense',
                 name: '',
                 amount: '',
@@ -1059,6 +1162,10 @@
                 startDate: today,
                 endDate: '',
                 day: new Date().getDate(),
+                month: new Date().getMonth() + 1,
+                weekday: new Date().getDay(),
+                frequency: 'monthly',
+                businessDayDirection: '',
                 active: true,
                 authorEmail: user?.email || ''
             });
@@ -1092,6 +1199,10 @@
                     id: editItem?.id || Date.now().toString(),
                     amount: Number(form.amount),
                     day: Math.min(Math.max(Number(form.day || 1), 1), 31),
+                    month: Math.min(Math.max(Number(form.month || 1), 1), 12),
+                    weekday: Math.min(Math.max(Number(form.weekday ?? 0), 0), 6),
+                    frequency: form.frequency || 'monthly',
+                    businessDayDirection: form.businessDayDirection || '',
                     authorEmail: form.authorEmail || user?.email || ''
                 };
                 const items = data.recurringTransactions || [];
@@ -1129,8 +1240,13 @@
                             <label><span>{form.type === 'Transfer' ? '출금 자산' : '자산'}</span><select value={form.assetId} onChange={event => setForm({ ...form, assetId: event.target.value })}>{data.assets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
                             {form.type === 'Transfer' && <label><span>입금 자산</span><select value={form.toAssetId} onChange={event => setForm({ ...form, toAssetId: event.target.value })}>{data.assets.filter(asset => asset.id !== form.assetId).map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>}
                             <label><span>카테고리</span><select value={form.categoryId} onChange={event => setForm({ ...form, categoryId: event.target.value })}>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-                            <label><span>시작 날짜</span><input type="date" value={form.startDate} onChange={event => { const value = event.target.value; setForm({ ...form, startDate: value, day: Number(value.substring(8)) || form.day }); }} onFocus={focusIntoView} /></label>
-                            <label><span>매월 실행일</span><input type="number" min="1" max="31" value={form.day} onChange={event => setForm({ ...form, day: event.target.value })} onFocus={focusIntoView} /></label>
+                            <label><span>반복 주기</span><select value={form.frequency} onChange={event => setForm({ ...form, frequency: event.target.value })}><option value="monthly">매월</option><option value="weekly">매주</option><option value="yearly">매년</option></select></label>
+                            <label><span>시작 날짜</span><input type="date" value={form.startDate} onChange={event => { const value = event.target.value; if (!value) { setForm({ ...form, startDate: '' }); return; } const date = parseLocalDate(value); setForm({ ...form, startDate: value, day: date.getDate(), month: date.getMonth() + 1, weekday: date.getDay() }); }} onFocus={focusIntoView} /></label>
+                            {form.frequency === 'weekly' && <label><span>실행 요일</span><select value={form.weekday} onChange={event => setForm({ ...form, weekday: Number(event.target.value) })}>{['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'].map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label>}
+                            {form.frequency === 'yearly' && <label><span>실행 월</span><select value={form.month} onChange={event => setForm({ ...form, month: Number(event.target.value) })}>{Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}월</option>)}</select></label>}
+                            {form.frequency !== 'weekly' && <label><span>{form.frequency === 'yearly' ? '실행일' : '매월 실행일'}</span><input type="number" min="1" max="31" value={form.day} onChange={event => setForm({ ...form, day: event.target.value })} onFocus={focusIntoView} /></label>}
+                            <label><span>영업일 기준</span><select value={form.businessDayDirection} onChange={event => setForm({ ...form, businessDayDirection: event.target.value })}><option value="">미설정</option><option value="before">앞 (이전 영업일)</option><option value="after">뒤 (다음 영업일)</option></select></label>
+                            <p className="recurring-business-help">주말 또는 한국 공휴일이면 선택한 방향의 가장 가까운 영업일에 거래가 생성됩니다.</p>
                             <label><span>종료 날짜</span><input type="date" value={form.endDate || ''} min={form.startDate} onChange={event => setForm({ ...form, endDate: event.target.value })} onFocus={focusIntoView} /></label>
                             {editItem && <button type="button" className="budget-delete-button" onClick={handleDelete}>반복 삭제</button>}
                         </form>
@@ -1156,6 +1272,13 @@
 
             const getCategoryName = item => data.categories.find(category => category.id === item.categoryId)?.name || '기타';
             const getAssetName = item => data.assets.find(asset => asset.id === item.assetId)?.name || '미지정';
+            const getScheduleLabel = item => {
+                const frequency = item.frequency || 'monthly';
+                if (frequency === 'weekly') return `매주 ${['일', '월', '화', '수', '목', '금', '토'][Number(item.weekday ?? parseLocalDate(item.startDate).getDay())]}요일`;
+                if (frequency === 'yearly') return `매년 ${Number(item.month || item.startDate?.substring(5, 7))}월 ${item.day}일`;
+                return `매월 ${item.day}일`;
+            };
+            const getBusinessDayLabel = item => item.businessDayDirection === 'before' ? ' · 영업일 앞' : item.businessDayDirection === 'after' ? ' · 영업일 뒤' : '';
             const getDday = dateString => {
                 if (!dateString) return '종료';
                 const today = new Date(`${formatLocalDate(new Date())}T00:00:00`);
@@ -1188,11 +1311,11 @@
                                     <div className="recurring-card-top"><span className="recurring-icon"><Icon name="repeat-2" size={22} /></span><strong>{getDday(nextDate)}</strong></div>
                                     <div className="recurring-card-title"><strong>{item.name}</strong><b>{Number(item.amount).toLocaleString()}원</b></div>
                                     <div className="recurring-card-meta"><span><Icon name="wallet" size={15} />{getAssetName(item)}</span><span><Icon name="tag" size={15} />{getCategoryName(item)}</span></div>
-                                    <div className="recurring-card-date"><span><Icon name="calendar-days" size={15} />매월 {item.day}일</span><strong>{nextDate ? `${Number(nextDate.substring(0, 4))}년 ${Number(nextDate.substring(5, 7))}월 ${Number(nextDate.substring(8))}일` : '종료됨'}</strong></div>
+                                    <div className="recurring-card-date"><span><Icon name="calendar-days" size={15} />{getScheduleLabel(item)}{getBusinessDayLabel(item)}</span><strong>{nextDate ? `${Number(nextDate.substring(0, 4))}년 ${Number(nextDate.substring(5, 7))}월 ${Number(nextDate.substring(8))}일` : '종료됨'}</strong></div>
                                 </button>
                             );
                         })}
-                        {visibleItems.length === 0 && <div className="recurring-empty"><Icon name="repeat-2" size={32} /><strong>등록된 반복이 없습니다</strong><p>추가 버튼을 눌러 매월 자동 생성할 거래를 등록해 보세요.</p></div>}
+                        {visibleItems.length === 0 && <div className="recurring-empty"><Icon name="repeat-2" size={32} /><strong>등록된 반복이 없습니다</strong><p>추가 버튼을 눌러 정기적으로 자동 생성할 거래를 등록해 보세요.</p></div>}
                     </div>
 
                     {showModal && <RecurringModal data={data} setData={setData} syncToCloud={syncToCloud} editItem={editingItem} user={user} onClose={() => { setShowModal(false); setEditingItem(null); }} />}
@@ -2221,28 +2344,22 @@ service cloud.firestore {
                 const recurringItems = (data.recurringTransactions || []).filter(item => item.active !== false);
                 if (recurringItems.length === 0) return;
                 const today = recurringCheckDate;
-                const currentMonth = today.substring(0, 7);
                 const existingIds = new Set(data.transactions.map(transaction => transaction.id));
                 const generated = [];
 
                 recurringItems.forEach(item => {
                     if (!item.startDate) return;
-                    const [startYear, startMonth] = item.startDate.substring(0, 7).split('-').map(Number);
-                    let cursor = new Date(startYear, startMonth - 1, 1);
-                    let safety = 0;
-                    while (safety < 240) {
-                        const month = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
-                        if (month > currentMonth) break;
-                        const scheduledDate = getRecurringDateForMonth(item, month);
-                        const transactionId = `recurring-${item.id}-${month}`;
-                        if (scheduledDate >= item.startDate && scheduledDate <= today && (!item.endDate || scheduledDate <= item.endDate) && !existingIds.has(transactionId)) {
+                    getRecurringOccurrences(item, today).forEach(occurrence => {
+                        const transactionId = `recurring-${item.id}-${occurrence.occurrenceKey}`;
+                        if (occurrence.scheduledDate <= today && !existingIds.has(transactionId)) {
                             generated.push({
                                 id: transactionId,
                                 recurringId: item.id,
-                                recurringMonth: month,
+                                recurringMonth: occurrence.rawDate.substring(0, 7),
+                                recurringOccurrence: occurrence.rawDate,
                                 type: item.type,
                                 amount: Number(item.amount || 0),
-                                date: scheduledDate,
+                                date: occurrence.scheduledDate,
                                 assetId: item.assetId,
                                 toAssetId: item.type === 'Transfer' ? item.toAssetId : undefined,
                                 categoryId: item.categoryId,
@@ -2251,9 +2368,7 @@ service cloud.firestore {
                             });
                             existingIds.add(transactionId);
                         }
-                        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-                        safety += 1;
-                    }
+                    });
                 });
 
                 if (generated.length > 0) {

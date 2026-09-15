@@ -3299,6 +3299,13 @@ textarea:focus {
   scroll-margin-block: 28px;
 }
 
+.recurring-business-help {
+  margin: -2px 8px 12px;
+  color: #858c96;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
 @media (max-width: 768px) {
   .recurring-page {
     width: calc(100% + 2rem);
