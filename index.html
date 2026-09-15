@@ -786,6 +786,7 @@
                     </div>
 
                     <div className="home-quick-entry">
+                        <button className="home-refresh-button" onClick={() => window.location.reload()} aria-label="새로고침"><Icon name="refresh-cw" size={22} /></button>
                         <button className={`home-add-button ${!isConnected ? 'btn-disabled' : ''}`} onClick={openAddTransaction} aria-label="거래 추가"><Icon name="plus" size={27} /></button>
                     </div>
                 </div>
@@ -1907,6 +1908,16 @@ service cloud.firestore {
                 if (tab !== 'transactions') setTransactionBackTab(tab);
             }, [tab]);
 
+            useEffect(() => {
+                const isHome = tab === 'home';
+                document.documentElement.classList.toggle('home-active', isHome);
+                document.body.classList.toggle('home-active', isHome);
+                return () => {
+                    document.documentElement.classList.remove('home-active');
+                    document.body.classList.remove('home-active');
+                };
+            }, [tab]);
+
             const menuClick = (t) => {
                 if (t === 'settings') {
                     const pw = prompt('설정 페이지에 진입하려면 비밀번호를 입력하세요.');
@@ -1958,7 +1969,7 @@ service cloud.firestore {
                         <div className={`nav-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => menuClick('settings')}><Icon name="settings" /> 설정</div>
                         <div className="user-profile">{user ? <button onClick={() => firebase.auth().signOut()} className="auth-btn" style={{ background: 'transparent', color: '#8b949e' }}><Icon name="log-out" size={16} /> 로그아웃</button> : <button className="auth-btn login" onClick={() => { if (!fbConfig) setTab('settings'); else firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); }}><Icon name="log-in" size={16} /> 로그인</button>}</div>
                     </div>
-                    <div className={`main-content ${tab === 'dashboard' ? 'dashboard-content' : ''}`}><div className="container">
+                    <div className={`main-content ${tab === 'home' ? 'home-content' : ''} ${tab === 'dashboard' ? 'dashboard-content' : ''}`}><div className="container">
                         {tab === 'home' && <HomePage data={data} setTab={setTab} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} onNavigate={menuClick} />}
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionMonth={setTransactionMonth} />}
                         {tab === 'plan' && <PlanPage data={data} setTab={setTab} />}

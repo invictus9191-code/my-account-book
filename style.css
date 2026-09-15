@@ -39,6 +39,12 @@ html, body {
   overscroll-behavior-y: none;
 }
 
+html.home-active,
+body.home-active,
+body.home-active #root {
+  background: #f2f2f7;
+}
+
 #root {
   display: flex;
   height: 100vh;
@@ -456,28 +462,29 @@ table {
 
 .home-quick-entry {
   position: fixed;
+  left: calc(var(--sidebar-width) + 28px);
   right: max(28px, calc((100vw - var(--sidebar-width) - 620px) / 2));
-  bottom: 25px;
+  bottom: 28px;
   z-index: 1000;
-  width: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
+.home-refresh-button,
 .home-add-button {
-  min-height: 58px;
-  background: rgba(255, 255, 255, 0.94);
-  color: #4c535b;
-  border: 1px solid rgba(255, 255, 255, 0.88);
-  box-shadow: 0 13px 34px rgba(38, 44, 58, 0.13);
-  backdrop-filter: blur(16px);
-}
-
-.home-add-button {
-  width: 58px;
+  width: 52px;
+  height: 52px;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  color: #4c535b;
+  border: 1px solid rgba(208, 215, 222, 0.72);
+  box-shadow: 0 9px 24px rgba(31, 42, 55, 0.18);
+  backdrop-filter: blur(12px);
 }
 
 /* Transaction timeline */
@@ -1282,7 +1289,7 @@ select {
     width: calc(100% + 2rem);
     min-height: 100vh;
     margin: 0 -1rem;
-    padding: 30px 16px 116px;
+    padding: 14px 16px 116px;
     background: #f2f2f7;
   }
 
@@ -1317,17 +1324,15 @@ select {
   }
 
   .home-quick-entry {
-    right: 16px;
-    bottom: 18px;
-    width: 54px;
+    left: 18px;
+    right: 18px;
+    bottom: 24px;
   }
 
+  .home-refresh-button,
   .home-add-button {
-    min-height: 54px;
-  }
-
-  .home-add-button {
-    width: 54px;
+    width: 50px;
+    height: 50px;
   }
 
   .transaction-page {
