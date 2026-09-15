@@ -1328,6 +1328,7 @@ select {
   }
 
   .transaction-toolbar {
+    position: relative;
     padding: 12px 14px;
   }
 
@@ -1340,7 +1341,11 @@ select {
   }
 
   .transaction-month-control {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
     font-size: 0.82rem;
+    white-space: nowrap;
   }
 
   .month-picker-overlay {

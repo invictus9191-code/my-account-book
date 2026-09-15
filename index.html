@@ -709,13 +709,12 @@
             const homeMenuItems = [
                 { label: '계획', icon: 'target', color: '#ff4051', tab: 'dashboard' },
                 { label: '반복', icon: 'repeat', color: '#6b7ff2', tab: 'transactions' },
-                { label: '분석', icon: 'bar-chart-3', color: '#5c6066', tab: 'dashboard' },
                 { label: '설정', icon: 'settings', color: '#6f7782', tab: 'settings' }
             ];
 
             return (
                 <div className="home-page fade-in">
-                    <button className="home-expense-card" onClick={() => setTab('transactions')}>
+                    <button className="home-expense-card" onClick={() => setTab('dashboard')}>
                         <span><small>이번 달</small><strong>지출</strong></span>
                         <b>{monthExpense.toLocaleString()}원</b>
                     </button>
@@ -766,7 +765,7 @@
             );
         }
 
-        function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm, isConnected, authorFilter, setAuthorFilter, transactionMonth, setTransactionMonth, setTab, showMobileSearch, setShowMobileSearch }) {
+        function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm, isConnected, authorFilter, setAuthorFilter, transactionMonth, setTransactionMonth, setTab, backTab, showMobileSearch, setShowMobileSearch }) {
             const [selectedMonth, setSelectedMonth] = useState(() => {
                 if (transactionMonth) return transactionMonth;
                 const now = new Date();
@@ -883,7 +882,7 @@
                 <div className="transaction-page fade-in">
                     <section className="transaction-calendar-card">
                         <div className="transaction-toolbar">
-                            <button className="transaction-round-button" onClick={() => setTab('home')} aria-label="홈으로 돌아가기"><Icon name="chevron-left" size={20} /></button>
+                            <button className="transaction-round-button" onClick={() => setTab(backTab)} aria-label="이전 페이지로 돌아가기"><Icon name="chevron-left" size={20} /></button>
                             <button className="transaction-month-control" onClick={() => setShowMonthPicker(true)} disabled={isGlobalSearch} aria-haspopup="dialog" aria-expanded={showMonthPicker}>
                                 <strong>{isGlobalSearch ? '전체 기간' : `${selectedMonth.split('-')[0]}년 ${Number(selectedMonth.split('-')[1])}월`}</strong>
                             </button>
@@ -1739,6 +1738,7 @@ service cloud.firestore {
             const [user, setUser] = useState(null);
             const [fbConfig, setFbConfig] = useState(() => JSON.parse(localStorage.getItem(FIREBASE_CONFIG_KEY) || 'null'));
             const [tab, setTab] = useState('home');
+            const [transactionBackTab, setTransactionBackTab] = useState('home');
             const [showModal, setShowModal] = useState(false);
             const [edit, setEdit] = useState(null);
             
@@ -1820,6 +1820,10 @@ service cloud.firestore {
                 if (window.lucide) window.lucide.createIcons();
             }, [data]);
 
+            useEffect(() => {
+                if (tab !== 'transactions') setTransactionBackTab(tab);
+            }, [tab]);
+
             const menuClick = (t) => {
                 if (t === 'settings') {
                     const pw = prompt('설정 페이지에 진입하려면 비밀번호를 입력하세요.');
@@ -1873,7 +1877,7 @@ service cloud.firestore {
                     <div className={`main-content ${tab === 'dashboard' ? 'dashboard-content' : ''}`}><div className="container">
                         {tab === 'home' && <HomePage data={data} setTab={setTab} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} onNavigate={menuClick} />}
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionMonth={setTransactionMonth} />}
-                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} setTab={setTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}
+                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} setTab={setTab} backTab={transactionBackTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} />}
                     </div></div>
