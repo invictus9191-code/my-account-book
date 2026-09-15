@@ -130,7 +130,8 @@
                 { id: 'in3', type: 'Income', name: '기타수입' }, { id: 'in4', type: 'Income', name: '보너스' },
                 { id: 'tr1', type: 'Transfer', name: '저축' }, { id: 'tr2', type: 'Transfer', name: '이체' }
             ],
-            transactions: []
+            transactions: [],
+            budgets: []
         };
 
         const Icon = ({ name, size = 18, className = "", style = {} }) => {
@@ -227,7 +228,7 @@
             return React.createElement('div', { ref: ref, id: chartId });
         }
 
-        function Dashboard({ data, setEdit, setShowModal, setEditAsset, setShowAssetModal, setTab, setSearchTerm, setTransactionMonth }) {
+        function Dashboard({ data, setEdit, setShowModal, setEditAsset, setShowAssetModal, setTab, setSearchTerm, setTransactionMonth, authorFilter, setAuthorFilter }) {
             const [categoryType, setCategoryType] = useState('Expense');
             const [selectedCategory, setSelectedCategory] = useState(() => {
                 const cats = data.categories ? data.categories.filter(c => c.type === 'Expense') : [];
@@ -261,6 +262,16 @@
                 months.add(selectedMonth);
                 return Array.from(months).sort((a, b) => b.localeCompare(a));
             }, [data.transactions, selectedMonth]);
+
+            const filteredMonthTransactions = useMemo(() => data.transactions.filter(transaction => {
+                if (!transaction.date.startsWith(selectedMonth)) return false;
+                return authorFilter === 'ALL' || transaction.authorEmail === authorFilter;
+            }), [data.transactions, selectedMonth, authorFilter]);
+
+            const authorOptions = useMemo(() => Array.from(new Set(data.transactions.map(transaction => transaction.authorEmail).filter(Boolean))), [data.transactions]);
+            const selectedAuthorLabel = authorFilter === 'ALL'
+                ? '전체'
+                : (data.authorAbbreviations || []).find(author => author.email === authorFilter)?.abbr || authorFilter.split('@')[0];
 
             useEffect(() => {
                 if (!showMonthPicker) return;
@@ -517,13 +528,25 @@
                             <h1 className="page-title">대시보드</h1>
                         </div>
                     </div>
-                    <div className="dashboard-toolbar">
-                        <button className="transaction-round-button dashboard-back-button" onClick={() => setTab('home')} aria-label="홈으로 돌아가기"><Icon name="chevron-left" size={20} /></button>
-                        <button className="transaction-month-control" onClick={() => setShowMonthPicker(true)} aria-haspopup="dialog" aria-expanded={showMonthPicker}>
-                            <strong>{selectedMonth.split('-')[0]}년 {Number(selectedMonth.split('-')[1])}월</strong>
-                        </button>
-                        <span />
-                    </div>
+                    <section className="transaction-calendar-card dashboard-calendar-card">
+                        <div className="transaction-toolbar dashboard-toolbar">
+                            <button className="transaction-round-button dashboard-back-button" onClick={() => setTab('home')} aria-label="홈으로 돌아가기"><Icon name="chevron-left" size={20} /></button>
+                            <button className="transaction-month-control" onClick={() => setShowMonthPicker(true)} aria-haspopup="dialog" aria-expanded={showMonthPicker}>
+                                <strong>{selectedMonth.split('-')[0]}년 {Number(selectedMonth.split('-')[1])}월</strong>
+                            </button>
+                            <div className="dashboard-author-filter">
+                                <Icon name="user-round" size={16} />
+                                <small>{selectedAuthorLabel}</small>
+                                <select value={authorFilter} onChange={event => setAuthorFilter(event.target.value)} aria-label="작성자 필터">
+                                    <option value="ALL">전체</option>
+                                    {authorOptions.map(email => {
+                                        const found = (data.authorAbbreviations || []).find(author => author.email === email);
+                                        return <option key={email} value={email}>{found ? found.abbr : email}</option>;
+                                    })}
+                                </select>
+                            </div>
+                        </div>
+                    </section>
 
                     {showMonthPicker && (
                         <div className="month-picker-overlay" role="presentation" onClick={() => setShowMonthPicker(false)}>
@@ -568,7 +591,7 @@
                             >
                                 <div>수입</div>
                                 <div style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--income-color)', opacity: 0.85, marginTop: '2px' }}>
-                                    {data.transactions.filter(t => t.date.startsWith(selectedMonth) && t.type === 'Income').reduce((s, t) => s + Number(t.amount), 0).toLocaleString()}원
+                                    {filteredMonthTransactions.filter(t => t.type === 'Income').reduce((s, t) => s + Number(t.amount), 0).toLocaleString()}원
                                 </div>
                             </div>
                             <div 
@@ -588,13 +611,13 @@
                             >
                                 <div>지출</div>
                                 <div style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--expense-color)', opacity: 0.85, marginTop: '2px' }}>
-                                    {data.transactions.filter(t => t.date.startsWith(selectedMonth) && t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0).toLocaleString()}원
+                                    {filteredMonthTransactions.filter(t => t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0).toLocaleString()}원
                                 </div>
                             </div>
                         </div>
                         <div style={{ padding: '0.5rem 1rem 1rem' }}>
                             {(() => {
-                                const monthT = data.transactions.filter(t => t.date.startsWith(selectedMonth) && t.type === categoryType);
+                                const monthT = filteredMonthTransactions.filter(t => t.type === categoryType);
                                 const totalAmount = monthT.reduce((sum, t) => sum + Number(t.amount), 0);
 
                                 const catGrouped = data.categories.filter(c => c.type === categoryType).map(c => {
@@ -793,58 +816,189 @@
             );
         }
 
-        function PlanPage({ data, setTab }) {
+        function BudgetModal({ data, selectedMonth, editBudget, setData, syncToCloud, onClose }) {
+            const expenseCategories = data.categories.filter(category => category.type === 'Expense');
+            const [form, setForm] = useState(() => ({
+                categoryId: editBudget?.categoryId || expenseCategories[0]?.id || '',
+                amount: editBudget?.amount || ''
+            }));
+
+            const handleSubmit = event => {
+                event.preventDefault();
+                const amount = Number(form.amount || 0);
+                if (!form.categoryId || amount <= 0) return;
+                const budgets = data.budgets || [];
+                const duplicate = budgets.find(budget => budget.month === selectedMonth && budget.categoryId === form.categoryId);
+                const savedBudget = { id: editBudget?.id || duplicate?.id || Date.now().toString(), month: selectedMonth, categoryId: form.categoryId, amount };
+                const targetId = editBudget?.id || duplicate?.id;
+                const cleanedBudgets = budgets.filter(budget => !(budget.month === selectedMonth && budget.categoryId === form.categoryId && budget.id !== targetId));
+                const newData = {
+                    ...data,
+                    budgets: targetId ? cleanedBudgets.map(budget => budget.id === targetId ? savedBudget : budget) : [...cleanedBudgets, savedBudget]
+                };
+                setData(newData);
+                syncToCloud(newData);
+                onClose();
+            };
+
+            const handleDelete = () => {
+                if (!editBudget || !confirm('이 예산을 삭제하시겠습니까?')) return;
+                const newData = { ...data, budgets: (data.budgets || []).filter(budget => budget.id !== editBudget.id) };
+                setData(newData);
+                syncToCloud(newData);
+                onClose();
+            };
+
+            return (
+                <div className="budget-modal-overlay" role="presentation" onClick={onClose}>
+                    <section className="budget-modal-sheet" role="dialog" aria-modal="true" aria-labelledby="budget-modal-title" onClick={event => event.stopPropagation()}>
+                        <header>
+                            <button type="button" onClick={onClose} aria-label="닫기"><Icon name="x" size={25} /></button>
+                            <strong id="budget-modal-title">예산 {editBudget ? '수정' : '생성'}</strong>
+                            <button type="submit" form="budget-form" className="budget-save-button" disabled={!form.categoryId || Number(form.amount || 0) <= 0} aria-label="저장"><Icon name="check" size={24} /></button>
+                        </header>
+                        <form id="budget-form" onSubmit={handleSubmit}>
+                            <label>
+                                <span>적용 월</span>
+                                <strong>{selectedMonth.split('-')[0]}년 {Number(selectedMonth.split('-')[1])}월</strong>
+                            </label>
+                            <label>
+                                <span>카테고리</span>
+                                <select value={form.categoryId} onChange={event => setForm({ ...form, categoryId: event.target.value })}>
+                                    {expenseCategories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+                                </select>
+                            </label>
+                            <label>
+                                <span>예산</span>
+                                <input type="text" inputMode="numeric" value={form.amount ? Number(form.amount).toLocaleString() : ''} onChange={event => setForm({ ...form, amount: event.target.value.replace(/[^0-9]/g, '') })} placeholder="0원" autoFocus />
+                            </label>
+                            {editBudget && <button type="button" className="budget-delete-button" onClick={handleDelete}>예산 삭제</button>}
+                        </form>
+                    </section>
+                </div>
+            );
+        }
+
+        function PlanPage({ data, setData, syncToCloud, setTab }) {
             const now = new Date();
-            const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-            const monthExpenses = data.transactions.filter(t => t.type === 'Expense' && t.date.startsWith(currentMonth));
-            const totalExpense = monthExpenses.reduce((sum, t) => sum + Number(t.amount || 0), 0);
-            const activeCategories = data.categories
-                .filter(category => category.type === 'Expense')
-                .map(category => ({
-                    ...category,
-                    amount: monthExpenses.filter(transaction => transaction.categoryId === category.id).reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0)
-                }))
-                .filter(category => category.amount > 0)
-                .sort((a, b) => b.amount - a.amount)
-                .slice(0, 3);
+            const [selectedMonth, setSelectedMonth] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+            const [showMonthPicker, setShowMonthPicker] = useState(false);
+            const [showBudgetModal, setShowBudgetModal] = useState(false);
+            const [editingBudget, setEditingBudget] = useState(null);
+            const selectedMonthRef = React.useRef(null);
+
+            const availableMonths = useMemo(() => {
+                const months = new Set([
+                    ...data.transactions.map(transaction => transaction.date.substring(0, 7)),
+                    ...(data.budgets || []).map(budget => budget.month)
+                ]);
+                for (let offset = 0; offset < 36; offset += 1) {
+                    const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+                    months.add(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+                }
+                months.add(selectedMonth);
+                return Array.from(months).sort((a, b) => b.localeCompare(a));
+            }, [data.transactions, data.budgets, selectedMonth]);
+
+            useEffect(() => {
+                if (!showMonthPicker) return;
+                const previousOverflow = document.body.style.overflow;
+                document.body.style.overflow = 'hidden';
+                const frame = requestAnimationFrame(() => selectedMonthRef.current?.scrollIntoView({ block: 'center' }));
+                return () => {
+                    cancelAnimationFrame(frame);
+                    document.body.style.overflow = previousOverflow;
+                };
+            }, [showMonthPicker]);
+
+            const monthlyBudgets = (data.budgets || [])
+                .filter(budget => budget.month === selectedMonth)
+                .map(budget => {
+                    const category = data.categories.find(item => item.id === budget.categoryId);
+                    const spent = data.transactions
+                        .filter(transaction => transaction.type === 'Expense' && transaction.categoryId === budget.categoryId && transaction.date.startsWith(selectedMonth))
+                        .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+                    const amount = Number(budget.amount || 0);
+                    return { ...budget, categoryName: category?.name || '삭제된 카테고리', amount, spent, percent: amount > 0 ? Math.round((spent / amount) * 100) : 0 };
+                })
+                .sort((a, b) => b.percent - a.percent);
+            const totalBudget = monthlyBudgets.reduce((sum, budget) => sum + budget.amount, 0);
+            const totalSpent = monthlyBudgets.reduce((sum, budget) => sum + budget.spent, 0);
+            const totalPercent = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
+
+            const openCreateBudget = () => {
+                setEditingBudget(null);
+                setShowBudgetModal(true);
+            };
 
             return (
                 <div className="plan-page fade-in">
-                    <div className="plan-page-toolbar">
-                        <button className="asset-back-button" onClick={() => setTab('home')} aria-label="홈으로 돌아가기"><Icon name="chevron-left" size={21} /></button>
-                        <strong>계획</strong>
-                        <span />
-                    </div>
-                    <section className="plan-hero-card">
-                        <span className="plan-hero-icon"><Icon name="target" size={28} /></span>
-                        <div>
-                            <small>{now.getFullYear()}년 {now.getMonth() + 1}월</small>
-                            <h2>나의 지출 계획</h2>
-                            <p>목표를 세우고 월별 소비 흐름을 관리해 보세요.</p>
+                    <section className="transaction-calendar-card plan-calendar-card">
+                        <div className="transaction-toolbar plan-toolbar">
+                            <button className="transaction-round-button" onClick={() => setTab('home')} aria-label="홈으로 돌아가기"><Icon name="chevron-left" size={20} /></button>
+                            <button className="transaction-month-control" onClick={() => setShowMonthPicker(true)} aria-haspopup="dialog" aria-expanded={showMonthPicker}>
+                                <strong>{selectedMonth.split('-')[0]}년 {Number(selectedMonth.split('-')[1])}월</strong>
+                            </button>
+                            <button className="plan-create-button" onClick={openCreateBudget} aria-label="예산 생성"><Icon name="plus" size={22} /></button>
                         </div>
                     </section>
-                    <section className="plan-summary-card">
-                        <div className="plan-summary-heading">
-                            <span>이번 달 지출</span>
-                            <strong>{totalExpense.toLocaleString()}원</strong>
+
+                    {showMonthPicker && (
+                        <div className="month-picker-overlay" role="presentation" onClick={() => setShowMonthPicker(false)}>
+                            <section className="month-picker-sheet" role="dialog" aria-modal="true" aria-labelledby="plan-month-picker-title" onClick={event => event.stopPropagation()}>
+                                <header>
+                                    <button onClick={() => setShowMonthPicker(false)} aria-label="월 선택 닫기"><Icon name="x" size={27} /></button>
+                                    <strong id="plan-month-picker-title">월 선택</strong>
+                                    <span />
+                                </header>
+                                <div className="month-picker-list">
+                                    {availableMonths.map(month => (
+                                        <button key={month} ref={month === selectedMonth ? selectedMonthRef : null} className={month === selectedMonth ? 'selected' : ''} onClick={() => {
+                                            setSelectedMonth(month);
+                                            setShowMonthPicker(false);
+                                        }}>
+                                            <span>{month.split('-')[0]}년 {Number(month.split('-')[1])}월</span>
+                                            {month === selectedMonth && <Icon name="check" size={22} />}
+                                        </button>
+                                    ))}
+                                </div>
+                            </section>
                         </div>
-                        {activeCategories.length > 0 ? (
-                            <div className="plan-category-list">
-                                {activeCategories.map(category => (
-                                    <div key={category.id}>
-                                        <span>{category.name}</span>
-                                        <b>{category.amount.toLocaleString()}원</b>
+                    )}
+
+                    <section className="plan-overview-card">
+                        <div><span>월 예산</span><strong>{totalBudget.toLocaleString()}원</strong></div>
+                        <div><span>사용 금액</span><strong>{totalSpent.toLocaleString()}원</strong></div>
+                        <div><span>전체 사용률</span><strong className={totalPercent > 100 ? 'over' : ''}>{totalPercent}%</strong></div>
+                    </section>
+
+                    {monthlyBudgets.length > 0 ? (
+                        <div className="plan-budget-grid">
+                            {monthlyBudgets.map(budget => (
+                                <button key={budget.id} className={`plan-budget-card ${budget.percent > 100 ? 'over' : ''}`} onClick={() => { setEditingBudget(budget); setShowBudgetModal(true); }}>
+                                    <div className="plan-budget-card-heading">
+                                        <span><Icon name="wallet-cards" size={18} />{budget.categoryName}</span>
+                                        <strong>{budget.percent}%</strong>
                                     </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="plan-empty-state">
-                                <Icon name="calendar-check" size={30} />
-                                <strong>아직 등록된 지출이 없습니다</strong>
-                                <p>거래를 기록하면 이곳에서 계획에 필요한 소비 흐름을 확인할 수 있어요.</p>
-                            </div>
-                        )}
-                    </section>
+                                    <div className="plan-budget-progress"><span style={{ width: `${Math.min(budget.percent, 100)}%` }} /></div>
+                                    <div className="plan-budget-values">
+                                        <span>사용 <b>{budget.spent.toLocaleString()}원</b></span>
+                                        <span>예산 <b>{budget.amount.toLocaleString()}원</b></span>
+                                    </div>
+                                    <small>{budget.amount - budget.spent >= 0 ? `${(budget.amount - budget.spent).toLocaleString()}원 남음` : `${Math.abs(budget.amount - budget.spent).toLocaleString()}원 초과`}</small>
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <section className="plan-empty-state plan-empty-card">
+                            <Icon name="calendar-check" size={32} />
+                            <strong>등록된 예산이 없습니다</strong>
+                            <p>오른쪽 위 생성 버튼을 눌러 카테고리별 월 예산을 설정해 보세요.</p>
+                            <button onClick={openCreateBudget}><Icon name="plus" size={18} /> 예산 생성</button>
+                        </section>
+                    )}
+
+                    {showBudgetModal && <BudgetModal data={data} selectedMonth={selectedMonth} editBudget={editingBudget} setData={setData} syncToCloud={syncToCloud} onClose={() => { setShowBudgetModal(false); setEditingBudget(null); }} />}
                 </div>
             );
         }
@@ -1812,6 +1966,7 @@ service cloud.firestore {
                 const p = JSON.parse(s);
                 if (!p.categories || p.categories.length < 10) p.categories = initialData.categories;
                 if (!p.groups) p.groups = initialData.groups;
+                if (!p.budgets) p.budgets = [];
                 if (p.assets) p.assets = p.assets.map(a => ({
                     ...a,
                     initialBalance: a.initialBalance !== undefined ? a.initialBalance : 0,
@@ -1971,8 +2126,8 @@ service cloud.firestore {
                     </div>
                     <div className={`main-content ${tab === 'home' ? 'home-content' : ''} ${tab === 'dashboard' ? 'dashboard-content' : ''}`}><div className="container">
                         {tab === 'home' && <HomePage data={data} setTab={setTab} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} onNavigate={menuClick} />}
-                        {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionMonth={setTransactionMonth} />}
-                        {tab === 'plan' && <PlanPage data={data} setTab={setTab} />}
+                        {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionMonth={setTransactionMonth} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} />}
+                        {tab === 'plan' && <PlanPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} />}
                         {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} setTab={setTab} backTab={transactionBackTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} />}
