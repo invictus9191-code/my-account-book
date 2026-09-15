@@ -294,12 +294,9 @@ table {
 }
 
 .home-asset-privacy {
-  position: absolute;
-  top: -6px;
-  right: 0;
-  z-index: 20;
-  transform: none;
+  width: fit-content;
   min-height: 30px;
+  margin: 12px 0 0 2px;
   padding: 5px 10px;
   display: flex;
   align-items: center;
@@ -1701,13 +1698,6 @@ select {
     margin: 0 -1rem;
     padding: 14px 16px 166px;
     background: #f2f2f7;
-  }
-
-  .home-asset-privacy {
-    position: absolute;
-    top: -7px;
-    right: 18px;
-    transform: none;
   }
 
   .home-expense-card {

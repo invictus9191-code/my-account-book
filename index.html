@@ -853,10 +853,6 @@
 
             return (
                 <div className="home-page fade-in">
-                    <label className="home-asset-privacy">
-                        <input type="checkbox" checked={hideAssetAmounts} onChange={event => setHideAssetAmounts(event.target.checked)} />
-                        <span><Icon name={hideAssetAmounts ? 'eye-off' : 'eye'} size={14} />금액 숨기기</span>
-                    </label>
                     <button className="home-expense-card" onClick={() => setTab('dashboard')}>
                         <span><small>이번 달</small><strong>지출</strong></span>
                         <b>{monthExpense.toLocaleString()}원</b>
@@ -903,6 +899,11 @@
                             </button>
                         ))}
                     </div>
+
+                    <label className="home-asset-privacy">
+                        <input type="checkbox" checked={hideAssetAmounts} onChange={event => setHideAssetAmounts(event.target.checked)} />
+                        <span><Icon name={hideAssetAmounts ? 'eye-off' : 'eye'} size={14} />금액 숨기기</span>
+                    </label>
 
                     <div className="home-quick-entry">
                         <button className="home-refresh-button" onClick={() => window.location.reload()} aria-label="새로고침"><Icon name="refresh-cw" size={22} /></button>
