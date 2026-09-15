@@ -1208,10 +1208,6 @@
                             <h2>자산 {editItem ? '수정' : '추가'}</h2>
                             <button type="submit" form="asset-form" className="asset-modal-save" disabled={!form.name || !form.ownerId} aria-label="저장"><Icon name="check" size={27} /></button>
                         </header>
-                        <div className={`asset-modal-icon ${form.type.toLowerCase()}`}>
-                            <span><Icon name={form.type === 'Cash' ? 'wallet' : form.type === 'Bank' ? 'landmark' : 'credit-card'} size={34} /></span>
-                            <small>아이콘 설정</small>
-                        </div>
                         <form id="asset-form" className="asset-modal-form" onSubmit={handleSubmit}>
                             <div className="form-row asset-type-row"><label>자산 유형</label><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}><option value="Cash">현금</option><option value="Bank">은행</option><option value="Card">카드</option></select></div>
                             <div className="form-row asset-name-row"><label className="sr-only">자산 이름</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="자산 이름" autoFocus required /></div>

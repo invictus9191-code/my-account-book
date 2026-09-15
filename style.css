@@ -1995,6 +1995,7 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   padding: 18px;
+  overflow: hidden;
   background: rgba(38, 42, 50, 0.36);
   backdrop-filter: blur(4px);
 }
@@ -2002,7 +2003,9 @@ textarea:focus {
 .asset-modal-panel {
   width: min(560px, 100%);
   max-height: calc(100vh - 36px);
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.9);
   border-radius: 32px;
   background: #f3f3f8;
@@ -2010,6 +2013,7 @@ textarea:focus {
 }
 
 .asset-modal-header {
+  flex: 0 0 auto;
   min-height: 78px;
   padding: 14px 18px;
   display: grid;
@@ -2049,43 +2053,15 @@ textarea:focus {
   color: white;
 }
 
-.asset-modal-icon {
-  margin: 42px 0 54px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 11px;
-  color: #9b9fa7;
-}
-
-.asset-modal-icon > span {
-  width: 90px;
-  height: 90px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: #d5def8;
-  color: #2f61df;
-}
-
-.asset-modal-icon.bank > span {
-  background: #d9e7f0;
-  color: #3d718f;
-}
-
-.asset-modal-icon.card > span {
-  background: #eadcf5;
-  color: #8455aa;
-}
-
-.asset-modal-icon small {
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
 .asset-modal-form {
-  padding: 0 22px 26px;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 24px 22px 26px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .asset-modal-form .form-row {
@@ -2203,6 +2179,7 @@ textarea:focus {
   .asset-modal-panel {
     width: 100%;
     height: calc(100vh - 26px);
+    height: calc(100dvh - 26px);
     max-height: none;
     border-radius: 32px 32px 0 0;
   }
@@ -2211,12 +2188,8 @@ textarea:focus {
     padding: 10px 16px;
   }
 
-  .asset-modal-icon {
-    margin: 58px 0 62px;
-  }
-
   .asset-modal-form {
-    padding: 0 16px 28px;
+    padding: 24px 16px max(28px, env(safe-area-inset-bottom));
   }
 
   .asset-modal-form .form-row {
