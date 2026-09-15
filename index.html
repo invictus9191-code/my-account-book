@@ -245,17 +245,33 @@
                 const now = new Date();
                 return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             });
+            const [showMonthPicker, setShowMonthPicker] = useState(false);
+            const selectedMonthRef = React.useRef(null);
             const [view, setView] = useState('main'); // main, income_detail, expense_detail, asset_detail, category_list
             const [selectedId, setSelectedId] = useState(null); // categoryId or assetGroupId
             const [chartType, setChartType] = useState('income_expense'); // income_expense or savings
 
             const availableMonths = useMemo(() => {
-                const months = new Set();
-                data.transactions.forEach(t => months.add(t.date.substring(0, 7)));
+                const months = new Set(data.transactions.map(t => t.date.substring(0, 7)));
                 const now = new Date();
-                months.add(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+                for (let offset = 0; offset < 36; offset += 1) {
+                    const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+                    months.add(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+                }
+                months.add(selectedMonth);
                 return Array.from(months).sort((a, b) => b.localeCompare(a));
-            }, [data.transactions]);
+            }, [data.transactions, selectedMonth]);
+
+            useEffect(() => {
+                if (!showMonthPicker) return;
+                const previousOverflow = document.body.style.overflow;
+                document.body.style.overflow = 'hidden';
+                const frame = requestAnimationFrame(() => selectedMonthRef.current?.scrollIntoView({ block: 'center' }));
+                return () => {
+                    cancelAnimationFrame(frame);
+                    document.body.style.overflow = previousOverflow;
+                };
+            }, [showMonthPicker]);
 
             const stats = useMemo(() => {
                 const [year, month] = selectedMonth.split('-').map(Number);
@@ -501,25 +517,36 @@
                             <h1 className="page-title">대시보드</h1>
                         </div>
                     </div>
-                    <div className="dashboard-month-switcher" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', margin: '0 0 1.5rem 0', fontSize: '1.2rem', fontWeight: 'bold' }}>
-                        <button
-                            onClick={() => {
-                                const [y, m] = selectedMonth.split('-').map(Number);
-                                const d = new Date(y, m - 2, 1);
-                                setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-                            }}
-                            style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                        ><Icon name="chevron-left" size={24} /></button>
-                        <span>{selectedMonth.split('-')[0]}년 {selectedMonth.split('-')[1]}월</span>
-                        <button
-                            onClick={() => {
-                                const [y, m] = selectedMonth.split('-').map(Number);
-                                const d = new Date(y, m, 1);
-                                setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-                            }}
-                            style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                        ><Icon name="chevron-right" size={24} /></button>
+                    <div className="dashboard-toolbar">
+                        <button className="transaction-round-button dashboard-back-button" onClick={() => setTab('home')} aria-label="홈으로 돌아가기"><Icon name="chevron-left" size={20} /></button>
+                        <button className="transaction-month-control" onClick={() => setShowMonthPicker(true)} aria-haspopup="dialog" aria-expanded={showMonthPicker}>
+                            <strong>{selectedMonth.split('-')[0]}년 {Number(selectedMonth.split('-')[1])}월</strong>
+                        </button>
+                        <span />
                     </div>
+
+                    {showMonthPicker && (
+                        <div className="month-picker-overlay" role="presentation" onClick={() => setShowMonthPicker(false)}>
+                            <section className="month-picker-sheet" role="dialog" aria-modal="true" aria-labelledby="dashboard-month-picker-title" onClick={event => event.stopPropagation()}>
+                                <header>
+                                    <button onClick={() => setShowMonthPicker(false)} aria-label="월 선택 닫기"><Icon name="x" size={27} /></button>
+                                    <strong id="dashboard-month-picker-title">월 선택</strong>
+                                    <span />
+                                </header>
+                                <div className="month-picker-list">
+                                    {availableMonths.map(month => (
+                                        <button key={month} ref={month === selectedMonth ? selectedMonthRef : null} className={month === selectedMonth ? 'selected' : ''} onClick={() => {
+                                            setSelectedMonth(month);
+                                            setShowMonthPicker(false);
+                                        }}>
+                                            <span>{month.split('-')[0]}년 {Number(month.split('-')[1])}월</span>
+                                            {month === selectedMonth && <Icon name="check" size={22} />}
+                                        </button>
+                                    ))}
+                                </div>
+                            </section>
+                        </div>
+                    )}
 
                     {/* 1. 수입지출탭 */}
                     <div className="card" style={{ padding: '0', overflow: 'hidden', marginBottom: '1.5rem' }}>
@@ -707,7 +734,7 @@
             };
 
             const homeMenuItems = [
-                { label: '계획', icon: 'target', color: '#ff4051', tab: 'dashboard' },
+                { label: '계획', icon: 'target', color: '#ff4051', tab: 'plan' },
                 { label: '반복', icon: 'repeat', color: '#6b7ff2', tab: 'transactions' },
                 { label: '설정', icon: 'settings', color: '#6f7782', tab: 'settings' }
             ];
@@ -761,6 +788,62 @@
                     <div className="home-quick-entry">
                         <button className={`home-add-button ${!isConnected ? 'btn-disabled' : ''}`} onClick={openAddTransaction} aria-label="거래 추가"><Icon name="plus" size={27} /></button>
                     </div>
+                </div>
+            );
+        }
+
+        function PlanPage({ data, setTab }) {
+            const now = new Date();
+            const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            const monthExpenses = data.transactions.filter(t => t.type === 'Expense' && t.date.startsWith(currentMonth));
+            const totalExpense = monthExpenses.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+            const activeCategories = data.categories
+                .filter(category => category.type === 'Expense')
+                .map(category => ({
+                    ...category,
+                    amount: monthExpenses.filter(transaction => transaction.categoryId === category.id).reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0)
+                }))
+                .filter(category => category.amount > 0)
+                .sort((a, b) => b.amount - a.amount)
+                .slice(0, 3);
+
+            return (
+                <div className="plan-page fade-in">
+                    <div className="plan-page-toolbar">
+                        <button className="asset-back-button" onClick={() => setTab('home')} aria-label="홈으로 돌아가기"><Icon name="chevron-left" size={21} /></button>
+                        <strong>계획</strong>
+                        <span />
+                    </div>
+                    <section className="plan-hero-card">
+                        <span className="plan-hero-icon"><Icon name="target" size={28} /></span>
+                        <div>
+                            <small>{now.getFullYear()}년 {now.getMonth() + 1}월</small>
+                            <h2>나의 지출 계획</h2>
+                            <p>목표를 세우고 월별 소비 흐름을 관리해 보세요.</p>
+                        </div>
+                    </section>
+                    <section className="plan-summary-card">
+                        <div className="plan-summary-heading">
+                            <span>이번 달 지출</span>
+                            <strong>{totalExpense.toLocaleString()}원</strong>
+                        </div>
+                        {activeCategories.length > 0 ? (
+                            <div className="plan-category-list">
+                                {activeCategories.map(category => (
+                                    <div key={category.id}>
+                                        <span>{category.name}</span>
+                                        <b>{category.amount.toLocaleString()}원</b>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="plan-empty-state">
+                                <Icon name="calendar-check" size={30} />
+                                <strong>아직 등록된 지출이 없습니다</strong>
+                                <p>거래를 기록하면 이곳에서 계획에 필요한 소비 흐름을 확인할 수 있어요.</p>
+                            </div>
+                        )}
+                    </section>
                 </div>
             );
         }
@@ -1837,6 +1920,7 @@ service cloud.firestore {
             const tabTitles = {
                 home: '홈',
                 dashboard: '대시보드',
+                plan: '계획',
                 transactions: '거래 내역',
                 assets: '자산 현황',
                 settings: '설정'
@@ -1844,10 +1928,10 @@ service cloud.firestore {
 
             return (
                 <React.Fragment>
-                    <div className={`mobile-header ${tab === 'home' ? 'home-mobile-header' : ''} ${tab === 'transactions' ? 'transactions-mobile-header' : ''} ${tab === 'assets' ? 'assets-mobile-header' : ''}`}>
+                    <div className={`mobile-header ${tab === 'home' ? 'home-mobile-header' : ''} ${tab === 'dashboard' ? 'dashboard-mobile-header' : ''} ${tab === 'plan' ? 'plan-mobile-header' : ''} ${tab === 'transactions' ? 'transactions-mobile-header' : ''} ${tab === 'assets' ? 'assets-mobile-header' : ''}`}>
                         <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem' }}><Icon name="menu" size={24} /></button>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                            <Icon name={tab === 'home' ? 'home' : tab === 'dashboard' ? 'layout-dashboard' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
+                            <Icon name={tab === 'home' ? 'home' : tab === 'dashboard' ? 'layout-dashboard' : tab === 'plan' ? 'target' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
                             <h2 style={{ fontSize: '1.2rem' }}>{tabTitles[tab] || 'Smart Finance'}</h2>
                             <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`} style={{ marginLeft: 'auto' }}>
                                 <div className="connection-dot"></div>
@@ -1877,6 +1961,7 @@ service cloud.firestore {
                     <div className={`main-content ${tab === 'dashboard' ? 'dashboard-content' : ''}`}><div className="container">
                         {tab === 'home' && <HomePage data={data} setTab={setTab} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} onNavigate={menuClick} />}
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionMonth={setTransactionMonth} />}
+                        {tab === 'plan' && <PlanPage data={data} setTab={setTab} />}
                         {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} setTab={setTab} backTab={transactionBackTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} />}
