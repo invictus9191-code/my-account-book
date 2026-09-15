@@ -778,7 +778,7 @@
             );
         }
 
-        function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm, isConnected, authorFilter, setAuthorFilter, transactionMonth, setTransactionMonth, setTab }) {
+        function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm, isConnected, authorFilter, setAuthorFilter, transactionMonth, setTransactionMonth, setTab, showMobileSearch, setShowMobileSearch }) {
             const [selectedMonth, setSelectedMonth] = useState(() => {
                 if (transactionMonth) return transactionMonth;
                 const now = new Date();
@@ -899,17 +899,24 @@
                             <button className="transaction-month-control" onClick={() => setShowMonthPicker(true)} disabled={isGlobalSearch} aria-haspopup="dialog" aria-expanded={showMonthPicker}>
                                 <strong>{isGlobalSearch ? '전체 기간' : `${selectedMonth.split('-')[0]}년 ${Number(selectedMonth.split('-')[1])}월`}</strong>
                             </button>
-                            <div className="transaction-filter-control">
-                                <select value={authorFilter} onChange={e => setAuthorFilter(e.target.value)} aria-label="작성자 필터">
-                                    <option value="ALL">전체 작성자</option>
-                                    {Array.from(new Set(data.transactions.map(t => t.authorEmail).filter(Boolean))).map(email => {
-                                        const found = (data.authorAbbreviations || []).find(a => a.email === email);
-                                        return <option key={email} value={email}>{found ? found.abbr : email}</option>;
-                                    })}
-                                </select>
-                                <Icon name="more-horizontal" size={20} />
+                            <div className="transaction-toolbar-actions">
+                                <div className={`transaction-connection ${isConnected ? 'connected' : 'disconnected'}`} title={isConnected ? 'Firebase 연결됨' : 'Firebase 연결 안 됨'}>
+                                    <span />
+                                    <small>{isConnected ? '연결' : '미연결'}</small>
+                                </div>
+                                <button className={showMobileSearch ? 'active' : ''} onClick={() => setShowMobileSearch(!showMobileSearch)} aria-label="거래 검색">
+                                    <Icon name="search" size={20} />
+                                </button>
                             </div>
                         </div>
+
+                        {showMobileSearch && (
+                            <div className="transaction-inline-search fade-in">
+                                <Icon name="search" size={17} />
+                                <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="거래 내역 검색" autoFocus />
+                                {searchTerm && <button onClick={() => setSearchTerm('')} aria-label="검색어 지우기"><Icon name="x" size={16} /></button>}
+                            </div>
+                        )}
                     </section>
 
                     {showMonthPicker && (
@@ -1833,7 +1840,7 @@ service cloud.firestore {
 
             return (
                 <React.Fragment>
-                    <div className={`mobile-header ${tab === 'home' ? 'home-mobile-header' : ''}`}>
+                    <div className={`mobile-header ${tab === 'home' ? 'home-mobile-header' : ''} ${tab === 'transactions' ? 'transactions-mobile-header' : ''}`}>
                         <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem' }}><Icon name="menu" size={24} /></button>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                             <Icon name={tab === 'home' ? 'home' : tab === 'dashboard' ? 'layout-dashboard' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
@@ -1843,32 +1850,7 @@ service cloud.firestore {
                                 <span className="mobile-hide">{isConnected ? '연동됨' : '미연동'}</span>
                             </div>
                         </div>
-                        {tab === 'transactions' && (
-                            <button className="mobile-only" onClick={() => setShowMobileSearch(!showMobileSearch)} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem', marginRight: '4px' }}>
-                                <Icon name="search" size={20} />
-                            </button>
-                        )}
-                        <button onClick={() => location.reload()} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem' }}><Icon name="refresh-cw" size={24} /></button>
                     </div>
-                    {tab === 'transactions' && showMobileSearch && (
-                        <div className="mobile-only fade-in" style={{ background: '#21262d', padding: '10px 15px', borderBottom: 'none', display: 'flex', position: 'sticky', top: '53px', zIndex: 999, width: '100%', boxShadow: 'none' }}>
-                            <div style={{ position: 'relative', flex: 1 }}>
-                                <Icon name="search" size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#8b949e' }} />
-                                <input 
-                                    type="text" 
-                                    value={searchTerm} 
-                                    onChange={e => setSearchTerm(e.target.value)} 
-                                    placeholder="검색어 입력..." 
-                                    style={{ width: '100%', padding: '8px 10px 8px 32px', borderRadius: '6px', border: '1px solid #30363d', background: '#0d1117', color: 'white' }} 
-                                />
-                                {searchTerm && (
-                                    <button onClick={() => setSearchTerm('')} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', color: '#8b949e', padding: 0 }}>
-                                        <Icon name="x" size={14} />
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    )}
                     <div className={`mobile-overlay ${sidebarOpen ? 'visible' : ''}`} onClick={() => setSidebarOpen(false)}></div>
                     <div className={`sidebar ${sidebarOpen ? 'mobile-open' : ''}`}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
@@ -1891,7 +1873,7 @@ service cloud.firestore {
                     <div className={`main-content ${tab === 'dashboard' ? 'dashboard-content' : ''}`}><div className="container">
                         {tab === 'home' && <HomePage data={data} setTab={setTab} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} />}
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionMonth={setTransactionMonth} />}
-                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} setTab={setTab} />}
+                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} setTab={setTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} />}
                     </div></div>

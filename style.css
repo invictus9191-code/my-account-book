@@ -578,13 +578,12 @@ table {
 
 .transaction-toolbar {
   display: grid;
-  grid-template-columns: 42px 1fr 42px;
+  grid-template-columns: 42px 1fr auto;
   align-items: center;
   padding: 18px;
 }
 
-.transaction-round-button,
-.transaction-filter-control {
+.transaction-round-button {
   width: 38px;
   height: 38px;
   padding: 0;
@@ -596,22 +595,95 @@ table {
   color: #353a40;
 }
 
-.transaction-filter-control {
-  position: relative;
+.transaction-toolbar-actions {
   justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 
-.transaction-filter-control select {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
+.transaction-connection {
+  height: 32px;
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 16px;
+  background: #f4f5f7;
+  color: #8b929a;
 }
 
-.transaction-filter-control svg {
-  pointer-events: none;
+.transaction-connection > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.transaction-connection small {
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.transaction-connection.connected {
+  background: #edf8f1;
+  color: #26925a;
+}
+
+.transaction-connection.disconnected {
+  background: #fff1f1;
+  color: #d25757;
+}
+
+.transaction-toolbar-actions > button {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #f4f5f7;
+  color: #353a40;
+}
+
+.transaction-toolbar-actions > button.active {
+  background: #e8f4fe;
+  color: #188fe7;
+}
+
+.transaction-inline-search {
+  margin: 0 18px 16px;
+  min-height: 42px;
+  padding: 0 11px;
+  display: grid;
+  grid-template-columns: 20px 1fr 24px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #e2e6eb;
+  border-radius: 14px;
+  background: #f7f8fa;
+  color: #90969e;
+}
+
+.transaction-inline-search input {
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.86rem;
+}
+
+.transaction-inline-search input:focus {
+  box-shadow: none;
+}
+
+.transaction-inline-search button {
+  padding: 3px;
+  display: flex;
+  background: transparent;
+  color: #9aa0a8;
 }
 
 .transaction-month-control {
@@ -1264,7 +1336,8 @@ select {
     padding-top: 0.2rem;
   }
 
-  .mobile-header.home-mobile-header {
+  .mobile-header.home-mobile-header,
+  .mobile-header.transactions-mobile-header {
     display: none !important;
   }
 
@@ -1352,6 +1425,14 @@ select {
 
   .transaction-toolbar {
     padding: 12px 14px;
+  }
+
+  .transaction-connection {
+    padding: 0 7px;
+  }
+
+  .transaction-inline-search {
+    margin: 0 14px 13px;
   }
 
   .transaction-month-control {
