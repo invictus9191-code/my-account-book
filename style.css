@@ -286,51 +286,6 @@ table {
   padding: 24px 0 118px;
 }
 
-.home-top-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.home-icon-button,
-.home-search-actions {
-  height: 54px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 9px 28px rgba(29, 39, 55, 0.07);
-}
-
-.home-icon-button {
-  width: 54px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 19px;
-}
-
-.home-icon-button.folder {
-  color: #1598f4;
-}
-
-.home-search-actions {
-  padding: 0 6px;
-  display: flex;
-  align-items: center;
-  border-radius: 22px;
-}
-
-.home-search-actions button {
-  width: 48px;
-  height: 46px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  color: #1f242a;
-}
-
 .home-expense-card,
 .home-row-card,
 .home-transactions-card {
@@ -504,13 +459,9 @@ table {
   right: max(28px, calc((100vw - var(--sidebar-width) - 620px) / 2));
   bottom: 25px;
   z-index: 1000;
-  width: min(620px, calc(100vw - var(--sidebar-width) - 56px));
-  display: grid;
-  grid-template-columns: 1fr 58px;
-  gap: 13px;
+  width: 58px;
 }
 
-.home-quick-input,
 .home-add-button {
   min-height: 58px;
   background: rgba(255, 255, 255, 0.94);
@@ -518,37 +469,6 @@ table {
   border: 1px solid rgba(255, 255, 255, 0.88);
   box-shadow: 0 13px 34px rgba(38, 44, 58, 0.13);
   backdrop-filter: blur(16px);
-}
-
-.home-quick-input {
-  padding: 7px 10px 7px 20px;
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 38px;
-  align-items: center;
-  gap: 9px;
-  border-radius: 29px;
-  text-align: left;
-}
-
-.home-quick-input > span {
-  overflow: hidden;
-  color: #b2b6bc;
-  font-size: 0.88rem;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.home-quick-input i {
-  width: 34px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: #1598f4;
-  color: white;
-  font-style: normal;
 }
 
 .home-add-button {
@@ -1349,19 +1269,6 @@ select {
     background: #f2f2f7;
   }
 
-  .home-top-actions {
-    margin-bottom: 15px;
-  }
-
-  .home-icon-button,
-  .home-search-actions {
-    height: 52px;
-  }
-
-  .home-icon-button {
-    width: 52px;
-  }
-
   .home-expense-card {
     min-height: 100px;
     margin-bottom: 20px;
@@ -1395,12 +1302,9 @@ select {
   .home-quick-entry {
     right: 16px;
     bottom: 18px;
-    width: calc(100vw - 32px);
-    grid-template-columns: minmax(0, 1fr) 54px;
-    gap: 10px;
+    width: 54px;
   }
 
-  .home-quick-input,
   .home-add-button {
     min-height: 54px;
   }

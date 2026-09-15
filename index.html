@@ -689,7 +689,7 @@
             );
         }
 
-        function HomePage({ data, setTab, setEdit, setShowModal, isConnected }) {
+        function HomePage({ data, setTab, setEdit, setShowModal, isConnected, onNavigate }) {
             const now = new Date();
             const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             const monthExpense = data.transactions
@@ -709,19 +709,12 @@
             const homeMenuItems = [
                 { label: '계획', icon: 'target', color: '#ff4051', tab: 'dashboard' },
                 { label: '반복', icon: 'repeat', color: '#6b7ff2', tab: 'transactions' },
-                { label: '분석', icon: 'bar-chart-3', color: '#5c6066', tab: 'dashboard' }
+                { label: '분석', icon: 'bar-chart-3', color: '#5c6066', tab: 'dashboard' },
+                { label: '설정', icon: 'settings', color: '#6f7782', tab: 'settings' }
             ];
 
             return (
                 <div className="home-page fade-in">
-                    <div className="home-top-actions">
-                        <button className="home-icon-button folder" onClick={() => setTab('assets')} aria-label="자산 보기"><Icon name="folder" size={26} /></button>
-                        <div className="home-search-actions">
-                            <button onClick={() => setTab('transactions')} aria-label="거래 검색"><Icon name="search" size={27} /></button>
-                            <button onClick={() => setTab('settings')} aria-label="설정"><Icon name="more-horizontal" size={25} /></button>
-                        </div>
-                    </div>
-
                     <button className="home-expense-card" onClick={() => setTab('transactions')}>
                         <span><small>이번 달</small><strong>지출</strong></span>
                         <b>{monthExpense.toLocaleString()}원</b>
@@ -758,7 +751,7 @@
 
                     <div className="home-menu-list">
                         {homeMenuItems.map(item => (
-                            <button key={item.label} className="home-row-card" onClick={() => setTab(item.tab)}>
+                            <button key={item.label} className="home-row-card" onClick={() => onNavigate(item.tab)}>
                                 <span className="home-card-icon" style={{ background: item.color }}><Icon name={item.icon} size={20} /></span>
                                 <strong>{item.label}</strong>
                                 <Icon name="chevron-right" size={22} className="home-chevron" />
@@ -767,11 +760,6 @@
                     </div>
 
                     <div className="home-quick-entry">
-                        <button className="home-quick-input" onClick={openAddTransaction}>
-                            <Icon name="plus" size={22} />
-                            <span>오늘 거래를 기록해 보세요</span>
-                            <i><Icon name="mic" size={18} /></i>
-                        </button>
                         <button className={`home-add-button ${!isConnected ? 'btn-disabled' : ''}`} onClick={openAddTransaction} aria-label="거래 추가"><Icon name="plus" size={27} /></button>
                     </div>
                 </div>
@@ -1871,7 +1859,7 @@ service cloud.firestore {
                         <div className="user-profile">{user ? <button onClick={() => firebase.auth().signOut()} className="auth-btn" style={{ background: 'transparent', color: '#8b949e' }}><Icon name="log-out" size={16} /> 로그아웃</button> : <button className="auth-btn login" onClick={() => { if (!fbConfig) setTab('settings'); else firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); }}><Icon name="log-in" size={16} /> 로그인</button>}</div>
                     </div>
                     <div className={`main-content ${tab === 'dashboard' ? 'dashboard-content' : ''}`}><div className="container">
-                        {tab === 'home' && <HomePage data={data} setTab={setTab} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} />}
+                        {tab === 'home' && <HomePage data={data} setTab={setTab} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} onNavigate={menuClick} />}
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionMonth={setTransactionMonth} />}
                         {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} setTab={setTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} />}
