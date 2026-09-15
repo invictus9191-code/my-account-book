@@ -42,12 +42,15 @@
         // 당겨서 새로고침
         (function() {
             var touchStartY = 0;
+            var isIndependentScrollGesture = false;
 
             document.addEventListener('touchstart', function(e) {
                 touchStartY = e.touches[0].clientY;
+                isIndependentScrollGesture = !!(e.target.closest && e.target.closest('.budget-modal-sheet, .asset-modal-form, .month-picker-list, .modal-content'));
             }, { passive: true });
 
             document.addEventListener('touchmove', function(e) {
+                if (isIndependentScrollGesture) return;
                 var content = document.querySelector('.main-content');
                 var isPullingDown = e.touches[0].clientY > touchStartY;
 
@@ -55,6 +58,10 @@
                     e.preventDefault();
                 }
             }, { passive: false });
+
+            document.addEventListener('touchend', function() {
+                isIndependentScrollGesture = false;
+            }, { passive: true });
         })();
 
         (function() {

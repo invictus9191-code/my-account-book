@@ -2921,6 +2921,7 @@ textarea:focus {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
+  touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
   border: 1px solid rgba(255, 255, 255, 0.9);
   border-radius: 32px 32px 0 0;
@@ -3288,6 +3289,7 @@ textarea:focus {
 
 .recurring-modal-sheet {
   max-height: calc(100% - 10px);
+  scroll-behavior: auto;
 }
 
 .recurring-modal-sheet form > label {
