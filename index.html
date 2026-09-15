@@ -139,7 +139,9 @@
             ],
             transactions: [],
             budgets: [],
-            recurringTransactions: []
+            recurringTransactions: [],
+            shoppingItems: [],
+            shoppingFavorites: []
         };
 
         const Icon = ({ name, size = 18, className = "", style = {} }) => {
@@ -322,7 +324,7 @@
                     },
                     yaxis: {
                         labels: {
-                            formatter: (v) => typeof v === 'number' && !isNaN(v) ? Math.floor(v).toLocaleString() : v,
+                            formatter: (v) => Number.isFinite(v) ? Math.floor(v).toLocaleString() : '0',
                             style: { colors: '#57606a' }
                         },
                         forceNiceScale: true,
@@ -332,7 +334,7 @@
                     grid: { borderColor: '#e1e4e8', strokeDashArray: 3 },
                     tooltip: {
                         theme: 'light',
-                        y: { formatter: (v) => typeof v === 'number' && !isNaN(v) ? Math.floor(v).toLocaleString() + '원' : v + '원' }
+                        y: { formatter: (v) => Number.isFinite(v) ? Math.floor(v).toLocaleString() + '원' : '0원' }
                     },
                     plotOptions: { bar: { borderRadius: 3, columnWidth: '60%' } },
                     legend: { show: series.length > 1, position: 'top', labels: { colors: '#57606a' } }
@@ -649,6 +651,10 @@
                 );
             }
 
+            const dashboardIncome = filteredMonthTransactions.filter(transaction => transaction.type === 'Income').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+            const dashboardExpense = filteredMonthTransactions.filter(transaction => transaction.type === 'Expense').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+            const dashboardBalance = dashboardIncome - dashboardExpense;
+
             return (
                 <div className="fade-in page-shell dashboard-page">
                     <div className="page-header dashboard-header">
@@ -700,51 +706,23 @@
                         </div>
                     )}
 
+                    <section className="dashboard-summary-cards">
+                        <div><span className="income"><Icon name="arrow-down-left" size={16} /></span><small>수입</small><strong>{dashboardIncome.toLocaleString()}원</strong></div>
+                        <div><span className="expense"><Icon name="arrow-up-right" size={16} /></span><small>지출</small><strong>{dashboardExpense.toLocaleString()}원</strong></div>
+                        <div><span className="balance"><Icon name="scale" size={16} /></span><small>수입 − 지출</small><strong className={dashboardBalance < 0 ? 'negative' : ''}>{dashboardBalance.toLocaleString()}원</strong></div>
+                    </section>
+
                     {/* 1. 수입지출탭 */}
-                    <div className="card" style={{ padding: '0', overflow: 'hidden', marginBottom: '1.5rem' }}>
-                        <div style={{ display: 'flex', borderBottom: '2px solid var(--border-color)' }}>
-                            <div 
-                                onClick={() => setCategoryType('Income')} 
-                                style={{
-                                    flex: 1,
-                                    textAlign: 'center',
-                                    padding: '0.7rem 1rem',
-                                    cursor: 'pointer',
-                                    borderBottom: categoryType === 'Income' ? '3px solid var(--income-color)' : '3px solid transparent',
-                                    color: categoryType === 'Income' ? 'var(--income-color)' : 'var(--text-secondary)',
-                                    fontWeight: categoryType === 'Income' ? '700' : '400',
-                                    background: categoryType === 'Income' ? 'rgba(26, 127, 55, 0.06)' : 'transparent',
-                                    fontSize: '0.95rem',
-                                    transition: 'all 0.2s'
-                                }}
-                            >
-                                <div>수입</div>
-                                <div style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--income-color)', opacity: 0.85, marginTop: '2px' }}>
-                                    {filteredMonthTransactions.filter(t => t.type === 'Income').reduce((s, t) => s + Number(t.amount), 0).toLocaleString()}원
-                                </div>
-                            </div>
-                            <div 
-                                onClick={() => setCategoryType('Expense')} 
-                                style={{
-                                    flex: 1,
-                                    textAlign: 'center',
-                                    padding: '0.7rem 1rem',
-                                    cursor: 'pointer',
-                                    borderBottom: categoryType === 'Expense' ? '3px solid var(--expense-color)' : '3px solid transparent',
-                                    color: categoryType === 'Expense' ? 'var(--expense-color)' : 'var(--text-secondary)',
-                                    fontWeight: categoryType === 'Expense' ? '700' : '400',
-                                    background: categoryType === 'Expense' ? 'rgba(207, 34, 46, 0.06)' : 'transparent',
-                                    fontSize: '0.95rem',
-                                    transition: 'all 0.2s'
-                                }}
-                            >
-                                <div>지출</div>
-                                <div style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--expense-color)', opacity: 0.85, marginTop: '2px' }}>
-                                    {filteredMonthTransactions.filter(t => t.type === 'Expense').reduce((s, t) => s + Number(t.amount), 0).toLocaleString()}원
-                                </div>
-                            </div>
+                    <section className="dashboard-category-card">
+                        <div className="dashboard-category-tabs">
+                            <button className={categoryType === 'Income' ? 'active income' : ''} onClick={() => setCategoryType('Income')}>
+                                <span>수입</span><strong>{dashboardIncome.toLocaleString()}원</strong>
+                            </button>
+                            <button className={categoryType === 'Expense' ? 'active expense' : ''} onClick={() => setCategoryType('Expense')}>
+                                <span>지출</span><strong>{dashboardExpense.toLocaleString()}원</strong>
+                            </button>
                         </div>
-                        <div style={{ padding: '0.5rem 1rem 1rem' }}>
+                        <div className="dashboard-category-list">
                             {(() => {
                                 const monthT = filteredMonthTransactions.filter(t => t.type === categoryType);
                                 const totalAmount = monthT.reduce((sum, t) => sum + Number(t.amount), 0);
@@ -755,39 +733,27 @@
                                 }).filter(c => c.amount > 0).sort((a, b) => b.amount - a.amount);
 
                                 if (catGrouped.length === 0) {
-                                    return <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--text-secondary)' }}>데이터가 없습니다.</div>;
+                                    return <div className="dashboard-category-empty"><Icon name="receipt-text" size={25} /><span>데이터가 없습니다.</span></div>;
                                 }
 
-                                const accentColor = categoryType === 'Income' ? 'var(--income-color)' : 'var(--expense-color)';
-
-                                return catGrouped.map((c, idx) => {
+                                return catGrouped.map(c => {
                                     const percent = totalAmount > 0 ? Math.round((c.amount / totalAmount) * 100) : 0;
                                     return (
-                                        <div key={c.id} style={{ padding: '0.75rem 0', borderBottom: idx < catGrouped.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                                                    <span style={{ minWidth: '38px', fontSize: '0.82rem', color: accentColor, fontWeight: '600', textAlign: 'right' }}>{percent}%</span>
-                                                    <span style={{ fontWeight: '500', color: 'var(--text-primary)', fontSize: '0.95rem' }}>{c.name}</span>
-                                                </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                    <span style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '0.95rem' }}>{c.amount.toLocaleString()}원</span>
-                                                    <button onClick={(e) => { e.stopPropagation(); setSearchTerm(c.name); setTransactionMonth(selectedMonth); setTab('transactions'); }} style={{ padding: '2px 6px', fontSize: '0.75rem', background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer' }}>상세보기</button>
-                                                </div>
-                                            </div>
-                                            <div style={{ height: '4px', background: 'var(--border-color)', borderRadius: '2px', overflow: 'hidden', marginLeft: '44px' }}>
-                                                <div style={{ height: '100%', width: `${percent}%`, background: accentColor, borderRadius: '2px', transition: 'width 0.4s ease' }} />
-                                            </div>
-                                        </div>
+                                        <button key={c.id} className={`dashboard-category-row ${categoryType.toLowerCase()}`} onClick={() => { setSearchTerm(c.name); setTransactionMonth(selectedMonth); setTab('transactions'); }}>
+                                            <span className="dashboard-category-percent">{percent}%</span>
+                                            <span className="dashboard-category-copy"><strong>{c.name}</strong><span><i style={{ width: `${percent}%` }} /></span></span>
+                                            <span className="dashboard-category-amount"><strong>{c.amount.toLocaleString()}원</strong><Icon name="chevron-right" size={18} /></span>
+                                        </button>
                                     );
                                 });
                             })()}
                         </div>
-                    </div>
+                    </section>
 
                     {/* 2. 연간자산흐름 & 3. 연간흐름 */}
-                    <div className="dashboard-grid" style={{ marginTop: '1.5rem' }}>
-                        <div className="card">
-                            <h3 style={{ marginBottom: '1rem' }}>연간 자산 흐름</h3>
+                    <div className="dashboard-grid dashboard-chart-grid">
+                        <section className="dashboard-chart-card">
+                            <div className="dashboard-chart-heading"><span><Icon name="landmark" size={18} /></span><h3>연간 자산 흐름</h3></div>
                             <ChartBar
                                 chartId="chart-assets"
                                 series={[{ name: '자산액', data: annualData.assetData }]}
@@ -795,19 +761,13 @@
                                 labels={annualData.labels}
                                 height={260}
                             />
-                        </div>
-                        <div className="card">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        </section>
+                        <section className="dashboard-chart-card">
+                            <div className="dashboard-chart-heading">
                                 <h3>연간 흐름</h3>
-                                <div style={{ display: 'flex', gap: '0.4rem', background: 'rgba(9, 105, 218, 0.08)', padding: '4px', borderRadius: '8px', border: '1px solid rgba(9, 105, 218, 0.2)' }}>
-                                    <button
-                                        onClick={() => setChartType('income_expense')}
-                                        style={{ background: chartType === 'income_expense' ? '#0969da' : 'transparent', color: chartType === 'income_expense' ? 'white' : '#0969da', padding: '0.3rem 0.7rem', fontSize: '0.82rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: chartType === 'income_expense' ? '600' : '400', transition: 'all 0.2s' }}
-                                    >수입/지출</button>
-                                    <button
-                                        onClick={() => setChartType('savings')}
-                                        style={{ background: chartType === 'savings' ? '#0969da' : 'transparent', color: chartType === 'savings' ? 'white' : '#0969da', padding: '0.3rem 0.7rem', fontSize: '0.82rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: chartType === 'savings' ? '600' : '400', transition: 'all 0.2s' }}
-                                    >저축</button>
+                                <div className="dashboard-chart-toggle">
+                                    <button className={chartType === 'income_expense' ? 'active' : ''} onClick={() => setChartType('income_expense')}>수입/지출</button>
+                                    <button className={chartType === 'savings' ? 'active' : ''} onClick={() => setChartType('savings')}>저축</button>
                                 </div>
                             </div>
                             {chartType === 'income_expense' ? (
@@ -830,18 +790,17 @@
                                     height={260}
                                 />
                             )}
-                        </div>
+                        </section>
                     </div>
 
                     {/* 4. 카테고리별 연간흐름 */}
-                    <div className="card" style={{ marginTop: '1.5rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                            <h3>카테고리별<br/>연간 흐름</h3>
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <section className="dashboard-chart-card dashboard-category-chart">
+                        <div className="dashboard-chart-heading">
+                            <h3>카테고리별 연간 흐름</h3>
+                            <div className="dashboard-chart-selects">
                                 <select
                                     value={categoryType}
                                     onChange={e => setCategoryType(e.target.value)}
-                                    style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', background: 'rgba(9, 105, 218, 0.08)', color: '#0969da', border: '1px solid rgba(9, 105, 218, 0.35)', fontSize: '0.85rem', fontWeight: '500', cursor: 'pointer', outline: 'none' }}
                                 >
                                     <option value="Expense">지출</option>
                                     <option value="Income">수입</option>
@@ -850,7 +809,6 @@
                                 <select
                                     value={selectedCategory}
                                     onChange={e => setSelectedCategory(e.target.value)}
-                                    style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', background: 'rgba(9, 105, 218, 0.08)', color: '#0969da', border: '1px solid rgba(9, 105, 218, 0.35)', maxWidth: '150px', fontSize: '0.85rem', fontWeight: '500', cursor: 'pointer', outline: 'none' }}
                                 >
                                     {data.categories.filter(c => c.type === categoryType).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                 </select>
@@ -863,7 +821,7 @@
                             labels={annualCategoryData.labels}
                             height={260}
                         />
-                    </div>
+                    </section>
                 </div>
             );
         }
@@ -888,6 +846,7 @@
             const homeMenuItems = [
                 { label: '예산 관리', icon: 'target', color: '#ff4051', tab: 'plan' },
                 { label: '반복', icon: 'repeat', color: '#6b7ff2', tab: 'recurring' },
+                { label: '장바구니', icon: 'shopping-basket', color: '#25a875', tab: 'shopping' },
                 { label: '설정', icon: 'settings', color: '#6f7782', tab: 'settings' }
             ];
 
@@ -941,6 +900,122 @@
                         <button className="home-refresh-button" onClick={() => window.location.reload()} aria-label="새로고침"><Icon name="refresh-cw" size={22} /></button>
                         <button className={`home-add-button ${!isConnected ? 'btn-disabled' : ''}`} onClick={openAddTransaction} aria-label="거래 추가"><Icon name="plus" size={27} /></button>
                     </div>
+                </div>
+            );
+        }
+
+        function ShoppingPage({ data, setData, syncToCloud, setTab, isConnected }) {
+            const [itemName, setItemName] = useState('');
+            const [favoriteOnAdd, setFavoriteOnAdd] = useState(false);
+            const inputRef = React.useRef(null);
+            const items = data.shoppingItems || [];
+            const favorites = data.shoppingFavorites || [];
+            const normalizeName = name => name.trim().replace(/\s+/g, ' ');
+            const isSameName = (left, right) => normalizeName(left).toLocaleLowerCase() === normalizeName(right).toLocaleLowerCase();
+
+            const commit = (nextItems, nextFavorites = favorites) => {
+                const newData = { ...data, shoppingItems: nextItems, shoppingFavorites: nextFavorites };
+                setData(newData);
+                syncToCloud(newData);
+            };
+
+            const requireConnection = () => {
+                if (isConnected) return true;
+                alert('Firebase 연동이 필요합니다.');
+                return false;
+            };
+
+            const addItem = event => {
+                event.preventDefault();
+                if (!requireConnection()) return;
+                const name = normalizeName(itemName);
+                if (!name) return;
+                const alreadyListed = items.some(item => isSameName(item.name, name));
+                const nextItems = alreadyListed ? items : [...items, { id: Date.now().toString(), name, createdAt: Date.now() }];
+                const alreadyFavorite = favorites.some(item => isSameName(item.name, name));
+                const nextFavorites = favoriteOnAdd && !alreadyFavorite ? [...favorites, { id: `favorite-${Date.now()}`, name }] : favorites;
+                commit(nextItems, nextFavorites);
+                setItemName('');
+                inputRef.current?.focus();
+            };
+
+            const addFavoriteToList = favorite => {
+                if (!requireConnection() || items.some(item => isSameName(item.name, favorite.name))) return;
+                commit([...items, { id: Date.now().toString(), name: favorite.name, createdAt: Date.now() }]);
+            };
+
+            const toggleFavorite = item => {
+                if (!requireConnection()) return;
+                const existing = favorites.find(favorite => isSameName(favorite.name, item.name));
+                const nextFavorites = existing
+                    ? favorites.filter(favorite => favorite.id !== existing.id)
+                    : [...favorites, { id: `favorite-${Date.now()}`, name: item.name }];
+                commit(items, nextFavorites);
+            };
+
+            const removeFavorite = favoriteId => {
+                if (!requireConnection()) return;
+                commit(items, favorites.filter(favorite => favorite.id !== favoriteId));
+            };
+
+            const completeItem = itemId => {
+                if (!requireConnection()) return;
+                commit(items.filter(item => item.id !== itemId));
+            };
+
+            return (
+                <div className="shopping-page fade-in">
+                    <div className="shopping-toolbar">
+                        <button className="transaction-round-button" onClick={() => setTab('home')} aria-label="홈으로 돌아가기"><Icon name="chevron-left" size={20} /></button>
+                        <strong>장바구니</strong>
+                        <span className="shopping-count">{items.length}</span>
+                    </div>
+
+                    <form className="shopping-add-card" onSubmit={addItem}>
+                        <div>
+                            <span className="shopping-add-icon"><Icon name="shopping-basket" size={21} /></span>
+                            <input ref={inputRef} value={itemName} onChange={event => setItemName(event.target.value)} placeholder="살 품목을 입력하세요" aria-label="장보기 품목" disabled={!isConnected} autoFocus />
+                            <button type="button" className={favoriteOnAdd ? 'active' : ''} onClick={() => setFavoriteOnAdd(value => !value)} aria-label="추가하면서 즐겨찾기"><Icon name="star" size={20} /></button>
+                        </div>
+                        <button type="submit" className="shopping-add-button" disabled={!isConnected || !normalizeName(itemName)}><Icon name="plus" size={20} />목록에 추가</button>
+                    </form>
+
+                    <section className="shopping-favorites-card">
+                        <header><span><Icon name="star" size={17} />즐겨찾기</span><small>눌러서 빠르게 추가</small></header>
+                        {favorites.length > 0 ? (
+                            <div className="shopping-favorites-list">
+                                {favorites.map(favorite => {
+                                    const isListed = items.some(item => isSameName(item.name, favorite.name));
+                                    return (
+                                        <span key={favorite.id} className={isListed ? 'listed' : ''}>
+                                            <button onClick={() => addFavoriteToList(favorite)} disabled={isListed} aria-label={`${favorite.name} 목록에 추가`}><Icon name={isListed ? 'check' : 'plus'} size={14} />{favorite.name}</button>
+                                            <button onClick={() => removeFavorite(favorite.id)} aria-label={`${favorite.name} 즐겨찾기 삭제`}><Icon name="x" size={13} /></button>
+                                        </span>
+                                    );
+                                })}
+                            </div>
+                        ) : <p className="shopping-favorites-empty">품목의 별을 누르면 여기에 저장됩니다.</p>}
+                    </section>
+
+                    <section className="shopping-list-section">
+                        <header><div><strong>살 품목</strong><small>{items.length > 0 ? `${items.length}개 남음` : '목록이 비어 있어요'}</small></div></header>
+                        {items.length > 0 ? (
+                            <div className="shopping-list-card">
+                                {items.map(item => {
+                                    const isFavorite = favorites.some(favorite => isSameName(favorite.name, item.name));
+                                    return (
+                                        <div key={item.id} className="shopping-item-row">
+                                            <button className={`shopping-item-star ${isFavorite ? 'active' : ''}`} onClick={() => toggleFavorite(item)} aria-label={`${item.name} 즐겨찾기 ${isFavorite ? '해제' : '추가'}`}><Icon name="star" size={20} /></button>
+                                            <strong>{item.name}</strong>
+                                            <button className="shopping-item-complete" onClick={() => completeItem(item.id)} aria-label={`${item.name} 구매 완료 및 삭제`}><Icon name="check" size={22} /></button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="shopping-empty-state"><span><Icon name="shopping-basket" size={28} /></span><strong>장볼 준비가 끝났어요</strong><p>위 입력창이나 즐겨찾기에서 품목을 추가해 보세요.</p></div>
+                        )}
+                    </section>
                 </div>
             );
         }
@@ -2325,6 +2400,8 @@ service cloud.firestore {
                 if (!p.groups) p.groups = initialData.groups;
                 if (!p.budgets) p.budgets = [];
                 if (!p.recurringTransactions) p.recurringTransactions = [];
+                if (!p.shoppingItems) p.shoppingItems = [];
+                if (!p.shoppingFavorites) p.shoppingFavorites = [];
                 if (p.assets) p.assets = p.assets.map(a => ({
                     ...a,
                     initialBalance: a.initialBalance !== undefined ? a.initialBalance : 0,
@@ -2493,6 +2570,7 @@ service cloud.firestore {
                 dashboard: '대시보드',
                 plan: '계획',
                 recurring: '반복',
+                shopping: '장바구니',
                 transactions: '거래 내역',
                 assets: '자산 현황',
                 settings: '설정'
@@ -2500,10 +2578,10 @@ service cloud.firestore {
 
             return (
                 <React.Fragment>
-                    <div className={`mobile-header ${tab === 'home' ? 'home-mobile-header' : ''} ${tab === 'dashboard' ? 'dashboard-mobile-header' : ''} ${tab === 'plan' ? 'plan-mobile-header' : ''} ${tab === 'recurring' ? 'recurring-mobile-header' : ''} ${tab === 'transactions' ? 'transactions-mobile-header' : ''} ${tab === 'assets' ? 'assets-mobile-header' : ''}`}>
+                    <div className={`mobile-header ${tab === 'home' ? 'home-mobile-header' : ''} ${tab === 'dashboard' ? 'dashboard-mobile-header' : ''} ${tab === 'plan' ? 'plan-mobile-header' : ''} ${tab === 'recurring' ? 'recurring-mobile-header' : ''} ${tab === 'shopping' ? 'shopping-mobile-header' : ''} ${tab === 'transactions' ? 'transactions-mobile-header' : ''} ${tab === 'assets' ? 'assets-mobile-header' : ''}`}>
                         <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem' }}><Icon name="menu" size={24} /></button>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                            <Icon name={tab === 'home' ? 'home' : tab === 'dashboard' ? 'layout-dashboard' : tab === 'plan' ? 'target' : tab === 'recurring' ? 'repeat' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
+                            <Icon name={tab === 'home' ? 'home' : tab === 'dashboard' ? 'layout-dashboard' : tab === 'plan' ? 'target' : tab === 'recurring' ? 'repeat' : tab === 'shopping' ? 'shopping-basket' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
                             <h2 style={{ fontSize: '1.2rem' }}>{tabTitles[tab] || 'Smart Finance'}</h2>
                             <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`} style={{ marginLeft: 'auto' }}>
                                 <div className="connection-dot"></div>
@@ -2527,6 +2605,7 @@ service cloud.firestore {
                         <div className={`nav-item ${tab === 'dashboard' ? 'active' : ''}`} onClick={() => menuClick('dashboard')}><Icon name="layout-dashboard" /> 대시보드</div>
                         <div className={`nav-item ${tab === 'transactions' ? 'active' : ''}`} onClick={() => menuClick('transactions')}><Icon name="list" /> 거래 내역</div>
                         <div className={`nav-item ${tab === 'assets' ? 'active' : ''}`} onClick={() => menuClick('assets')}><Icon name="wallet" /> 자산 현황</div>
+                        <div className={`nav-item ${tab === 'shopping' ? 'active' : ''}`} onClick={() => menuClick('shopping')}><Icon name="shopping-basket" /> 장바구니</div>
                         <div className={`nav-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => menuClick('settings')}><Icon name="settings" /> 설정</div>
                         <div className="user-profile">{user ? <button onClick={() => firebase.auth().signOut()} className="auth-btn" style={{ background: 'transparent', color: '#8b949e' }}><Icon name="log-out" size={16} /> 로그아웃</button> : <button className="auth-btn login" onClick={() => { if (!fbConfig) setTab('settings'); else firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); }}><Icon name="log-in" size={16} /> 로그인</button>}</div>
                     </div>
@@ -2535,6 +2614,7 @@ service cloud.firestore {
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionMonth={setTransactionMonth} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} />}
                         {tab === 'plan' && <PlanPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} />}
                         {tab === 'recurring' && <RecurringPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} user={user} isConnected={isConnected} />}
+                        {tab === 'shopping' && <ShoppingPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} isConnected={isConnected} />}
                         {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} setTab={setTab} backTab={transactionBackTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} />}
