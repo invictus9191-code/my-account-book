@@ -131,7 +131,8 @@
                 { id: 'tr1', type: 'Transfer', name: '저축' }, { id: 'tr2', type: 'Transfer', name: '이체' }
             ],
             transactions: [],
-            budgets: []
+            budgets: [],
+            recurringTransactions: []
         };
 
         const Icon = ({ name, size = 18, className = "", style = {} }) => {
@@ -164,6 +165,30 @@
                 }
                 return sum;
             }, Number(asset.initialBalance || 0));
+        };
+
+        const formatLocalDate = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+        const getRecurringDateForMonth = (recurring, month) => {
+            const [year, monthNumber] = month.split('-').map(Number);
+            const lastDay = new Date(year, monthNumber, 0).getDate();
+            const day = Math.min(Math.max(Number(recurring.day || 1), 1), lastDay);
+            return `${month}-${String(day).padStart(2, '0')}`;
+        };
+
+        const getNextRecurringDate = recurring => {
+            if (!recurring.active) return null;
+            const today = new Date();
+            const todayString = formatLocalDate(today);
+            for (let offset = 0; offset < 24; offset += 1) {
+                const date = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+                const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                const scheduledDate = getRecurringDateForMonth(recurring, month);
+                if (scheduledDate < recurring.startDate || scheduledDate < todayString) continue;
+                if (recurring.endDate && scheduledDate > recurring.endDate) return null;
+                return scheduledDate;
+            }
+            return null;
         };
 
         // ApexCharts를 useRef + useEffect로 직접 렌더링하는 컴포넌트
@@ -757,8 +782,8 @@
             };
 
             const homeMenuItems = [
-                { label: '계획', icon: 'target', color: '#ff4051', tab: 'plan' },
-                { label: '반복', icon: 'repeat', color: '#6b7ff2', tab: 'transactions' },
+                { label: '예산 관리', icon: 'target', color: '#ff4051', tab: 'plan' },
+                { label: '반복', icon: 'repeat', color: '#6b7ff2', tab: 'recurring' },
                 { label: '설정', icon: 'settings', color: '#6f7782', tab: 'settings' }
             ];
 
@@ -818,10 +843,28 @@
 
         function BudgetModal({ data, selectedMonth, editBudget, setData, syncToCloud, onClose }) {
             const expenseCategories = data.categories.filter(category => category.type === 'Expense');
+            const [viewportStyle, setViewportStyle] = useState({});
             const [form, setForm] = useState(() => ({
                 categoryId: editBudget?.categoryId || expenseCategories[0]?.id || '',
                 amount: editBudget?.amount || ''
             }));
+
+            useEffect(() => {
+                const viewport = window.visualViewport;
+                if (!viewport) return;
+                const updateViewport = () => setViewportStyle({
+                    top: `${viewport.offsetTop}px`,
+                    bottom: 'auto',
+                    height: `${viewport.height}px`
+                });
+                updateViewport();
+                viewport.addEventListener('resize', updateViewport);
+                viewport.addEventListener('scroll', updateViewport);
+                return () => {
+                    viewport.removeEventListener('resize', updateViewport);
+                    viewport.removeEventListener('scroll', updateViewport);
+                };
+            }, []);
 
             const handleSubmit = event => {
                 event.preventDefault();
@@ -850,7 +893,7 @@
             };
 
             return (
-                <div className="budget-modal-overlay" role="presentation" onClick={onClose}>
+                <div className="budget-modal-overlay" style={viewportStyle} role="presentation" onClick={onClose}>
                     <section className="budget-modal-sheet" role="dialog" aria-modal="true" aria-labelledby="budget-modal-title" onClick={event => event.stopPropagation()}>
                         <header>
                             <button type="button" onClick={onClose} aria-label="닫기"><Icon name="x" size={25} /></button>
@@ -870,7 +913,7 @@
                             </label>
                             <label>
                                 <span>예산</span>
-                                <input type="text" inputMode="numeric" value={form.amount ? Number(form.amount).toLocaleString() : ''} onChange={event => setForm({ ...form, amount: event.target.value.replace(/[^0-9]/g, '') })} placeholder="0원" autoFocus />
+                                <input type="text" inputMode="numeric" value={form.amount ? Number(form.amount).toLocaleString() : ''} onChange={event => setForm({ ...form, amount: event.target.value.replace(/[^0-9]/g, '') })} onFocus={event => { const input = event.currentTarget; requestAnimationFrame(() => input.scrollIntoView({ block: 'center' })); }} placeholder="0원" autoFocus />
                             </label>
                             {editBudget && <button type="button" className="budget-delete-button" onClick={handleDelete}>예산 삭제</button>}
                         </form>
@@ -1003,6 +1046,160 @@
             );
         }
 
+        function RecurringModal({ data, setData, syncToCloud, editItem, user, onClose }) {
+            const today = formatLocalDate(new Date());
+            const [viewportStyle, setViewportStyle] = useState({});
+            const [form, setForm] = useState(() => editItem ? { ...editItem } : {
+                type: 'Expense',
+                name: '',
+                amount: '',
+                assetId: data.assets[0]?.id || '',
+                toAssetId: data.assets[1]?.id || '',
+                categoryId: data.categories.find(category => category.type === 'Expense')?.id || '',
+                startDate: today,
+                endDate: '',
+                day: new Date().getDate(),
+                active: true,
+                authorEmail: user?.email || ''
+            });
+
+            useEffect(() => {
+                const viewport = window.visualViewport;
+                if (!viewport) return;
+                const updateViewport = () => setViewportStyle({ top: `${viewport.offsetTop}px`, bottom: 'auto', height: `${viewport.height}px` });
+                updateViewport();
+                viewport.addEventListener('resize', updateViewport);
+                viewport.addEventListener('scroll', updateViewport);
+                return () => {
+                    viewport.removeEventListener('resize', updateViewport);
+                    viewport.removeEventListener('scroll', updateViewport);
+                };
+            }, []);
+
+            const categories = data.categories.filter(category => category.type === form.type || (form.type === 'Transfer' && category.type === 'Transfer'));
+
+            useEffect(() => {
+                if (!categories.some(category => category.id === form.categoryId)) {
+                    setForm(current => ({ ...current, categoryId: categories[0]?.id || '' }));
+                }
+            }, [form.type]);
+
+            const handleSubmit = event => {
+                event.preventDefault();
+                if (!form.name || Number(form.amount || 0) <= 0 || !form.assetId || !form.categoryId || !form.startDate || (form.type === 'Transfer' && !form.toAssetId)) return;
+                const saved = {
+                    ...form,
+                    id: editItem?.id || Date.now().toString(),
+                    amount: Number(form.amount),
+                    day: Math.min(Math.max(Number(form.day || 1), 1), 31),
+                    authorEmail: form.authorEmail || user?.email || ''
+                };
+                const items = data.recurringTransactions || [];
+                const newData = { ...data, recurringTransactions: editItem ? items.map(item => item.id === editItem.id ? saved : item) : [...items, saved] };
+                setData(newData);
+                syncToCloud(newData);
+                onClose();
+            };
+
+            const handleDelete = () => {
+                if (!editItem || !confirm('이 반복 항목을 삭제하시겠습니까? 이미 생성된 거래내역은 유지됩니다.')) return;
+                const newData = { ...data, recurringTransactions: (data.recurringTransactions || []).filter(item => item.id !== editItem.id) };
+                setData(newData);
+                syncToCloud(newData);
+                onClose();
+            };
+
+            const focusIntoView = event => {
+                const input = event.currentTarget;
+                requestAnimationFrame(() => input.scrollIntoView({ block: 'center' }));
+            };
+
+            return (
+                <div className="budget-modal-overlay recurring-modal-overlay" style={viewportStyle} role="presentation" onClick={onClose}>
+                    <section className="budget-modal-sheet recurring-modal-sheet" role="dialog" aria-modal="true" aria-labelledby="recurring-modal-title" onClick={event => event.stopPropagation()}>
+                        <header>
+                            <button type="button" onClick={onClose} aria-label="닫기"><Icon name="x" size={25} /></button>
+                            <strong id="recurring-modal-title">반복 {editItem ? '수정' : '추가'}</strong>
+                            <button type="submit" form="recurring-form" className="budget-save-button" disabled={!form.name || Number(form.amount || 0) <= 0 || !form.assetId || !form.categoryId || (form.type === 'Transfer' && !form.toAssetId)} aria-label="저장"><Icon name="check" size={24} /></button>
+                        </header>
+                        <form id="recurring-form" onSubmit={handleSubmit}>
+                            <label><span>거래 유형</span><select value={form.type} onChange={event => setForm({ ...form, type: event.target.value })}><option value="Expense">지출</option><option value="Income">수입</option><option value="Transfer">이체</option></select></label>
+                            <label><span>이름</span><input value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} onFocus={focusIntoView} placeholder="예: 월세, 구독료" autoFocus /></label>
+                            <label><span>금액</span><input type="text" inputMode="numeric" value={form.amount ? Number(form.amount).toLocaleString() : ''} onChange={event => setForm({ ...form, amount: event.target.value.replace(/[^0-9]/g, '') })} onFocus={focusIntoView} placeholder="0원" /></label>
+                            <label><span>{form.type === 'Transfer' ? '출금 자산' : '자산'}</span><select value={form.assetId} onChange={event => setForm({ ...form, assetId: event.target.value })}>{data.assets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
+                            {form.type === 'Transfer' && <label><span>입금 자산</span><select value={form.toAssetId} onChange={event => setForm({ ...form, toAssetId: event.target.value })}>{data.assets.filter(asset => asset.id !== form.assetId).map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>}
+                            <label><span>카테고리</span><select value={form.categoryId} onChange={event => setForm({ ...form, categoryId: event.target.value })}>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+                            <label><span>시작 날짜</span><input type="date" value={form.startDate} onChange={event => { const value = event.target.value; setForm({ ...form, startDate: value, day: Number(value.substring(8)) || form.day }); }} onFocus={focusIntoView} /></label>
+                            <label><span>매월 실행일</span><input type="number" min="1" max="31" value={form.day} onChange={event => setForm({ ...form, day: event.target.value })} onFocus={focusIntoView} /></label>
+                            <label><span>종료 날짜</span><input type="date" value={form.endDate || ''} min={form.startDate} onChange={event => setForm({ ...form, endDate: event.target.value })} onFocus={focusIntoView} /></label>
+                            {editItem && <button type="button" className="budget-delete-button" onClick={handleDelete}>반복 삭제</button>}
+                        </form>
+                    </section>
+                </div>
+            );
+        }
+
+        function RecurringPage({ data, setData, syncToCloud, setTab, user, isConnected }) {
+            const [selectedType, setSelectedType] = useState('Expense');
+            const [showModal, setShowModal] = useState(false);
+            const [editingItem, setEditingItem] = useState(null);
+            const items = data.recurringTransactions || [];
+            const activeItems = items.filter(item => item.active !== false && getNextRecurringDate(item));
+            const endedItems = items.filter(item => item.active === false || !getNextRecurringDate(item));
+            const visibleItems = activeItems.filter(item => item.type === selectedType);
+
+            const openCreate = () => {
+                if (!isConnected) { alert('Firebase 연동이 필요합니다.'); return; }
+                setEditingItem(null);
+                setShowModal(true);
+            };
+
+            const getCategoryName = item => data.categories.find(category => category.id === item.categoryId)?.name || '기타';
+            const getAssetName = item => data.assets.find(asset => asset.id === item.assetId)?.name || '미지정';
+            const getDday = dateString => {
+                if (!dateString) return '종료';
+                const today = new Date(`${formatLocalDate(new Date())}T00:00:00`);
+                const target = new Date(`${dateString}T00:00:00`);
+                const days = Math.round((target - today) / 86400000);
+                return days === 0 ? 'D-Day' : `D-${days}`;
+            };
+
+            return (
+                <div className="recurring-page fade-in">
+                    <div className="recurring-toolbar">
+                        <button className="transaction-round-button" onClick={() => setTab('home')} aria-label="홈으로 돌아가기"><Icon name="chevron-left" size={20} /></button>
+                        <strong>반복</strong>
+                        <button className={`recurring-create-button ${!isConnected ? 'btn-disabled' : ''}`} onClick={openCreate} aria-label="반복 추가"><Icon name="plus" size={22} /></button>
+                    </div>
+
+                    <div className="recurring-type-tabs">
+                        {[['Expense', '지출', '#3787f6'], ['Income', '수입', '#ff982d'], ['Transfer', '이체', '#6f8394']].map(([type, label, color]) => (
+                            <button key={type} className={selectedType === type ? 'active' : ''} style={{ '--tab-color': color }} onClick={() => setSelectedType(type)}>{label} <b>{activeItems.filter(item => item.type === type).length}</b></button>
+                        ))}
+                    </div>
+
+                    <div className="recurring-ended-card"><span>종료된 반복</span><strong>{endedItems.length}</strong></div>
+
+                    <div className="recurring-list">
+                        {visibleItems.map(item => {
+                            const nextDate = getNextRecurringDate(item);
+                            return (
+                                <button key={item.id} className="recurring-card" onClick={() => { setEditingItem(item); setShowModal(true); }}>
+                                    <div className="recurring-card-top"><span className="recurring-icon"><Icon name="repeat-2" size={22} /></span><strong>{getDday(nextDate)}</strong></div>
+                                    <div className="recurring-card-title"><strong>{item.name}</strong><b>{Number(item.amount).toLocaleString()}원</b></div>
+                                    <div className="recurring-card-meta"><span><Icon name="wallet" size={15} />{getAssetName(item)}</span><span><Icon name="tag" size={15} />{getCategoryName(item)}</span></div>
+                                    <div className="recurring-card-date"><span><Icon name="calendar-days" size={15} />매월 {item.day}일</span><strong>{nextDate ? `${Number(nextDate.substring(0, 4))}년 ${Number(nextDate.substring(5, 7))}월 ${Number(nextDate.substring(8))}일` : '종료됨'}</strong></div>
+                                </button>
+                            );
+                        })}
+                        {visibleItems.length === 0 && <div className="recurring-empty"><Icon name="repeat-2" size={32} /><strong>등록된 반복이 없습니다</strong><p>추가 버튼을 눌러 매월 자동 생성할 거래를 등록해 보세요.</p></div>}
+                    </div>
+
+                    {showModal && <RecurringModal data={data} setData={setData} syncToCloud={syncToCloud} editItem={editingItem} user={user} onClose={() => { setShowModal(false); setEditingItem(null); }} />}
+                </div>
+            );
+        }
+
         function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm, isConnected, authorFilter, setAuthorFilter, transactionMonth, setTransactionMonth, setTab, backTab, showMobileSearch, setShowMobileSearch }) {
             const [selectedMonth, setSelectedMonth] = useState(() => {
                 if (transactionMonth) return transactionMonth;
@@ -1060,7 +1257,8 @@
                 const categoryMatch = data.categories.find(c => c.id === t.categoryId)?.name?.toLowerCase().includes(term);
                 const assetMatch = data.assets.find(a => a.id === t.assetId)?.name?.toLowerCase().includes(term);
                 const toAssetMatch = t.type === 'Transfer' && data.assets.find(a => a.id === t.toAssetId)?.name?.toLowerCase().includes(term);
-                return memoMatch || categoryMatch || assetMatch || toAssetMatch;
+                const recurringMatch = Boolean(t.recurringId) && '반복 자동 생성 정기'.includes(term);
+                return memoMatch || categoryMatch || assetMatch || toAssetMatch || recurringMatch;
             });
 
             const groupedByDay = filteredTransactions.reduce((acc, t) => {
@@ -1223,7 +1421,10 @@
                                                     </span>
                                                     <span className="transaction-copy">
                                                         <small>{visual.categoryName}</small>
-                                                        <strong>{t.memo || visual.categoryName}</strong>
+                                                        <span className="transaction-memo-line">
+                                                            <strong>{t.memo || visual.categoryName}</strong>
+                                                            {t.recurringId && <span className="transaction-recurring-mark" title="반복 자동 생성" aria-label="반복 자동 생성"><Icon name="repeat-2" size={13} /></span>}
+                                                        </span>
                                                     </span>
                                                     <span className="transaction-amount-copy">
                                                         <strong className={`type-${t.type.toLowerCase()}`}>
@@ -1967,6 +2168,7 @@ service cloud.firestore {
                 if (!p.categories || p.categories.length < 10) p.categories = initialData.categories;
                 if (!p.groups) p.groups = initialData.groups;
                 if (!p.budgets) p.budgets = [];
+                if (!p.recurringTransactions) p.recurringTransactions = [];
                 if (p.assets) p.assets = p.assets.map(a => ({
                     ...a,
                     initialBalance: a.initialBalance !== undefined ? a.initialBalance : 0,
@@ -1991,6 +2193,7 @@ service cloud.firestore {
             const [searchTerm, setSearchTerm] = useState('');
             const [transactionMonth, setTransactionMonth] = useState(null); // 대시보드 카테고리 상세보기 시 월 필터
             const [showMobileSearch, setShowMobileSearch] = useState(false);
+            const [recurringCheckDate, setRecurringCheckDate] = useState(() => formatLocalDate(new Date()));
 
             const isConnected = useMemo(() => {
                 return !!user && !!fbConfig && window.firebase && firebase.apps.length > 0;
@@ -2005,6 +2208,60 @@ service cloud.firestore {
                     docRef.set(newData).catch(err => console.error("Firebase Sync Error:", err));
                 }
             };
+
+            useEffect(() => {
+                const timer = setInterval(() => {
+                    const currentDate = formatLocalDate(new Date());
+                    setRecurringCheckDate(previous => previous === currentDate ? previous : currentDate);
+                }, 60000);
+                return () => clearInterval(timer);
+            }, []);
+
+            useEffect(() => {
+                const recurringItems = (data.recurringTransactions || []).filter(item => item.active !== false);
+                if (recurringItems.length === 0) return;
+                const today = recurringCheckDate;
+                const currentMonth = today.substring(0, 7);
+                const existingIds = new Set(data.transactions.map(transaction => transaction.id));
+                const generated = [];
+
+                recurringItems.forEach(item => {
+                    if (!item.startDate) return;
+                    const [startYear, startMonth] = item.startDate.substring(0, 7).split('-').map(Number);
+                    let cursor = new Date(startYear, startMonth - 1, 1);
+                    let safety = 0;
+                    while (safety < 240) {
+                        const month = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+                        if (month > currentMonth) break;
+                        const scheduledDate = getRecurringDateForMonth(item, month);
+                        const transactionId = `recurring-${item.id}-${month}`;
+                        if (scheduledDate >= item.startDate && scheduledDate <= today && (!item.endDate || scheduledDate <= item.endDate) && !existingIds.has(transactionId)) {
+                            generated.push({
+                                id: transactionId,
+                                recurringId: item.id,
+                                recurringMonth: month,
+                                type: item.type,
+                                amount: Number(item.amount || 0),
+                                date: scheduledDate,
+                                assetId: item.assetId,
+                                toAssetId: item.type === 'Transfer' ? item.toAssetId : undefined,
+                                categoryId: item.categoryId,
+                                memo: item.name,
+                                authorEmail: item.authorEmail || ''
+                            });
+                            existingIds.add(transactionId);
+                        }
+                        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+                        safety += 1;
+                    }
+                });
+
+                if (generated.length > 0) {
+                    const newData = { ...data, transactions: [...data.transactions, ...generated] };
+                    setData(newData);
+                    syncToCloud(newData);
+                }
+            }, [data.recurringTransactions, data.transactions, recurringCheckDate]);
 
             useEffect(() => {
                 if (!fbConfig || !window.firebase) return;
@@ -2087,6 +2344,7 @@ service cloud.firestore {
                 home: '홈',
                 dashboard: '대시보드',
                 plan: '계획',
+                recurring: '반복',
                 transactions: '거래 내역',
                 assets: '자산 현황',
                 settings: '설정'
@@ -2094,10 +2352,10 @@ service cloud.firestore {
 
             return (
                 <React.Fragment>
-                    <div className={`mobile-header ${tab === 'home' ? 'home-mobile-header' : ''} ${tab === 'dashboard' ? 'dashboard-mobile-header' : ''} ${tab === 'plan' ? 'plan-mobile-header' : ''} ${tab === 'transactions' ? 'transactions-mobile-header' : ''} ${tab === 'assets' ? 'assets-mobile-header' : ''}`}>
+                    <div className={`mobile-header ${tab === 'home' ? 'home-mobile-header' : ''} ${tab === 'dashboard' ? 'dashboard-mobile-header' : ''} ${tab === 'plan' ? 'plan-mobile-header' : ''} ${tab === 'recurring' ? 'recurring-mobile-header' : ''} ${tab === 'transactions' ? 'transactions-mobile-header' : ''} ${tab === 'assets' ? 'assets-mobile-header' : ''}`}>
                         <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem' }}><Icon name="menu" size={24} /></button>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                            <Icon name={tab === 'home' ? 'home' : tab === 'dashboard' ? 'layout-dashboard' : tab === 'plan' ? 'target' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
+                            <Icon name={tab === 'home' ? 'home' : tab === 'dashboard' ? 'layout-dashboard' : tab === 'plan' ? 'target' : tab === 'recurring' ? 'repeat' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
                             <h2 style={{ fontSize: '1.2rem' }}>{tabTitles[tab] || 'Smart Finance'}</h2>
                             <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`} style={{ marginLeft: 'auto' }}>
                                 <div className="connection-dot"></div>
@@ -2128,6 +2386,7 @@ service cloud.firestore {
                         {tab === 'home' && <HomePage data={data} setTab={setTab} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} onNavigate={menuClick} />}
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionMonth={setTransactionMonth} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} />}
                         {tab === 'plan' && <PlanPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} />}
+                        {tab === 'recurring' && <RecurringPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} user={user} isConnected={isConnected} />}
                         {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} setTab={setTab} backTab={transactionBackTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} />}
