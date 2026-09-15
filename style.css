@@ -2107,33 +2107,6 @@ textarea:focus {
   clip: rect(0, 0, 0, 0);
 }
 
-.asset-smart-guide {
-  margin: 2px 0 18px;
-  padding: 18px;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  border-radius: 25px;
-  background: #e4e4e9;
-  color: #248ee8;
-}
-
-.asset-smart-guide div {
-  color: #2e3339;
-}
-
-.asset-smart-guide strong {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 0.9rem;
-}
-
-.asset-smart-guide p {
-  color: #7e838a;
-  font-size: 0.75rem;
-  line-height: 1.5;
-}
-
 .asset-extra-fields {
   padding-top: 2px;
 }

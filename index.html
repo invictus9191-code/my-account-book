@@ -1211,10 +1211,6 @@
                         <form id="asset-form" className="asset-modal-form" onSubmit={handleSubmit}>
                             <div className="form-row asset-type-row"><label>자산 유형</label><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}><option value="Cash">현금</option><option value="Bank">은행</option><option value="Card">카드</option></select></div>
                             <div className="form-row asset-name-row"><label className="sr-only">자산 이름</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="자산 이름" autoFocus required /></div>
-                            <div className="asset-smart-guide">
-                                <Icon name="info" size={17} />
-                                <div><strong>스마트 자산 선택</strong><p>계좌나 카드 이름과 동일하게 자산 이름을 설정하면 거래 입력 시 자산을 쉽게 찾을 수 있습니다.</p></div>
-                            </div>
                             <div className="asset-extra-fields">
                             <div className="form-row"><label>우선순위</label><input type="number" value={form.priority !== undefined ? form.priority : ''} onChange={e => setForm({ ...form, priority: e.target.value })} placeholder="예: 1 (낮은 숫자 우선)" /></div>
                             <div className="form-row"><label>소유자</label><select value={form.ownerId} onChange={e => setForm({ ...form, ownerId: e.target.value })} required><option value="">선택</option>{data.owners.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>
