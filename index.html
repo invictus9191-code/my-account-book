@@ -118,6 +118,7 @@
         const FIREBASE_CONFIG_KEY = 'INV_FIREBASE_CONFIG';
         const PASSWORD_KEY = 'INV_APP_PASSWORD';
         const SHARED_ID_KEY = 'INV_SHARED_ID';
+        const ASSET_AMOUNT_HIDDEN_KEY = 'INV_ASSET_AMOUNT_HIDDEN';
         const DEFAULT_PASSWORD = '9999';
 
         const initialData = {
@@ -826,7 +827,7 @@
             );
         }
 
-        function HomePage({ data, setTab, setEdit, setShowModal, isConnected, onNavigate }) {
+        function HomePage({ data, setTab, setEdit, setShowModal, isConnected, onNavigate, hideAssetAmounts, setHideAssetAmounts }) {
             const now = new Date();
             const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             const monthExpense = data.transactions
@@ -846,12 +847,16 @@
             const homeMenuItems = [
                 { label: '예산 관리', icon: 'target', color: '#ff4051', tab: 'plan' },
                 { label: '반복', icon: 'repeat', color: '#6b7ff2', tab: 'recurring' },
-                { label: '장바구니', icon: 'shopping-basket', color: '#25a875', tab: 'shopping' },
+                { label: '장바구니', icon: 'shopping-basket', color: '#25a875', tab: 'shopping', count: (data.shoppingItems || []).length },
                 { label: '설정', icon: 'settings', color: '#6f7782', tab: 'settings' }
             ];
 
             return (
                 <div className="home-page fade-in">
+                    <label className="home-asset-privacy">
+                        <input type="checkbox" checked={hideAssetAmounts} onChange={event => setHideAssetAmounts(event.target.checked)} />
+                        <span><Icon name={hideAssetAmounts ? 'eye-off' : 'eye'} size={14} />금액 숨기기</span>
+                    </label>
                     <button className="home-expense-card" onClick={() => setTab('dashboard')}>
                         <span><small>이번 달</small><strong>지출</strong></span>
                         <b>{monthExpense.toLocaleString()}원</b>
@@ -860,7 +865,7 @@
                     <button className="home-row-card" onClick={() => setTab('assets')}>
                         <span className="home-card-icon asset"><Icon name="wallet" size={21} /></span>
                         <strong>자산</strong>
-                        <b>{totalAssets.toLocaleString()}원</b>
+                        <b>{hideAssetAmounts ? '금액숨김' : `${totalAssets.toLocaleString()}원`}</b>
                     </button>
 
                     <button className="home-transactions-card" onClick={() => setTab('transactions')}>
@@ -890,7 +895,10 @@
                         {homeMenuItems.map(item => (
                             <button key={item.label} className="home-row-card" onClick={() => onNavigate(item.tab)}>
                                 <span className="home-card-icon" style={{ background: item.color }}><Icon name={item.icon} size={20} /></span>
-                                <strong>{item.label}</strong>
+                                <span className="home-menu-label">
+                                    <strong>{item.label}</strong>
+                                    {item.count > 0 && <span className="home-menu-count" aria-label={`${item.count}개 품목`}>{item.count}</span>}
+                                </span>
                                 <Icon name="chevron-right" size={22} className="home-chevron" />
                             </button>
                         ))}
@@ -974,7 +982,7 @@
                     <form className="shopping-add-card" onSubmit={addItem}>
                         <div>
                             <span className="shopping-add-icon"><Icon name="shopping-basket" size={21} /></span>
-                            <input ref={inputRef} value={itemName} onChange={event => setItemName(event.target.value)} placeholder="살 품목을 입력하세요" aria-label="장보기 품목" disabled={!isConnected} autoFocus />
+                            <input ref={inputRef} value={itemName} onChange={event => setItemName(event.target.value)} placeholder="살 품목을 입력하세요" aria-label="장보기 품목" disabled={!isConnected} />
                             <button type="button" className={favoriteOnAdd ? 'active' : ''} onClick={() => setFavoriteOnAdd(value => !value)} aria-label="추가하면서 즐겨찾기"><Icon name="star" size={20} /></button>
                         </div>
                         <button type="submit" className="shopping-add-button" disabled={!isConnected || !normalizeName(itemName)}><Icon name="plus" size={20} />목록에 추가</button>
@@ -1677,7 +1685,7 @@
             );
         }
 
-        function AssetManagementPage({ data, setEdit, setShowModal, setTab, setSearchTerm, setEditAsset, setShowAssetModal }) {
+        function AssetManagementPage({ data, setEdit, setShowModal, setTab, setSearchTerm, setEditAsset, setShowAssetModal, hideAssetAmounts }) {
             const [selectedAsset, setSelectedAsset] = useState(null);
 
             const groupGrouped = (data.groups || [])
@@ -1736,7 +1744,7 @@
                                                     <td colSpan="6">
                                                         <div className="subtotal-label">[{y}년 {m}월]</div>
                                                         <div className="subtotal-values">
-                                                            (수입: {monthIncome.toLocaleString()} / 지출: {monthExpense.toLocaleString()})
+                                                            {hideAssetAmounts ? '금액숨김' : `(수입: ${monthIncome.toLocaleString()} / 지출: ${monthExpense.toLocaleString()})`}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -1746,7 +1754,7 @@
                                                         <td className={`type-${t.type.toLowerCase()} mobile-hide`}>{t.type === 'Income' ? '수입' : t.type === 'Expense' ? '지출' : '이체'}</td>
                                                         <td className="mobile-hide">{data.categories.find(c => c.id === t.categoryId)?.name || '-'}</td>
                                                         <td style={{ fontWeight: '600' }} className={`type-${t.type.toLowerCase()}`}>
-                                                            {t.type === 'Expense' && t.assetId === asset.id ? '-' : t.type === 'Income' && t.assetId === asset.id ? '+' : t.type === 'Transfer' && t.toAssetId === asset.id ? '+' : t.type === 'Transfer' && t.assetId === asset.id ? '-' : ''}{Number(t.amount).toLocaleString()}
+                                                            {hideAssetAmounts ? '금액숨김' : `${t.type === 'Expense' && t.assetId === asset.id ? '-' : t.type === 'Income' && t.assetId === asset.id ? '+' : t.type === 'Transfer' && t.toAssetId === asset.id ? '+' : t.type === 'Transfer' && t.assetId === asset.id ? '-' : ''}${Number(t.amount).toLocaleString()}`}
                                                         </td>
                                                         <td className="mobile-hide">
                                                             {t.type === 'Transfer'
@@ -1780,7 +1788,7 @@
                     <div className="asset-total-card">
                         <div>
                             <div style={{ fontSize: '0.85rem', opacity: 0.9, marginBottom: '2px' }}>전체 자산 합계</div>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{grandTotal.toLocaleString()}원</div>
+                            <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{hideAssetAmounts ? '금액숨김' : `${grandTotal.toLocaleString()}원`}</div>
                         </div>
                         <Icon name="wallet" size={32} style={{ opacity: 0.4 }} />
                     </div>
@@ -1789,7 +1797,7 @@
                             <div key={g.id} style={{ marginBottom: '2rem' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.8rem', borderBottom: '2px solid #30363d', marginBottom: '1rem' }}>
                                     <h3 style={{ color: '#58a6ff' }}>{g.name}</h3>
-                                    <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#58a6ff' }}>{g.total.toLocaleString()}원</span>
+                                    <span style={{ fontWeight: 'bold', fontSize: '1.1rem', color: '#58a6ff' }}>{hideAssetAmounts ? '금액숨김' : `${g.total.toLocaleString()}원`}</span>
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                     {g.assets.map(a => {
@@ -1800,7 +1808,7 @@
                                                     {a.name}
                                                     <Icon name="chevron-right" size={14} style={{ color: '#58a6ff', opacity: 0.7 }} />
                                                 </span>
-                                                <span style={{ fontWeight: 500 }}>{bal.toLocaleString()}원</span>
+                                                <span style={{ fontWeight: 500 }}>{hideAssetAmounts ? '금액숨김' : `${bal.toLocaleString()}원`}</span>
                                             </div>
                                         );
                                     })}
@@ -2412,6 +2420,7 @@ service cloud.firestore {
             const [user, setUser] = useState(null);
             const [fbConfig, setFbConfig] = useState(() => JSON.parse(localStorage.getItem(FIREBASE_CONFIG_KEY) || 'null'));
             const [tab, setTab] = useState('home');
+            const [hideAssetAmounts, setHideAssetAmounts] = useState(() => localStorage.getItem(ASSET_AMOUNT_HIDDEN_KEY) === 'true');
             const [transactionBackTab, setTransactionBackTab] = useState('home');
             const [showModal, setShowModal] = useState(false);
             const [edit, setEdit] = useState(null);
@@ -2542,6 +2551,10 @@ service cloud.firestore {
             }, [data]);
 
             useEffect(() => {
+                localStorage.setItem(ASSET_AMOUNT_HIDDEN_KEY, String(hideAssetAmounts));
+            }, [hideAssetAmounts]);
+
+            useEffect(() => {
                 if (tab !== 'transactions') setTransactionBackTab(tab);
             }, [tab]);
 
@@ -2610,13 +2623,13 @@ service cloud.firestore {
                         <div className="user-profile">{user ? <button onClick={() => firebase.auth().signOut()} className="auth-btn" style={{ background: 'transparent', color: '#8b949e' }}><Icon name="log-out" size={16} /> 로그아웃</button> : <button className="auth-btn login" onClick={() => { if (!fbConfig) setTab('settings'); else firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); }}><Icon name="log-in" size={16} /> 로그인</button>}</div>
                     </div>
                     <div className={`main-content ${tab === 'home' ? 'home-content' : ''} ${tab === 'dashboard' ? 'dashboard-content' : ''}`}><div className="container">
-                        {tab === 'home' && <HomePage data={data} setTab={setTab} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} onNavigate={menuClick} />}
+                        {tab === 'home' && <HomePage data={data} setTab={setTab} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} onNavigate={menuClick} hideAssetAmounts={hideAssetAmounts} setHideAssetAmounts={setHideAssetAmounts} />}
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionMonth={setTransactionMonth} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} />}
                         {tab === 'plan' && <PlanPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} />}
                         {tab === 'recurring' && <RecurringPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} user={user} isConnected={isConnected} />}
                         {tab === 'shopping' && <ShoppingPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} isConnected={isConnected} />}
                         {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} setTab={setTab} backTab={transactionBackTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}
-                        {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} />}
+                        {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} hideAssetAmounts={hideAssetAmounts} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} />}
                     </div></div>
                     {showModal && <TransactionModal data={data} setData={setData} onClose={() => { setShowModal(false); setEdit(null); }} editItem={edit} syncToCloud={syncToCloud} isConnected={isConnected} user={user} />}
