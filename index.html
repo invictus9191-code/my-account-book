@@ -46,7 +46,7 @@
 
             document.addEventListener('touchstart', function(e) {
                 touchStartY = e.touches[0].clientY;
-                isIndependentScrollGesture = !!(e.target.closest && e.target.closest('.budget-modal-sheet, .asset-modal-form, .month-picker-list, .modal-content'));
+                isIndependentScrollGesture = !!(e.target.closest && e.target.closest('.budget-modal-sheet, .asset-modal-form, .transaction-modal-form, .month-picker-list, .modal-content'));
             }, { passive: true });
 
             document.addEventListener('touchmove', function(e) {
@@ -1868,6 +1868,11 @@
                     setForm(f => ({ ...f, toAssetId: filteredToAssets[0].id }));
                 }
             }, [form.groupId, form.type, form.toGroupId]);
+            useEffect(() => {
+                if (form.categoryId && !filteredCategories.some(category => category.id === form.categoryId)) {
+                    setForm(current => ({ ...current, categoryId: '' }));
+                }
+            }, [form.type]);
             const handleSubmit = (e) => {
                 if (e) e.preventDefault();
                 if (form.type === 'Transfer' && form.assetId === form.toAssetId) { alert('동일 자산 간 이체는 불가합니다.'); return; }
@@ -1896,32 +1901,58 @@
             };
             const clearAmount = () => setForm({ ...form, amount: '' });
 
+            const [viewportStyle, setViewportStyle] = useState({});
+            useEffect(() => {
+                const viewport = window.visualViewport;
+                if (!viewport) return;
+                const updateViewport = () => setViewportStyle({ top: `${viewport.offsetTop}px`, bottom: 'auto', height: `${viewport.height}px` });
+                updateViewport();
+                viewport.addEventListener('resize', updateViewport);
+                viewport.addEventListener('scroll', updateViewport);
+                return () => {
+                    viewport.removeEventListener('resize', updateViewport);
+                    viewport.removeEventListener('scroll', updateViewport);
+                };
+            }, []);
+
+            const focusIntoView = event => {
+                const input = event.currentTarget;
+                requestAnimationFrame(() => input.scrollIntoView({ block: 'center' }));
+            };
+
+            const canSave = isConnected && form.date && form.categoryId && form.assetId && Number(form.amount || 0) > 0 && (form.type !== 'Transfer' || form.toAssetId);
+
             return (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', overflowY: 'auto', zIndex: 1000, padding: '1rem 0' }}>
-                    <div className="card modal-content" style={{ maxWidth: '420px', width: '90%', padding: '2rem', margin: 'auto' }}>
-                        <h2 className="modal-title" style={{ marginBottom: '1.5rem', fontSize: '1.5rem' }}>거래 {editItem ? '수정' : '추가'}</h2>
+                <div className="transaction-modal-overlay" style={viewportStyle} role="presentation">
+                    <section className="transaction-modal-panel" role="dialog" aria-modal="true" aria-labelledby="transaction-modal-title">
+                        <header className="transaction-modal-header">
+                            <button type="button" onClick={onClose} aria-label="닫기"><Icon name="x" size={27} /></button>
+                            <h2 id="transaction-modal-title">거래 {editItem ? '수정' : '추가'}</h2>
+                            <button type="submit" form="transaction-entry-form" className="transaction-modal-save" disabled={!canSave} aria-label="저장"><Icon name="check" size={27} /></button>
+                        </header>
                         {!isConnected && (
-                            <div className="sync-warning">
+                            <div className="sync-warning transaction-modal-warning">
                                 <Icon name="alert-circle" size={18} />
                                 <span>Firebase에 연동되지 않아 작성이 제한됩니다.</span>
                             </div>
                         )}
-                        <form onSubmit={handleSubmit}>
-                            <div className="form-row"><label>날짜</label><input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required /></div>
-                            <div className="form-row">
-                                <label>구분</label>
-                                <div className="type-button-group">
+                        <form id="transaction-entry-form" className="transaction-modal-form" onSubmit={handleSubmit}>
+                            <div className="transaction-type-card">
+                                <span>거래 유형</span>
+                                <div className="type-button-group transaction-type-buttons">
                                     <button type="button" className={`${form.type === 'Income' ? 'active' : ''} ${!isConnected ? 'btn-disabled' : ''}`} data-type="Income" onClick={() => setForm({ ...form, type: 'Income' })}>수입</button>
                                     <button type="button" className={`${form.type === 'Expense' ? 'active' : ''} ${!isConnected ? 'btn-disabled' : ''}`} data-type="Expense" onClick={() => setForm({ ...form, type: 'Expense' })}>지출</button>
                                     <button type="button" className={`${form.type === 'Transfer' ? 'active' : ''} ${!isConnected ? 'btn-disabled' : ''}`} data-type="Transfer" onClick={() => setForm({ ...form, type: 'Transfer' })}>이체</button>
                                 </div>
                             </div>
-                            <div className="form-row"><label>카테고리</label><select value={form.categoryId} onChange={e => setForm({ ...form, categoryId: e.target.value })} required disabled={!isConnected}><option value="">선택하세요</option>{filteredCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-                            <div className="form-row" style={{ alignItems: 'flex-start' }}>
-                                <label style={{ marginTop: '10px' }}>금액</label>
-                                <div className="quick-amount-container">
-                                    <input type="text" value={form.amount ? Number(form.amount).toLocaleString() : ''} onChange={handleAmountChange} placeholder="금액 입력" required disabled={!isConnected} />
-                                    <div className="quick-amount-buttons">
+                            <label className="transaction-form-card"><span>날짜</span><input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required /></label>
+                            <label className="transaction-form-card"><span>카테고리</span><select value={form.categoryId} onChange={e => setForm({ ...form, categoryId: e.target.value })} required disabled={!isConnected}><option value="">선택하세요</option>{filteredCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+                            <div className="transaction-amount-card">
+                                <div className="transaction-amount-input">
+                                    <label htmlFor="transaction-amount">금액</label>
+                                    <div><input id="transaction-amount" type="text" inputMode="numeric" value={form.amount ? Number(form.amount).toLocaleString() : ''} onChange={handleAmountChange} onFocus={focusIntoView} placeholder="0" required disabled={!isConnected} /><b>원</b></div>
+                                </div>
+                                <div className="quick-amount-buttons transaction-quick-amounts">
                                         <button type="button" onClick={() => handleQuickAmount(1000000)} disabled={!isConnected}>백만</button>
                                         <button type="button" onClick={() => handleQuickAmount(100000)} disabled={!isConnected}>십만</button>
                                         <button type="button" onClick={() => handleQuickAmount(10000)} disabled={!isConnected}>만</button>
@@ -1929,25 +1960,20 @@
                                         <button type="button" onClick={() => handleQuickAmount(100)} disabled={!isConnected}>백</button>
                                         <button type="button" onClick={() => handleQuickAmount(10)} disabled={!isConnected}>십</button>
                                         <button type="button" className="clear-btn" onClick={clearAmount} disabled={!isConnected}>지우기</button>
-                                    </div>
                                 </div>
                             </div>
-                            <div className="form-row"><label>그룹 (출금)</label><select value={form.groupId} onChange={e => setForm({ ...form, groupId: e.target.value })} disabled={!isConnected}><option value="">전체/미지정</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
-                            <div className="form-row"><label>{form.type === 'Transfer' ? '출금 자산' : '자산'}</label><select value={form.assetId} onChange={e => setForm({ ...form, assetId: e.target.value })} disabled={!isConnected}>{filteredAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+                            <label className="transaction-form-card"><span>그룹 {form.type === 'Transfer' ? '(출금)' : ''}</span><select value={form.groupId} onChange={e => setForm({ ...form, groupId: e.target.value })} disabled={!isConnected}><option value="">전체/미지정</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
+                            <label className="transaction-form-card"><span>{form.type === 'Transfer' ? '출금 자산' : '자산'}</span><select value={form.assetId} onChange={e => setForm({ ...form, assetId: e.target.value })} disabled={!isConnected}>{filteredAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
                             {form.type === 'Transfer' && (
                                 <React.Fragment>
-                                    <div className="form-row"><label>그룹 (입금)</label><select value={form.toGroupId} onChange={e => setForm({ ...form, toGroupId: e.target.value })} disabled={!isConnected}><option value="">전체/미지정</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
-                                    <div className="form-row"><label>입금 자산</label><select value={form.toAssetId} onChange={e => setForm({ ...form, toAssetId: e.target.value })} disabled={!isConnected}>{filteredToAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+                                    <label className="transaction-form-card"><span>그룹 (입금)</span><select value={form.toGroupId} onChange={e => setForm({ ...form, toGroupId: e.target.value })} disabled={!isConnected}><option value="">전체/미지정</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
+                                    <label className="transaction-form-card"><span>입금 자산</span><select value={form.toAssetId} onChange={e => setForm({ ...form, toAssetId: e.target.value })} disabled={!isConnected}>{filteredToAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
                                 </React.Fragment>
                             )}
-                            <div className="form-row"><label>메모</label><input value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} placeholder="메모" disabled={!isConnected} /></div>
-                            <div className="modal-footer" style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
-                                <button type="button" onClick={onClose} style={{ background: '#30363d', color: 'white' }}>취소</button>
-                                {editItem && <button type="button" className="danger" onClick={handleDelete} disabled={!isConnected}>삭제</button>}
-                                <button type="submit" className={`primary ${!isConnected ? 'btn-disabled' : ''}`} disabled={!isConnected}>저장</button>
-                            </div>
+                            <label className="transaction-form-card transaction-memo-card"><span>메모</span><input value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} onFocus={focusIntoView} placeholder="메모를 입력하세요" disabled={!isConnected} /></label>
+                            {editItem && <div className="transaction-modal-footer"><button type="button" className="danger" onClick={handleDelete} disabled={!isConnected}>거래 삭제</button></div>}
                         </form>
-                    </div>
+                    </section>
                 </div>
             );
         }

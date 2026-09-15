@@ -2374,6 +2374,285 @@ textarea:focus {
   }
 }
 
+/* Transaction entry: home-inspired rounded card layout */
+.transaction-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2400;
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(38, 42, 50, 0.34);
+  backdrop-filter: blur(4px);
+}
+
+.transaction-modal-panel {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 36px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 32px;
+  background: #f2f2f7;
+  box-shadow: 0 24px 64px rgba(26, 31, 41, 0.22);
+}
+
+.transaction-modal-header {
+  flex: 0 0 auto;
+  min-height: 78px;
+  padding: 14px 18px;
+  display: grid;
+  grid-template-columns: 50px 1fr 50px;
+  align-items: center;
+}
+
+.transaction-modal-header h2 {
+  color: #20242a;
+  font-size: 1.15rem;
+  font-weight: 750;
+  text-align: center;
+}
+
+.transaction-modal-header button {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.78);
+  color: #24292f;
+  box-shadow: 0 7px 20px rgba(40, 45, 55, 0.06);
+}
+
+.transaction-modal-header .transaction-modal-save {
+  justify-self: end;
+  background: #2d83ea;
+  color: white;
+}
+
+.transaction-modal-header .transaction-modal-save:disabled {
+  background: #d5d6dc;
+  color: white;
+}
+
+.transaction-modal-warning {
+  flex: 0 0 auto;
+  margin: 0 22px 12px;
+  border-radius: 18px;
+}
+
+.transaction-modal-form {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 8px 22px 28px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.transaction-type-card,
+.transaction-form-card,
+.transaction-amount-card {
+  width: 100%;
+  margin: 0 0 14px;
+  border-radius: 26px;
+  background: white;
+  box-shadow: 0 8px 26px rgba(29, 39, 55, 0.035);
+}
+
+.transaction-type-card {
+  min-height: 92px;
+  padding: 13px 16px;
+}
+
+.transaction-type-card > span,
+.transaction-form-card > span,
+.transaction-amount-input > label {
+  color: #30353b;
+  font-size: 0.92rem;
+  font-weight: 680;
+}
+
+.transaction-type-buttons {
+  margin-top: 11px;
+  gap: 7px;
+}
+
+.transaction-type-buttons button {
+  min-height: 38px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 14px;
+  background: #f0f1f4;
+  color: #7a818a;
+}
+
+.transaction-type-buttons button.active[data-type="Income"] {
+  border-color: transparent;
+  background: #e6f7ec;
+  color: #238c51;
+}
+
+.transaction-type-buttons button.active[data-type="Expense"] {
+  border-color: transparent;
+  background: #e8f2ff;
+  color: #277ad8;
+}
+
+.transaction-type-buttons button.active[data-type="Transfer"] {
+  border-color: transparent;
+  background: #f0ebff;
+  color: #7556ba;
+}
+
+.transaction-form-card {
+  min-height: 68px;
+  padding: 10px 17px;
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.transaction-form-card input,
+.transaction-form-card select {
+  min-width: 0;
+  height: 46px;
+  padding: 0 3px;
+  border: 0;
+  background: transparent;
+  color: #767d86;
+  font-size: 0.98rem;
+  text-align: right;
+  text-align-last: right;
+  box-shadow: none;
+}
+
+.transaction-memo-card input {
+  text-align: left;
+}
+
+.transaction-amount-card {
+  padding: 13px 16px 15px;
+}
+
+.transaction-amount-input {
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.transaction-amount-input > div {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.transaction-amount-input input {
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #252a30;
+  font-size: 1.24rem;
+  font-weight: 750;
+  text-align: right;
+  box-shadow: none;
+}
+
+.transaction-amount-input b {
+  color: #353a40;
+  font-size: 0.95rem;
+}
+
+.transaction-quick-amounts {
+  margin-top: 9px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.transaction-quick-amounts button {
+  min-width: 0;
+  min-height: 35px;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 12px;
+  background: #f1f2f5;
+  color: #6f7680;
+  font-size: 0.75rem;
+}
+
+.transaction-quick-amounts button.clear-btn {
+  background: #fff0f1;
+  color: #ca4652;
+}
+
+.transaction-modal-footer {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 2px;
+}
+
+.transaction-modal-footer .danger {
+  padding: 10px 18px;
+  border-radius: 16px;
+  background: #fff0f0;
+  color: #cb3d48;
+}
+
+@media (max-width: 768px) {
+  .transaction-modal-overlay {
+    padding: 0;
+    align-items: flex-end;
+    background: rgba(38, 42, 50, 0.3);
+  }
+
+  .transaction-modal-panel {
+    width: 100%;
+    height: calc(100vh - 12px);
+    height: calc(100dvh - 12px);
+    max-height: none;
+    border-radius: 32px 32px 0 0;
+  }
+
+  .transaction-modal-header {
+    min-height: 72px;
+    padding: 10px 16px;
+  }
+
+  .transaction-modal-warning {
+    margin: 0 16px 10px;
+  }
+
+  .transaction-modal-form {
+    padding: 8px 14px max(34px, env(safe-area-inset-bottom));
+  }
+
+  .transaction-type-card,
+  .transaction-form-card,
+  .transaction-amount-card {
+    margin-bottom: 12px;
+  }
+
+  .transaction-form-card,
+  .transaction-amount-input {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+}
+
 /* Settings: responsive rounded-card layout */
 .settings-page {
   max-width: 1100px;
