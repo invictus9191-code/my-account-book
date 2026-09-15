@@ -1584,35 +1584,35 @@
             };
 
             const renderCatList = (type) => (
-                <div style={{ marginBottom: '1.5rem' }}>
+                <div className="settings-section settings-category-section">
                     <h4 style={{ marginBottom: '0.5rem', color: '#8b949e' }}>{type === 'Income' ? '수입' : type === 'Expense' ? '지출' : '이체'}</h4>
-                    <div style={{ display: 'flex', gap: '8px', margin: '0.5rem 0' }}><input value={newCat.type === type ? newCat.name : ''} onChange={e => setNewCat({ type, name: e.target.value })} placeholder="카테고리명" /><button className="primary" onClick={() => { if (newCat.type === type) addCat(); }}>추가</button></div>
-                    {data.categories.filter(c => c.type === type).map(c => (<div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #30363d' }}>{c.name} <button onClick={() => delCat(c.id)} style={{ background: 'transparent', color: '#da3633', fontSize: '0.8rem' }}>삭제</button></div>))}
+                    <div className="settings-inline-form"><input value={newCat.type === type ? newCat.name : ''} onChange={e => setNewCat({ type, name: e.target.value })} placeholder="카테고리명" /><button className="primary" onClick={() => { if (newCat.type === type) addCat(); }}>추가</button></div>
+                    {data.categories.filter(c => c.type === type).map(c => (<div key={c.id} className="settings-list-row">{c.name} <button onClick={() => delCat(c.id)} className="settings-delete-button">삭제</button></div>))}
                 </div>
             );
 
             return (
-                <div className="fade-in">
-                    <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: '1.5rem' }}>
-                        <div style={{ display: 'flex', borderBottom: '1px solid #30363d', background: 'rgba(22, 27, 34, 0.5)', overflowX: 'auto', padding: '6px' }}>
+                <div className="settings-page fade-in">
+                    <div className="settings-shell">
+                        <div className="settings-tabs">
                             {[{ id: 'general', label: '일반/백업' }, { id: 'owners', label: '소유자' }, { id: 'groups', label: '자산 그룹' }, { id: 'assets', label: '자산 목록' }, { id: 'categories', label: '카테고리' }, { id: 'authors', label: '작성자 약칭' }].map(t => (
-                                <button key={t.id} onClick={() => setActiveTab(t.id)} style={{ padding: '0.6rem 1.2rem', margin: '0 4px', background: activeTab === t.id ? '#ffffff' : 'transparent', color: activeTab === t.id ? '#000000' : '#ffffff', border: 'none', borderRadius: '6px', whiteSpace: 'nowrap', fontWeight: activeTab === t.id ? '700' : '500', transition: 'all 0.2s ease' }}>
+                                <button key={t.id} className={activeTab === t.id ? 'active' : ''} onClick={() => setActiveTab(t.id)}>
                                     {t.label}
                                 </button>
                             ))}
                         </div>
-                        <div style={{ padding: '1.5rem' }}>
+                        <div className="settings-content">
                             {activeTab === 'general' && (
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: '1.5rem' }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                        <div>
+                                <div className="settings-general-grid">
+                                    <div className="settings-general-column">
+                                        <div className="settings-section">
                                             <h3>🔑 비밀번호 변경</h3>
-                                            <div style={{ display: 'flex', gap: '8px', margin: '1rem 0' }}><input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="새 비밀번호 입력" /><button className="primary" onClick={changePw}>변경</button></div>
+                                            <div className="settings-inline-form"><input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="새 비밀번호 입력" /><button className="primary" onClick={changePw}>변경</button></div>
                                         </div>
-                                        <div style={{ borderTop: '1px solid #30363d', paddingTop: '1.5rem' }}>
+                                        <div className="settings-section">
                                             <h3>🔗 데이터 공유 설정 (공유 ID)</h3>
                                             <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '0.5rem' }}>동일한 공유 ID를 입력한 계정끼리 데이터가 실시간으로 연동됩니다.</p>
-                                            <div style={{ display: 'flex', gap: '8px', margin: '0.5rem 0' }}>
+                                            <div className="settings-inline-form settings-share-form">
                                                 <input value={tempSharedId} onChange={e => setTempSharedId(e.target.value)} placeholder="공유 ID 입력" />
                                                 <button className="primary" onClick={saveSharedId}>저장</button>
                                                 <button onClick={generateSharedId} style={{ background: '#30363d', color: 'white' }}>생성</button>
@@ -1621,15 +1621,15 @@
                                                 <p style={{ color: '#238636', fontSize: '0.8rem' }}>현재 공유 모드 활성화 중</p>
                                             )}
                                         </div>
-                                        <div style={{ borderTop: '1px solid #30363d', paddingTop: '1.5rem' }}>
+                                        <div className="settings-section">
                                             <h3>💾 데이터 백업 및 복구</h3>
-                                            <div style={{ display: 'flex', gap: '12px', marginTop: '1rem' }}>
+                                            <div className="settings-backup-actions">
                                                 <button onClick={handleExportData} style={{ background: '#30363d', color: 'white', flex: 1 }}><Icon name="download" size={16} /> JSON 저장</button>
                                                 <label className="auth-btn login" style={{ textAlign: 'center', cursor: 'pointer', margin: 0, flex: 1 }}><Icon name="upload" size={16} /> 복구 <input type="file" accept=".json" onChange={handleImportData} style={{ display: 'none' }} /></label>
                                             </div>
                                         </div>
                                     </div>
-                                    <div>
+                                    <div className="settings-section">
                                         <h3>☁️ 서버 연동 (Firebase)</h3>
                                         <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '0.5rem' }}>Firebase 프로젝트 "웹 앱" 구성 JSON을 입력하세요.</p>
                                         <div style={{ background: 'rgba(255, 165, 0, 0.1)', padding: '8px', borderRadius: '6px', marginBottom: '1rem', border: '1px solid rgba(255, 165, 0, 0.3)' }}>
@@ -1674,12 +1674,12 @@ service cloud.firestore {
                             )}
 
                             {activeTab === 'authors' && (
-                                <div>
+                                <div className="settings-panel settings-section">
                                     <h3>작성자 약칭 관리</h3>
                                     <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>거래내역 필터에 표시될 이메일별 약칭과 거래 작성 시 기본 지정될 초기그룹을 설정합니다.</p>
                                     <div style={{ background: editingAbbr ? 'rgba(88,166,255,0.07)' : 'transparent', border: editingAbbr ? '1px solid #388bfd' : '1px solid transparent', borderRadius: '8px', padding: editingAbbr ? '12px' : '0', marginBottom: '1rem', transition: 'all 0.2s' }}>
                                         {editingAbbr && <p style={{ color: '#58a6ff', fontSize: '0.82rem', marginBottom: '8px', fontWeight: '600' }}>✏️ 약칭 수정 중: <span style={{ color: '#e6edf3' }}>{editingAbbr}</span></p>}
-                                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', maxWidth: '650px' }}>
+                                        <div className="settings-inline-form settings-author-form">
                                             <select value={newEmail} onChange={e => !editingAbbr && setNewEmail(e.target.value)} disabled={!!editingAbbr} style={{ padding: '8px', borderRadius: '6px', background: '#0d1117', color: editingAbbr ? '#8b949e' : 'white', border: '1px solid #30363d', flex: 2, minWidth: '160px', opacity: editingAbbr ? 0.6 : 1 }}>
                                                 <option value="">이메일 선택</option>
                                                 {Array.from(new Set([...data.transactions.map(t => t.authorEmail).filter(Boolean), user?.email].filter(Boolean))).map(email => (
@@ -1699,7 +1699,7 @@ service cloud.firestore {
                                     </div>
                                     <div style={{ maxWidth: '650px' }}>
                                         {(data.authorAbbreviations || []).map(a => (
-                                            <div key={a.email} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #30363d', gap: '10px', background: editingAbbr === a.email ? 'rgba(88,166,255,0.05)' : 'transparent', borderRadius: '4px', transition: 'background 0.2s' }}>
+                                            <div key={a.email} className={`settings-list-row settings-author-row ${editingAbbr === a.email ? 'editing' : ''}`}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, flexWrap: 'wrap' }}>
                                                     <span style={{ fontWeight: '500' }}>{a.email} <span style={{ color: '#58a6ff', marginLeft: '6px' }}>[{a.abbr}]</span></span>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1727,29 +1727,29 @@ service cloud.firestore {
                             )}
 
                             {activeTab === 'owners' && (
-                                <div>
+                                <div className="settings-panel settings-section">
                                     <h3>소유자 관리</h3>
                                     <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>자산을 소유하는 구성원을 등록합니다.</p>
-                                    <div style={{ display: 'flex', gap: '8px', margin: '1rem 0', maxWidth: '400px' }}><input value={newOwner} onChange={e => setNewOwner(e.target.value)} placeholder="이름" /><button className="primary" onClick={addOwner}>추가</button></div>
+                                    <div className="settings-inline-form"><input value={newOwner} onChange={e => setNewOwner(e.target.value)} placeholder="이름" /><button className="primary" onClick={addOwner}>추가</button></div>
                                     <div style={{ maxWidth: '400px' }}>
-                                        {data.owners.map(o => (<div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #30363d' }}>{o.name} <button onClick={() => delOwner(o.id)} style={{ background: 'transparent', color: '#da3633', fontSize: '0.85rem' }}>삭제</button></div>))}
+                                        {data.owners.map(o => (<div key={o.id} className="settings-list-row">{o.name} <button onClick={() => delOwner(o.id)} className="settings-delete-button">삭제</button></div>))}
                                     </div>
                                 </div>
                             )}
 
                             {activeTab === 'groups' && (
-                                <div>
+                                <div className="settings-panel settings-section">
                                     <h3>자산 그룹 관리</h3>
                                     <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>자산을 논리적으로 묶어주는 그룹을 등록합니다.</p>
-                                    <div style={{ display: 'flex', gap: '8px', margin: '1rem 0', maxWidth: '400px' }}><input value={newGroup} onChange={e => setNewGroup(e.target.value)} placeholder="그룹명" /><button className="primary" onClick={addGroup}>추가</button></div>
+                                    <div className="settings-inline-form"><input value={newGroup} onChange={e => setNewGroup(e.target.value)} placeholder="그룹명" /><button className="primary" onClick={addGroup}>추가</button></div>
                                     <div style={{ maxWidth: '400px' }}>
-                                        {(data.groups || []).map(g => (<div key={g.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #30363d' }}>{g.name} <button onClick={() => delGroup(g.id)} style={{ background: 'transparent', color: '#da3633', fontSize: '0.85rem' }}>삭제</button></div>))}
+                                        {(data.groups || []).map(g => (<div key={g.id} className="settings-list-row">{g.name} <button onClick={() => delGroup(g.id)} className="settings-delete-button">삭제</button></div>))}
                                     </div>
                                 </div>
                             )}
 
                             {activeTab === 'categories' && (
-                                <div className="dashboard-grid">
+                                <div className="dashboard-grid settings-categories-grid">
                                     <div>{renderCatList('Expense')}</div>
                                     <div>{renderCatList('Income')}</div>
                                     <div>{renderCatList('Transfer')}</div>
@@ -1757,13 +1757,13 @@ service cloud.firestore {
                             )}
 
                             {activeTab === 'assets' && (
-                                <div>
+                                <div className="settings-panel settings-section settings-assets-panel">
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                                         <h3>자산 목록 및 관리</h3>
                                         <button className="primary" onClick={() => { setEditingAsset(null); setShowAssetModal(true); }}>+ 자산 추가</button>
                                     </div>
-                                    <div style={{ overflowX: 'auto' }}>
-                                        <table>
+                                    <div className="settings-assets-table-wrap">
+                                        <table className="settings-assets-table">
                                             <thead><tr><th>자산명</th><th>우선순위</th><th>소유자</th><th>그룹</th><th>유형</th><th>초기금액</th><th>현재금액</th><th>관리</th></tr></thead>
                                             <tbody>
                                                 {data.assets.slice().sort((a, b) => Number(a.priority || 9999) - Number(b.priority || 9999)).map(a => {
@@ -1779,14 +1779,14 @@ service cloud.firestore {
                                                     }, Number(a.initialBalance || 0));
                                                     return (
                                                         <tr key={a.id}>
-                                                            <td style={{ fontWeight: 500 }}>{a.name}</td>
-                                                            <td>{a.priority !== undefined && a.priority !== 9999 ? a.priority : '-'}</td>
-                                                            <td>{data.owners.find(o => o.id === a.ownerId)?.name}</td>
-                                                            <td>{data.groups?.find(g => g.id === a.groupId)?.name || '-'}</td>
-                                                            <td>{a.type === 'Cash' ? '현금' : a.type === 'Bank' ? '은행' : '카드'}</td>
-                                                            <td style={{ color: '#8b949e' }}>{Number(a.initialBalance || 0).toLocaleString()}</td>
-                                                            <td style={{ fontWeight: 600, color: '#58a6ff' }}>{bal.toLocaleString()}</td>
-                                                            <td>
+                                                            <td data-label="자산명" style={{ fontWeight: 500 }}>{a.name}</td>
+                                                            <td data-label="우선순위">{a.priority !== undefined && a.priority !== 9999 ? a.priority : '-'}</td>
+                                                            <td data-label="소유자">{data.owners.find(o => o.id === a.ownerId)?.name}</td>
+                                                            <td data-label="그룹">{data.groups?.find(g => g.id === a.groupId)?.name || '-'}</td>
+                                                            <td data-label="유형">{a.type === 'Cash' ? '현금' : a.type === 'Bank' ? '은행' : '카드'}</td>
+                                                            <td data-label="초기금액" style={{ color: '#8b949e' }}>{Number(a.initialBalance || 0).toLocaleString()}</td>
+                                                            <td data-label="현재금액" style={{ fontWeight: 600, color: '#58a6ff' }}>{bal.toLocaleString()}</td>
+                                                            <td data-label="관리">
                                                                 <button onClick={() => { setEditingAsset(a); setShowAssetModal(true); }} style={{ background: 'transparent', color: '#58a6ff', padding: '0.3rem' }}>수정</button>
                                                             </td>
                                                         </tr>
