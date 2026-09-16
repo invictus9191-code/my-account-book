@@ -301,6 +301,61 @@
             return getRecurringOccurrences(recurring, formatLocalDate(limit)).find(occurrence => occurrence.scheduledDate >= todayString)?.scheduledDate || null;
         };
 
+        const useMobileEdgeSwipeBack = onBack => {
+            const onBackRef = React.useRef(onBack);
+            onBackRef.current = onBack;
+
+            useEffect(() => {
+                let gesture = null;
+                const reset = () => { gesture = null; };
+                const isMobile = () => window.matchMedia('(max-width: 768px)').matches;
+
+                const handleTouchStart = event => {
+                    if (!isMobile() || event.touches.length !== 1) return;
+                    const touch = event.touches[0];
+                    if (touch.clientX > 28) return;
+                    const target = event.target;
+                    if (target.closest?.('input, textarea, select, [contenteditable="true"], .budget-modal-overlay, .asset-modal-overlay, .transaction-modal-overlay')) return;
+                    gesture = { startX: touch.clientX, startY: touch.clientY, x: touch.clientX, y: touch.clientY, startedAt: Date.now(), horizontal: false };
+                };
+
+                const handleTouchMove = event => {
+                    if (!gesture || event.touches.length !== 1) return;
+                    const touch = event.touches[0];
+                    gesture.x = touch.clientX;
+                    gesture.y = touch.clientY;
+                    const deltaX = gesture.x - gesture.startX;
+                    const deltaY = gesture.y - gesture.startY;
+                    if (deltaX < -8 || (Math.abs(deltaY) > 14 && Math.abs(deltaY) > Math.abs(deltaX))) { reset(); return; }
+                    if (deltaX > 12 && Math.abs(deltaX) > Math.abs(deltaY) * 1.15) {
+                        gesture.horizontal = true;
+                        event.preventDefault();
+                    }
+                };
+
+                const handleTouchEnd = () => {
+                    if (!gesture) return;
+                    const deltaX = gesture.x - gesture.startX;
+                    const deltaY = Math.abs(gesture.y - gesture.startY);
+                    const elapsed = Date.now() - gesture.startedAt;
+                    const shouldGoBack = gesture.horizontal && deltaX >= 72 && deltaY <= 64 && deltaX > deltaY * 1.25 && elapsed <= 900;
+                    reset();
+                    if (shouldGoBack) onBackRef.current?.();
+                };
+
+                document.addEventListener('touchstart', handleTouchStart, { passive: true });
+                document.addEventListener('touchmove', handleTouchMove, { passive: false });
+                document.addEventListener('touchend', handleTouchEnd, { passive: true });
+                document.addEventListener('touchcancel', reset, { passive: true });
+                return () => {
+                    document.removeEventListener('touchstart', handleTouchStart);
+                    document.removeEventListener('touchmove', handleTouchMove);
+                    document.removeEventListener('touchend', handleTouchEnd);
+                    document.removeEventListener('touchcancel', reset);
+                };
+            }, []);
+        };
+
         // ApexCharts를 useRef + useEffect로 직접 렌더링하는 컴포넌트
         function ChartBar({ chartId, series, colors, labels, height }) {
             const ref = React.useRef(null);
@@ -386,6 +441,12 @@
             const [view, setView] = useState('main'); // main, income_detail, expense_detail, asset_detail, category_list
             const [selectedId, setSelectedId] = useState(null); // categoryId or assetGroupId
             const [chartType, setChartType] = useState('income_expense'); // income_expense or savings
+
+            useMobileEdgeSwipeBack(() => {
+                if (showMonthPicker) setShowMonthPicker(false);
+                else if (view !== 'main') setView('main');
+                else setTab('home');
+            });
 
             const availableMonths = useMemo(() => {
                 const months = new Set(data.transactions.map(t => t.date.substring(0, 7)));
@@ -926,6 +987,7 @@
             const [itemName, setItemName] = useState('');
             const [favoriteOnAdd, setFavoriteOnAdd] = useState(false);
             const inputRef = React.useRef(null);
+            useMobileEdgeSwipeBack(() => setTab('home'));
             const items = data.shoppingItems || [];
             const favorites = data.shoppingFavorites || [];
             const normalizeName = name => name.trim().replace(/\s+/g, ' ');
@@ -1126,6 +1188,11 @@
             const [showBudgetModal, setShowBudgetModal] = useState(false);
             const [editingBudget, setEditingBudget] = useState(null);
             const selectedMonthRef = React.useRef(null);
+
+            useMobileEdgeSwipeBack(() => {
+                if (showMonthPicker) setShowMonthPicker(false);
+                else setTab('home');
+            });
 
             const availableMonths = useMemo(() => {
                 const months = new Set([
@@ -1390,6 +1457,7 @@
             const [selectedType, setSelectedType] = useState('Expense');
             const [showModal, setShowModal] = useState(false);
             const [editingItem, setEditingItem] = useState(null);
+            useMobileEdgeSwipeBack(() => setTab('home'));
             const items = data.recurringTransactions || [];
             const activeItems = items.filter(item => item.active !== false && getNextRecurringDate(item));
             const endedItems = items.filter(item => item.active === false || !getNextRecurringDate(item));
@@ -1505,6 +1573,11 @@
             });
             const [showMonthPicker, setShowMonthPicker] = useState(false);
             const selectedMonthRef = React.useRef(null);
+
+            useMobileEdgeSwipeBack(() => {
+                if (showMonthPicker) setShowMonthPicker(false);
+                else setTab(backTab);
+            });
 
             // transactionMonth prop이 바뀌면 selectedMonth 동기화
             useEffect(() => {
@@ -1768,6 +1841,11 @@
 
         function AssetManagementPage({ data, setEdit, setShowModal, setTab, setSearchTerm, setEditAsset, setShowAssetModal, hideAssetAmounts }) {
             const [selectedAsset, setSelectedAsset] = useState(null);
+
+            useMobileEdgeSwipeBack(() => {
+                if (selectedAsset) setSelectedAsset(null);
+                else setTab('home');
+            });
 
             const groupGrouped = (data.groups || [])
                 .sort((a, b) => (a.order || 0) - (b.order || 0)) // 정렬 순서 적용
@@ -2175,7 +2253,7 @@
             );
         }
 
-        function Settings({ data, setData, fbConfig, setFbConfig, syncToCloud, user, isConnected }) {
+        function Settings({ data, setData, fbConfig, setFbConfig, syncToCloud, user, isConnected, setTab }) {
             const [fbVal, setFbVal] = useState(fbConfig ? JSON.stringify(fbConfig, null, 2) : '');
             const [newPw, setNewPw] = useState('');
             const [activeTab, setActiveTab] = useState('general'); // general, owners, groups, categories, assets, authors
@@ -2191,6 +2269,11 @@
             const [editingAsset, setEditingAsset] = useState(null);
             const [showAssetModal, setShowAssetModal] = useState(false);
             const [tempSharedId, setTempSharedId] = useState(localStorage.getItem(SHARED_ID_KEY) || '');
+
+            useMobileEdgeSwipeBack(() => {
+                if (activeTab !== 'general') setActiveTab('general');
+                else setTab('home');
+            });
 
             const saveFb = () => {
                 try {
@@ -2748,7 +2831,7 @@ service cloud.firestore {
                         {tab === 'shopping' && <ShoppingPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} isConnected={isConnected} />}
                         {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} setTab={setTab} backTab={transactionBackTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} hideAssetAmounts={hideAssetAmounts} />}
-                        {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} />}
+                        {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} setTab={setTab} />}
                     </div></div>
                     {showModal && <TransactionModal data={data} setData={setData} onClose={() => { setShowModal(false); setEdit(null); }} editItem={edit} syncToCloud={syncToCloud} isConnected={isConnected} user={user} />}
                     {showAssetModal && <AssetModal data={data} setData={setData} onClose={() => { setShowAssetModal(false); setEditAsset(null); }} editItem={editAsset} syncToCloud={syncToCloud} />}
