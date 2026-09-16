@@ -710,14 +710,20 @@
                         </div>
                     )}
 
-                    <section className="dashboard-summary-cards">
-                        <div><span className="income"><Icon name="arrow-down-left" size={16} /></span><small>수입</small><strong>{dashboardIncome.toLocaleString()}원</strong></div>
-                        <div><span className="expense"><Icon name="arrow-up-right" size={16} /></span><small>지출</small><strong>{dashboardExpense.toLocaleString()}원</strong></div>
-                        <div><span className="balance"><Icon name="scale" size={16} /></span><small>수입 − 지출</small><strong className={dashboardBalance < 0 ? 'negative' : ''}>{dashboardBalance.toLocaleString()}원</strong></div>
+                    <section className={`dashboard-balance-card ${dashboardBalance < 0 ? 'negative' : 'positive'}`}>
+                        <span className="dashboard-balance-icon"><Icon name="scale" size={20} /></span>
+                        <div className="dashboard-balance-copy">
+                            <small>이번 달 수입 − 지출</small>
+                            <strong>{dashboardBalance.toLocaleString()}원</strong>
+                        </div>
+                        <span className="dashboard-balance-status">{dashboardBalance < 0 ? '적자' : '흑자'}</span>
                     </section>
 
-                    {/* 1. 수입지출탭 */}
                     <section className="dashboard-category-card">
+                        <div className="dashboard-category-heading">
+                            <div><small>월간 분석</small><strong>카테고리별 내역</strong></div>
+                            <span>수입·지출 비중</span>
+                        </div>
                         <div className="dashboard-category-tabs">
                             <button className={categoryType === 'Income' ? 'active income' : ''} onClick={() => setCategoryType('Income')}>
                                 <span>수입</span><strong>{dashboardIncome.toLocaleString()}원</strong>
@@ -1451,53 +1457,43 @@
         function TransactionSearchInput({ value, onChange }) {
             const [inputValue, setInputValue] = useState(value);
             const composingRef = React.useRef(false);
-            const timerRef = React.useRef(null);
 
             useEffect(() => {
                 if (!composingRef.current) setInputValue(value);
             }, [value]);
 
-            useEffect(() => () => clearTimeout(timerRef.current), []);
-
-            const applySearch = nextValue => {
-                clearTimeout(timerRef.current);
-                timerRef.current = setTimeout(() => onChange(nextValue), 180);
-            };
-
             const handleChange = event => {
-                const nextValue = event.target.value;
-                setInputValue(nextValue);
-                if (!composingRef.current && !event.nativeEvent?.isComposing) applySearch(nextValue);
+                setInputValue(event.target.value);
             };
 
-            const handleCompositionEnd = event => {
-                const nextValue = event.currentTarget.value;
-                composingRef.current = false;
-                setInputValue(nextValue);
-                applySearch(nextValue);
+            const submitSearch = event => {
+                event.preventDefault();
+                if (composingRef.current) return;
+                onChange(inputValue.trim());
             };
 
             const clearSearch = () => {
-                clearTimeout(timerRef.current);
                 setInputValue('');
                 onChange('');
             };
 
             return (
-                <div className="transaction-inline-search fade-in">
+                <form className="transaction-inline-search fade-in" onSubmit={submitSearch} role="search">
                     <Icon name="search" size={17} />
                     <input
-                        type="search"
+                        type="text"
                         value={inputValue}
                         onChange={handleChange}
-                        onCompositionStart={() => { composingRef.current = true; clearTimeout(timerRef.current); }}
-                        onCompositionEnd={handleCompositionEnd}
-                        placeholder="거래 내역 검색"
+                        onCompositionStart={() => { composingRef.current = true; }}
+                        onCompositionEnd={() => { composingRef.current = false; }}
+                        placeholder="검색어 입력 후 검색"
                         autoFocus
                         autoComplete="off"
+                        enterKeyHint="search"
                     />
-                    {inputValue && <button type="button" onClick={clearSearch} aria-label="검색어 지우기"><Icon name="x" size={16} /></button>}
-                </div>
+                    <span className="transaction-search-clear-slot">{inputValue && <button type="button" onClick={clearSearch} aria-label="검색어 지우기"><Icon name="x" size={16} /></button>}</span>
+                    <button type="submit" className="transaction-search-submit" aria-label="검색 실행"><Icon name="search" size={16} /></button>
+                </form>
             );
         }
 
@@ -1548,19 +1544,22 @@
                 }
             };
 
+            const categoryById = useMemo(() => new Map(data.categories.map(category => [category.id, category])), [data.categories]);
+            const assetById = useMemo(() => new Map(data.assets.map(asset => [asset.id, asset])), [data.assets]);
+            const savingsCategoryIds = useMemo(() => new Set(data.categories.filter(category => category.name.includes('저축')).map(category => category.id)), [data.categories]);
             const isGlobalSearch = searchTerm.trim().length > 0;
-            const filteredTransactions = data.transactions.filter(t => {
+            const filteredTransactions = useMemo(() => data.transactions.filter(t => {
                 if (!isGlobalSearch && t.date.substring(0, 7) !== selectedMonth) return false;
                 if (authorFilter !== 'ALL' && t.authorEmail !== authorFilter) return false;
                 if (!isGlobalSearch) return true;
                 const term = searchTerm.trim().toLowerCase();
                 const memoMatch = t.memo?.toLowerCase().includes(term);
-                const categoryMatch = data.categories.find(c => c.id === t.categoryId)?.name?.toLowerCase().includes(term);
-                const assetMatch = data.assets.find(a => a.id === t.assetId)?.name?.toLowerCase().includes(term);
-                const toAssetMatch = t.type === 'Transfer' && data.assets.find(a => a.id === t.toAssetId)?.name?.toLowerCase().includes(term);
+                const categoryMatch = categoryById.get(t.categoryId)?.name?.toLowerCase().includes(term);
+                const assetMatch = assetById.get(t.assetId)?.name?.toLowerCase().includes(term);
+                const toAssetMatch = t.type === 'Transfer' && assetById.get(t.toAssetId)?.name?.toLowerCase().includes(term);
                 const recurringMatch = Boolean(t.recurringId) && '반복 자동 생성 정기'.includes(term);
                 return memoMatch || categoryMatch || assetMatch || toAssetMatch || recurringMatch;
-            });
+            }), [data.transactions, isGlobalSearch, selectedMonth, authorFilter, searchTerm, categoryById, assetById]);
 
             const groupedByDay = filteredTransactions.reduce((acc, t) => {
                 const day = t.date; // YYYY-MM-DD
@@ -1573,10 +1572,9 @@
 
             const sortedDays = Object.keys(groupedByDay).sort((a, b) => b.localeCompare(a));
             const monthStats = filteredTransactions.reduce((acc, t) => {
-                const savingsCategories = data.categories.filter(c => c.name === '저축' || c.name.includes('저축')).map(c => c.id);
                 if (t.type === 'Income') acc.income += Number(t.amount);
-                if ((t.type === 'Expense' || t.type === 'Transfer') && savingsCategories.includes(t.categoryId)) acc.savings += Math.abs(Number(t.amount));
-                if (t.type === 'Expense' && !savingsCategories.includes(t.categoryId)) acc.expense += Number(t.amount);
+                if ((t.type === 'Expense' || t.type === 'Transfer') && savingsCategoryIds.has(t.categoryId)) acc.savings += Math.abs(Number(t.amount));
+                if (t.type === 'Expense' && !savingsCategoryIds.has(t.categoryId)) acc.expense += Number(t.amount);
                 return acc;
             }, { income: 0, expense: 0, savings: 0 });
 
@@ -1603,7 +1601,7 @@
             };
 
             const getTransactionVisual = (transaction) => {
-                const category = data.categories.find(c => c.id === transaction.categoryId);
+                const category = categoryById.get(transaction.categoryId);
                 const categoryName = category?.name || (transaction.type === 'Transfer' ? '이체' : '기타');
                 const fallback = transaction.type === 'Income' ? ['arrow-down-left', '#2ebd77'] : transaction.type === 'Transfer' ? ['arrow-left-right', '#6f7f90'] : ['ellipsis', '#8b949e'];
                 const [icon, color] = categoryVisuals[categoryName] || fallback;
@@ -1707,8 +1705,8 @@
                                         {transactions.map(t => {
                                             const visual = getTransactionVisual(t);
                                             const assetName = t.type === 'Transfer'
-                                                ? `${data.assets.find(a => a.id === t.assetId)?.name || '-'} → ${data.assets.find(a => a.id === t.toAssetId)?.name || '-'}`
-                                                : data.assets.find(a => a.id === t.assetId)?.name || '-';
+                                                ? `${assetById.get(t.assetId)?.name || '-'} → ${assetById.get(t.toAssetId)?.name || '-'}`
+                                                : assetById.get(t.assetId)?.name || '-';
                                             return (
                                                 <button className="transaction-list-item" key={t.id} onClick={() => openTransaction(t)}>
                                                     <span className="transaction-category-icon" style={{ backgroundColor: visual.color }}>

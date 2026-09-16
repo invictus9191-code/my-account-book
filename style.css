@@ -648,7 +648,7 @@ table {
   min-height: 42px;
   padding: 0 11px;
   display: grid;
-  grid-template-columns: 20px 1fr 24px;
+  grid-template-columns: 20px minmax(0, 1fr) 24px 32px;
   align-items: center;
   gap: 7px;
   border: 1px solid #e2e6eb;
@@ -675,6 +675,24 @@ table {
   display: flex;
   background: transparent;
   color: #9aa0a8;
+}
+
+.transaction-search-clear-slot {
+  width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.transaction-inline-search .transaction-search-submit {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: #188fe7;
+  color: white;
 }
 
 .transaction-month-control {
@@ -751,73 +769,74 @@ table {
   padding: 18px 0 96px;
 }
 
-.dashboard-summary-cards {
+.dashboard-balance-card {
   margin-bottom: 16px;
-  padding: 8px;
+  min-height: 92px;
+  padding: 18px 20px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
   border: 1px solid rgba(208, 215, 222, 0.64);
   border-radius: 24px;
   background: white;
   box-shadow: 0 10px 34px rgba(31, 42, 55, 0.055);
 }
 
-.dashboard-summary-cards > div {
-  min-width: 0;
-  padding: 12px 14px;
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  align-items: center;
-  column-gap: 8px;
-}
-
-.dashboard-summary-cards > div + div {
-  border-left: 1px solid #edf0f3;
-}
-
-.dashboard-summary-cards > div > span {
-  grid-row: 1 / span 2;
-  width: 28px;
-  height: 28px;
+.dashboard-balance-icon {
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: 14px;
+  background: #eaf7ef;
+  color: #258d55;
 }
 
-.dashboard-summary-cards > div > span.income {
-  background: #e8f7ee;
-  color: #28915a;
+.dashboard-balance-card.negative .dashboard-balance-icon {
+  background: #fff0f1;
+  color: #cf4c58;
 }
 
-.dashboard-summary-cards > div > span.expense {
-  background: #e9f3ff;
-  color: #277edc;
+.dashboard-balance-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
-.dashboard-summary-cards > div > span.balance {
-  background: #f0edfb;
-  color: #725ab7;
+.dashboard-balance-copy small {
+  color: #8b929b;
+  font-size: 0.73rem;
+  font-weight: 600;
 }
 
-.dashboard-summary-cards small {
+.dashboard-balance-copy strong {
   overflow: hidden;
-  color: #9299a1;
-  font-size: 0.68rem;
+  color: #258d55;
+  font-size: 1.24rem;
+  letter-spacing: -0.03em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.dashboard-summary-cards strong {
-  overflow: hidden;
-  color: #30363d;
-  font-size: 0.86rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.dashboard-balance-card.negative .dashboard-balance-copy strong {
+  color: #c94451;
 }
 
-.dashboard-summary-cards strong.negative {
-  color: #d04d58;
+.dashboard-balance-status {
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #eaf7ef;
+  color: #258d55;
+  font-size: 0.69rem;
+  font-weight: 750;
+}
+
+.dashboard-balance-card.negative .dashboard-balance-status {
+  background: #fff0f1;
+  color: #c94451;
 }
 
 .dashboard-category-card,
@@ -831,6 +850,31 @@ table {
 
 .dashboard-category-card {
   margin-bottom: 18px;
+}
+
+.dashboard-category-heading {
+  padding: 17px 18px 10px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-category-heading > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dashboard-category-heading small,
+.dashboard-category-heading > span {
+  color: #969da5;
+  font-size: 0.68rem;
+}
+
+.dashboard-category-heading strong {
+  color: #31373d;
+  font-size: 0.98rem;
 }
 
 .dashboard-category-tabs {
@@ -4316,26 +4360,12 @@ textarea:focus {
     background: #f8fafc;
   }
 
-  .dashboard-summary-cards {
+  .dashboard-balance-card {
     border-radius: 23px;
   }
 
-  .dashboard-summary-cards > div {
-    padding: 10px 6px;
-    grid-template-columns: 1fr;
-    justify-items: center;
-    row-gap: 4px;
-    text-align: center;
-  }
-
-  .dashboard-summary-cards > div > span {
-    grid-row: auto;
-  }
-
-  .dashboard-summary-cards strong {
-    width: 100%;
-    font-size: 0.75rem;
-    text-align: center;
+  .dashboard-balance-copy strong {
+    font-size: 1.12rem;
   }
 
   .dashboard-category-card,
