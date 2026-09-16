@@ -1244,6 +1244,9 @@
                 ...editItem,
                 frequency: editItem.frequency || 'monthly',
                 businessDayDirection: editItem.businessDayDirection || '',
+                loanAssetId: editItem.loanAssetId || '',
+                loanPrincipal: editItem.loanPrincipal || '',
+                loanInterest: editItem.loanInterest || '',
                 month: editItem.month || Number(editItem.startDate?.substring(5, 7)) || new Date().getMonth() + 1,
                 weekday: editItem.weekday ?? parseLocalDate(editItem.startDate || today).getDay()
             } : {
@@ -1260,6 +1263,9 @@
                 weekday: new Date().getDay(),
                 frequency: 'monthly',
                 businessDayDirection: '',
+                loanAssetId: '',
+                loanPrincipal: '',
+                loanInterest: '',
                 active: true,
                 authorEmail: user?.email || ''
             });
@@ -1278,6 +1284,10 @@
             }, []);
 
             const categories = data.categories.filter(category => category.type === form.type || (form.type === 'Transfer' && category.type === 'Transfer'));
+            const selectedCategory = data.categories.find(category => category.id === form.categoryId);
+            const isLoanPayment = form.type === 'Expense' && selectedCategory?.name === '대출';
+            const paymentTotal = isLoanPayment ? Number(form.loanPrincipal || 0) + Number(form.loanInterest || 0) : Number(form.amount || 0);
+            const canSave = !!form.name && paymentTotal > 0 && !!form.assetId && !!form.categoryId && !!form.startDate && (!isLoanPayment || !!form.loanAssetId) && (form.type !== 'Transfer' || !!form.toAssetId);
 
             useEffect(() => {
                 if (!categories.some(category => category.id === form.categoryId)) {
@@ -1287,11 +1297,26 @@
 
             const handleSubmit = event => {
                 event.preventDefault();
-                if (!form.name || Number(form.amount || 0) <= 0 || !form.assetId || !form.categoryId || !form.startDate || (form.type === 'Transfer' && !form.toAssetId)) return;
+                if (!canSave) return;
+                if (isLoanPayment) {
+                    const debtAsset = data.assets.find(asset => asset.id === form.loanAssetId && asset.type === 'RealEstate');
+                    if (!debtAsset) {
+                        alert('상환할 자산을 확인해주세요.');
+                        return;
+                    }
+                    if (data.assets.find(asset => asset.id === form.assetId)?.type === 'RealEstate') {
+                        alert('출금되는 현금 또는 금융 자산을 선택해주세요.');
+                        return;
+                    }
+                }
                 const saved = {
                     ...form,
                     id: editItem?.id || Date.now().toString(),
-                    amount: Number(form.amount),
+                    amount: paymentTotal,
+                    isLoanPayment,
+                    loanAssetId: isLoanPayment ? form.loanAssetId : '',
+                    loanPrincipal: isLoanPayment ? Number(form.loanPrincipal || 0) : 0,
+                    loanInterest: isLoanPayment ? Number(form.loanInterest || 0) : 0,
                     day: Math.min(Math.max(Number(form.day || 1), 1), 31),
                     month: Math.min(Math.max(Number(form.month || 1), 1), 12),
                     weekday: Math.min(Math.max(Number(form.weekday ?? 0), 0), 6),
@@ -1325,15 +1350,21 @@
                         <header>
                             <button type="button" onClick={onClose} aria-label="닫기"><Icon name="x" size={25} /></button>
                             <strong id="recurring-modal-title">반복 {editItem ? '수정' : '추가'}</strong>
-                            <button type="submit" form="recurring-form" className="budget-save-button" disabled={!form.name || Number(form.amount || 0) <= 0 || !form.assetId || !form.categoryId || (form.type === 'Transfer' && !form.toAssetId)} aria-label="저장"><Icon name="check" size={24} /></button>
+                            <button type="submit" form="recurring-form" className="budget-save-button" disabled={!canSave} aria-label="저장"><Icon name="check" size={24} /></button>
                         </header>
                         <form id="recurring-form" onSubmit={handleSubmit}>
                             <label><span>거래 유형</span><select value={form.type} onChange={event => setForm({ ...form, type: event.target.value })}><option value="Expense">지출</option><option value="Income">수입</option><option value="Transfer">이체</option></select></label>
                             <label><span>이름</span><input value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} onFocus={focusIntoView} placeholder="예: 월세, 구독료" autoFocus /></label>
-                            <label><span>금액</span><input type="text" inputMode="numeric" value={form.amount ? Number(form.amount).toLocaleString() : ''} onChange={event => setForm({ ...form, amount: event.target.value.replace(/[^0-9]/g, '') })} onFocus={focusIntoView} placeholder="0원" /></label>
+                            <label><span>카테고리</span><select value={form.categoryId} onChange={event => setForm({ ...form, categoryId: event.target.value })}>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+                            {isLoanPayment ? <>
+                                <label><span>자산</span><select value={form.loanAssetId || ''} onChange={event => setForm({ ...form, loanAssetId: event.target.value })}><option value="">선택하세요</option>{data.assets.filter(asset => asset.type === 'RealEstate').map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
+                                {data.assets.filter(asset => asset.type === 'RealEstate').length === 0 && <p className="recurring-business-help">자산 페이지에서 부채가 있는 자산을 먼저 등록해주세요.</p>}
+                                <label><span>상환 원금</span><input type="text" inputMode="numeric" value={form.loanPrincipal ? Number(form.loanPrincipal).toLocaleString() : ''} onChange={event => setForm({ ...form, loanPrincipal: event.target.value.replace(/[^0-9]/g, '') })} onFocus={focusIntoView} placeholder="0원" /></label>
+                                <label><span>이자</span><input type="text" inputMode="numeric" value={form.loanInterest ? Number(form.loanInterest).toLocaleString() : ''} onChange={event => setForm({ ...form, loanInterest: event.target.value.replace(/[^0-9]/g, '') })} onFocus={focusIntoView} placeholder="0원" /></label>
+                                <label><span>총 출금액</span><strong>{paymentTotal.toLocaleString()}원</strong></label>
+                            </> : <label><span>금액</span><input type="text" inputMode="numeric" value={form.amount ? Number(form.amount).toLocaleString() : ''} onChange={event => setForm({ ...form, amount: event.target.value.replace(/[^0-9]/g, '') })} onFocus={focusIntoView} placeholder="0원" /></label>}
                             <label><span>{form.type === 'Transfer' ? '출금 자산' : '자산'}</span><select value={form.assetId} onChange={event => setForm({ ...form, assetId: event.target.value })}>{data.assets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
                             {form.type === 'Transfer' && <label><span>입금 자산</span><select value={form.toAssetId} onChange={event => setForm({ ...form, toAssetId: event.target.value })}>{data.assets.filter(asset => asset.id !== form.assetId).map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>}
-                            <label><span>카테고리</span><select value={form.categoryId} onChange={event => setForm({ ...form, categoryId: event.target.value })}>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
                             <label><span>반복 주기</span><select value={form.frequency} onChange={event => setForm({ ...form, frequency: event.target.value })}><option value="monthly">매월</option><option value="weekly">매주</option><option value="yearly">매년</option></select></label>
                             <label><span>시작 날짜</span><input type="date" value={form.startDate} onChange={event => { const value = event.target.value; if (!value) { setForm({ ...form, startDate: '' }); return; } const date = parseLocalDate(value); setForm({ ...form, startDate: value, day: date.getDate(), month: date.getMonth() + 1, weekday: date.getDay() }); }} onFocus={focusIntoView} /></label>
                             {form.frequency === 'weekly' && <label><span>실행 요일</span><select value={form.weekday} onChange={event => setForm({ ...form, weekday: Number(event.target.value) })}>{['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'].map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label>}
@@ -1413,6 +1444,59 @@
                     </div>
 
                     {showModal && <RecurringModal data={data} setData={setData} syncToCloud={syncToCloud} editItem={editingItem} user={user} onClose={() => { setShowModal(false); setEditingItem(null); }} />}
+                </div>
+            );
+        }
+
+        function TransactionSearchInput({ value, onChange }) {
+            const [inputValue, setInputValue] = useState(value);
+            const composingRef = React.useRef(false);
+            const timerRef = React.useRef(null);
+
+            useEffect(() => {
+                if (!composingRef.current) setInputValue(value);
+            }, [value]);
+
+            useEffect(() => () => clearTimeout(timerRef.current), []);
+
+            const applySearch = nextValue => {
+                clearTimeout(timerRef.current);
+                timerRef.current = setTimeout(() => onChange(nextValue), 180);
+            };
+
+            const handleChange = event => {
+                const nextValue = event.target.value;
+                setInputValue(nextValue);
+                if (!composingRef.current && !event.nativeEvent?.isComposing) applySearch(nextValue);
+            };
+
+            const handleCompositionEnd = event => {
+                const nextValue = event.currentTarget.value;
+                composingRef.current = false;
+                setInputValue(nextValue);
+                applySearch(nextValue);
+            };
+
+            const clearSearch = () => {
+                clearTimeout(timerRef.current);
+                setInputValue('');
+                onChange('');
+            };
+
+            return (
+                <div className="transaction-inline-search fade-in">
+                    <Icon name="search" size={17} />
+                    <input
+                        type="search"
+                        value={inputValue}
+                        onChange={handleChange}
+                        onCompositionStart={() => { composingRef.current = true; clearTimeout(timerRef.current); }}
+                        onCompositionEnd={handleCompositionEnd}
+                        placeholder="거래 내역 검색"
+                        autoFocus
+                        autoComplete="off"
+                    />
+                    {inputValue && <button type="button" onClick={clearSearch} aria-label="검색어 지우기"><Icon name="x" size={16} /></button>}
                 </div>
             );
         }
@@ -1550,13 +1634,7 @@
                             </div>
                         </div>
 
-                        {showMobileSearch && (
-                            <div className="transaction-inline-search fade-in">
-                                <Icon name="search" size={17} />
-                                <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="거래 내역 검색" autoFocus />
-                                {searchTerm && <button onClick={() => setSearchTerm('')} aria-label="검색어 지우기"><Icon name="x" size={16} /></button>}
-                            </div>
-                        )}
+                        {showMobileSearch && <TransactionSearchInput value={searchTerm} onChange={setSearchTerm} />}
                     </section>
 
                     {showMonthPicker && (
@@ -1709,6 +1787,7 @@
             }
 
             const grandTotal = groupGrouped.reduce((sum, g) => sum + g.total, 0);
+            const grandDebt = data.assets.reduce((sum, asset) => sum + calculateAssetDebt(asset, data.transactions), 0);
 
             // 자산 거래내역 뷰
             if (selectedAsset) {
@@ -1794,33 +1873,35 @@
                         <div>
                             <div style={{ fontSize: '0.85rem', opacity: 0.9, marginBottom: '2px' }}>전체 자산 합계</div>
                             <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{hideAssetAmounts ? '금액숨김' : `${grandTotal.toLocaleString()}원`}</div>
-                            <small>{hideAssetAmounts ? '금액숨김' : `부채 ${data.assets.reduce((sum, a) => sum + calculateAssetDebt(a, data.transactions), 0).toLocaleString()}원`}</small>
+                            {grandDebt > 0 && <small>{hideAssetAmounts ? '금액숨김' : `부채 ${grandDebt.toLocaleString()}원`}</small>}
                         </div>
                         <Icon name="wallet" size={32} style={{ opacity: 0.4 }} />
                     </div>
                     <div className="card">
-                        {groupGrouped.map(g => (
-                            <div key={g.id} style={{ marginBottom: '2rem' }}>
+                        {groupGrouped.map(g => {
+                            const groupDebt = g.assets.reduce((sum, asset) => sum + calculateAssetDebt(asset, data.transactions), 0);
+                            return <div key={g.id} style={{ marginBottom: '2rem' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.8rem', borderBottom: '2px solid #30363d', marginBottom: '1rem' }}>
                                     <h3 style={{ color: '#58a6ff' }}>{g.name}</h3>
-                                    <span className="asset-amount-stack"><b>{hideAssetAmounts ? '금액숨김' : `${g.total.toLocaleString()}원`}</b><small>{hideAssetAmounts ? '금액숨김' : `부채 ${g.assets.reduce((sum, a) => sum + calculateAssetDebt(a, data.transactions), 0).toLocaleString()}원`}</small></span>
+                                    <span className="asset-amount-stack"><b>{hideAssetAmounts ? '금액숨김' : `${g.total.toLocaleString()}원`}</b>{groupDebt > 0 && <small>{hideAssetAmounts ? '금액숨김' : `부채 ${groupDebt.toLocaleString()}원`}</small>}</span>
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                     {g.assets.map(a => {
                                         const bal = calculateAssetBalance(a.id, data.assets, data.transactions);
+                                        const debt = calculateAssetDebt(a, data.transactions);
                                         return (
                                             <div key={a.id} onClick={() => { setSearchTerm(a.name); setTab('transactions'); }} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 1rem', background: 'rgba(9, 105, 218, 0.1)', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s' }} className="list-item">
                                                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     {a.name}
                                                     <Icon name="chevron-right" size={14} style={{ color: '#58a6ff', opacity: 0.7 }} />
                                                 </span>
-                                                <span className="asset-amount-stack"><b>{hideAssetAmounts ? '금액숨김' : `${bal.toLocaleString()}원`}</b>{a.type === 'RealEstate' && <small>{hideAssetAmounts ? '금액숨김' : `부채 ${calculateAssetDebt(a, data.transactions).toLocaleString()}원`}</small>}</span>
+                                                <span className="asset-amount-stack"><b>{hideAssetAmounts ? '금액숨김' : `${bal.toLocaleString()}원`}</b>{a.type === 'RealEstate' && debt > 0 && <small>{hideAssetAmounts ? '금액숨김' : `부채 ${debt.toLocaleString()}원`}</small>}</span>
                                             </div>
                                         );
                                     })}
                                 </div>
-                            </div>
-                        ))}
+                            </div>;
+                        })}
                         {groupGrouped.length === 0 && <div style={{ padding: '2rem', textAlign: 'center', color: '#8b949e' }}>등록된 자산이 없습니다. 설정에서 자산을 추가해주세요.</div>}
                     </div>
                 </div>
@@ -2518,7 +2599,11 @@ service cloud.firestore {
                                 toAssetId: item.type === 'Transfer' ? item.toAssetId : undefined,
                                 categoryId: item.categoryId,
                                 memo: item.name,
-                                authorEmail: item.authorEmail || ''
+                                authorEmail: item.authorEmail || '',
+                                isLoanPayment: !!item.isLoanPayment,
+                                loanAssetId: item.isLoanPayment ? item.loanAssetId : '',
+                                loanPrincipal: item.isLoanPayment ? Number(item.loanPrincipal || 0) : 0,
+                                loanInterest: item.isLoanPayment ? Number(item.loanInterest || 0) : 0
                             });
                             existingIds.add(transactionId);
                         }
