@@ -3,8 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#188fe7">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="가계부">
     <title>Smart Finance - 가계부</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
@@ -15,6 +22,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-messaging-compat.js"></script>
 </head>
 <body>
     <div id="pull-to-refresh-indicator" style="position: fixed; top: -60px; left: 0; width: 100%; height: 60px; display: flex; align-items: center; justify-content: center; background: #f6f8fa; color: #57606a; z-index: 2000; transition: transform 0.2s; font-size: 0.9rem; font-weight: 500; border-bottom: none;">
@@ -109,6 +117,13 @@
                     if (btn) btn.style.display = 'block';
                 }
             }, 6000);
+
+            window.__deferredPwaInstallPrompt = null;
+            window.addEventListener('beforeinstallprompt', function(event) {
+                event.preventDefault();
+                window.__deferredPwaInstallPrompt = event;
+                window.dispatchEvent(new CustomEvent('pwa-install-available'));
+            });
         })();
     </script>
     <script type="text/babel">
@@ -119,6 +134,10 @@
         const PASSWORD_KEY = 'INV_APP_PASSWORD';
         const SHARED_ID_KEY = 'INV_SHARED_ID';
         const ASSET_AMOUNT_HIDDEN_KEY = 'INV_ASSET_AMOUNT_HIDDEN';
+        const NOTIFICATION_VAPID_KEY = 'INV_NOTIFICATION_VAPID_KEY';
+        const NOTIFICATION_ENABLED_KEY = 'INV_NOTIFICATION_ENABLED';
+        const NOTIFICATION_TOKEN_KEY = 'INV_NOTIFICATION_TOKEN';
+        const NOTIFICATION_DEVICE_ID_KEY = 'INV_NOTIFICATION_DEVICE_ID';
         const DEFAULT_PASSWORD = '9999';
 
         const initialData = {
@@ -143,6 +162,79 @@
             recurringTransactions: [],
             shoppingItems: [],
             shoppingFavorites: []
+        };
+
+        const isIosDevice = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const isStandaloneApp = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        const supportsWebPush = () => window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && !!window.firebase?.messaging;
+        const getNotificationPlatform = () => isIosDevice() ? 'ios-web' : /android/i.test(navigator.userAgent) ? 'android-web' : 'desktop-web';
+
+        const getNotificationDeviceId = () => {
+            let deviceId = localStorage.getItem(NOTIFICATION_DEVICE_ID_KEY);
+            if (!deviceId) {
+                deviceId = window.crypto?.randomUUID?.() || `device-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                localStorage.setItem(NOTIFICATION_DEVICE_ID_KEY, deviceId);
+            }
+            return deviceId;
+        };
+
+        const getMessagingWorkerRegistration = async firebaseConfig => {
+            if (!firebaseConfig) throw new Error('Firebase 설정이 필요합니다.');
+            const requiredKeys = ['apiKey', 'projectId', 'messagingSenderId', 'appId'];
+            if (requiredKeys.some(key => !firebaseConfig[key])) throw new Error('Firebase 설정에 messagingSenderId와 appId가 포함되어야 합니다.');
+            const workerUrl = new URL('firebase-messaging-sw.js', window.location.href);
+            ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'].forEach(key => {
+                if (firebaseConfig[key]) workerUrl.searchParams.set(key, firebaseConfig[key]);
+            });
+            const registration = await navigator.serviceWorker.register(workerUrl.href, { scope: './' });
+            await navigator.serviceWorker.ready;
+            return registration;
+        };
+
+        const saveNotificationDevice = async (user, token) => {
+            if (!user || !token) return;
+            const deviceId = getNotificationDeviceId();
+            const reference = firebase.firestore().collection('notification_subscriptions').doc(user.uid).collection('devices').doc(deviceId);
+            const existing = await reference.get();
+            const now = new Date().toISOString();
+            await reference.set({
+                token,
+                platform: getNotificationPlatform(),
+                enabled: true,
+                createdAt: existing.exists ? existing.data().createdAt || now : now,
+                updatedAt: now
+            });
+        };
+
+        const registerNotificationDevice = async ({ firebaseConfig, user, vapidKey, requestPermission = false }) => {
+            if (!supportsWebPush()) throw new Error('이 브라우저에서는 웹 푸시 알림을 지원하지 않습니다.');
+            if (!user || !firebase.apps.length) throw new Error('Firebase에 로그인한 뒤 알림을 활성화해주세요.');
+            if (!vapidKey?.trim()) throw new Error('VAPID 공개키를 입력해주세요.');
+            if (isIosDevice() && !isStandaloneApp()) throw new Error('iPhone에서는 먼저 이 웹앱을 홈 화면에 추가해주세요.');
+            let permission = Notification.permission;
+            if (permission === 'default' && requestPermission) permission = await Notification.requestPermission();
+            if (permission !== 'granted') throw new Error(permission === 'denied' ? '브라우저 설정에서 알림 권한이 차단되어 있습니다.' : '알림 권한을 허용해주세요.');
+            const registration = await getMessagingWorkerRegistration(firebaseConfig);
+            const messaging = firebase.messaging();
+            const token = await messaging.getToken({ vapidKey: vapidKey.trim(), serviceWorkerRegistration: registration });
+            if (!token) throw new Error('FCM 등록 토큰을 발급받지 못했습니다.');
+            await saveNotificationDevice(user, token);
+            localStorage.setItem(NOTIFICATION_VAPID_KEY, vapidKey.trim());
+            localStorage.setItem(NOTIFICATION_TOKEN_KEY, token);
+            localStorage.setItem(NOTIFICATION_ENABLED_KEY, 'true');
+            return { token, registration };
+        };
+
+        const unregisterNotificationDevice = async user => {
+            const deviceId = localStorage.getItem(NOTIFICATION_DEVICE_ID_KEY);
+            if (user && deviceId && firebase.apps.length) {
+                await firebase.firestore().collection('notification_subscriptions').doc(user.uid).collection('devices').doc(deviceId).delete().catch(() => {});
+            }
+            if (window.firebase?.messaging && firebase.apps.length) {
+                await firebase.messaging().deleteToken().catch(() => {});
+            }
+            localStorage.removeItem(NOTIFICATION_TOKEN_KEY);
+            localStorage.setItem(NOTIFICATION_ENABLED_KEY, 'false');
         };
 
         const Icon = ({ name, size = 18, className = "", style = {} }) => {
@@ -2337,6 +2429,142 @@
             );
         }
 
+        function NotificationSettings({ fbConfig, user, isConnected }) {
+            const [vapidKey, setVapidKey] = useState(() => localStorage.getItem(NOTIFICATION_VAPID_KEY) || '');
+            const [token, setToken] = useState(() => localStorage.getItem(NOTIFICATION_TOKEN_KEY) || '');
+            const [enabled, setEnabled] = useState(() => localStorage.getItem(NOTIFICATION_ENABLED_KEY) === 'true');
+            const [permission, setPermission] = useState(() => 'Notification' in window ? Notification.permission : 'unsupported');
+            const [busy, setBusy] = useState(false);
+            const [message, setMessage] = useState('');
+            const [installPrompt, setInstallPrompt] = useState(() => window.__deferredPwaInstallPrompt);
+            const supported = supportsWebPush();
+            const iosNeedsInstall = isIosDevice() && !isStandaloneApp();
+
+            useEffect(() => {
+                const updateInstallPrompt = () => setInstallPrompt(window.__deferredPwaInstallPrompt);
+                window.addEventListener('pwa-install-available', updateInstallPrompt);
+                return () => window.removeEventListener('pwa-install-available', updateInstallPrompt);
+            }, []);
+
+            useEffect(() => {
+                const updatePermission = () => setPermission('Notification' in window ? Notification.permission : 'unsupported');
+                window.addEventListener('focus', updatePermission);
+                document.addEventListener('visibilitychange', updatePermission);
+                return () => {
+                    window.removeEventListener('focus', updatePermission);
+                    document.removeEventListener('visibilitychange', updatePermission);
+                };
+            }, []);
+
+            const enableNotifications = async () => {
+                setBusy(true);
+                setMessage('');
+                try {
+                    const result = await registerNotificationDevice({ firebaseConfig: fbConfig, user, vapidKey, requestPermission: true });
+                    setToken(result.token);
+                    setEnabled(true);
+                    setPermission(Notification.permission);
+                    setMessage('이 기기에서 푸시 알림을 받을 준비가 완료되었습니다.');
+                } catch (error) {
+                    setPermission('Notification' in window ? Notification.permission : 'unsupported');
+                    setMessage(error.message || '알림을 활성화하지 못했습니다.');
+                } finally {
+                    setBusy(false);
+                }
+            };
+
+            const disableNotifications = async () => {
+                setBusy(true);
+                setMessage('');
+                await unregisterNotificationDevice(user);
+                setToken('');
+                setEnabled(false);
+                setMessage('이 기기의 알림 등록을 해제했습니다.');
+                setBusy(false);
+            };
+
+            const installApp = async () => {
+                const prompt = window.__deferredPwaInstallPrompt;
+                if (!prompt) return;
+                await prompt.prompt();
+                await prompt.userChoice;
+                window.__deferredPwaInstallPrompt = null;
+                setInstallPrompt(null);
+            };
+
+            const copyToken = async () => {
+                if (!token) return;
+                try {
+                    await navigator.clipboard.writeText(token);
+                    setMessage('FCM 테스트 토큰을 복사했습니다.');
+                } catch (error) {
+                    setMessage('토큰 복사에 실패했습니다. 길게 눌러 직접 복사해주세요.');
+                }
+            };
+
+            const showTestNotification = async () => {
+                setMessage('');
+                try {
+                    if (Notification.permission !== 'granted') throw new Error('먼저 알림을 활성화해주세요.');
+                    const registration = await getMessagingWorkerRegistration(fbConfig);
+                    await registration.showNotification('Smart Finance 테스트', {
+                        body: '이 기기에서 알림이 정상적으로 표시됩니다.',
+                        icon: './assets/icon-192.png',
+                        badge: './assets/icon-192.png',
+                        tag: 'smart-finance-local-test',
+                        data: { url: './' }
+                    });
+                    setMessage('테스트 알림을 전송했습니다.');
+                } catch (error) {
+                    setMessage(error.message || '테스트 알림을 표시하지 못했습니다.');
+                }
+            };
+
+            const permissionLabel = permission === 'granted' ? '허용됨' : permission === 'denied' ? '차단됨' : permission === 'unsupported' ? '미지원' : '미결정';
+
+            return (
+                <section className="notification-settings-card">
+                    <div className="notification-settings-heading">
+                        <span><Icon name="bell-ring" size={21} /></span>
+                        <div><h3>푸시 알림</h3><p>앱을 닫아도 알림을 받을 수 있도록 이 기기를 등록합니다.</p></div>
+                    </div>
+
+                    <div className="notification-status-grid">
+                        <div><small>브라우저</small><strong>{supported ? '지원됨' : '미지원'}</strong></div>
+                        <div><small>권한</small><strong>{permissionLabel}</strong></div>
+                        <div><small>기기 등록</small><strong>{enabled && token ? '활성' : '비활성'}</strong></div>
+                        <div><small>앱 설치</small><strong>{isStandaloneApp() ? '설치됨' : '브라우저 실행'}</strong></div>
+                    </div>
+
+                    {iosNeedsInstall && (
+                        <div className="notification-guide warning">
+                            <Icon name="share" size={18} />
+                            <span>iPhone에서는 Safari의 공유 버튼을 누른 뒤 <b>홈 화면에 추가</b>하고, 설치된 앱에서 알림을 활성화해주세요.</span>
+                        </div>
+                    )}
+                    {!window.isSecureContext && <div className="notification-guide warning"><Icon name="shield-alert" size={18} /><span>푸시 알림은 HTTPS 주소에서만 사용할 수 있습니다.</span></div>}
+                    {!isConnected && <div className="notification-guide"><Icon name="log-in" size={18} /><span>Firebase 설정과 Google 로그인을 완료한 후 기기를 등록할 수 있습니다.</span></div>}
+
+                    <label className="notification-vapid-field">
+                        <span>VAPID 공개키</span>
+                        <input value={vapidKey} onChange={event => setVapidKey(event.target.value.trim())} onBlur={() => localStorage.setItem(NOTIFICATION_VAPID_KEY, vapidKey.trim())} placeholder="Firebase Web Push 인증서 공개키" autoComplete="off" />
+                        <small>Firebase Console → 프로젝트 설정 → Cloud Messaging → Web Push 인증서에서 확인할 수 있습니다.</small>
+                    </label>
+
+                    {installPrompt && !isStandaloneApp() && <button type="button" className="notification-install-button" onClick={installApp}><Icon name="download" size={17} />웹앱 설치</button>}
+
+                    <div className="notification-action-row">
+                        {!enabled ? <button type="button" className="primary" onClick={enableNotifications} disabled={busy || !supported || !isConnected || iosNeedsInstall}>{busy ? '등록 중...' : '알림 활성화'}</button> : <button type="button" className="notification-disable-button" onClick={disableNotifications} disabled={busy}>{busy ? '처리 중...' : '알림 해제'}</button>}
+                        <button type="button" onClick={showTestNotification} disabled={!enabled || busy}>기기 테스트</button>
+                        <button type="button" onClick={copyToken} disabled={!token}>토큰 복사</button>
+                    </div>
+
+                    {token && <details className="notification-token"><summary>FCM 테스트 토큰 보기</summary><code>{token}</code><small>Firebase Console의 Messaging에서 테스트 메시지를 만들고 이 토큰을 대상 기기로 입력하면 백그라운드 수신을 확인할 수 있습니다.</small></details>}
+                    {message && <p className={`notification-result ${message.includes('완료') || message.includes('복사') || message.includes('전송') || message.includes('해제') ? 'success' : ''}`}>{message}</p>}
+                </section>
+            );
+        }
+
         function Settings({ data, setData, fbConfig, setFbConfig, syncToCloud, user, isConnected, setTab }) {
             const [fbVal, setFbVal] = useState(fbConfig ? JSON.stringify(fbConfig, null, 2) : '');
             const [newPw, setNewPw] = useState('');
@@ -2359,13 +2587,14 @@
                 else setTab('home');
             });
 
-            const saveFb = () => {
+            const saveFb = async () => {
                 try {
                     const c = JSON.parse(fbVal);
                     if (!c.apiKey || !c.projectId) {
                         alert('올바른 Firebase 웹 설정 형식이 아닙니다.\n"apiKey"와 "projectId"가 포함된 JSON을 입력해주세요.\n(주의: 서비스 계정 키 파일이 아닙니다)');
                         return;
                     }
+                    if (localStorage.getItem(NOTIFICATION_ENABLED_KEY) === 'true') await unregisterNotificationDevice(user);
                     localStorage.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(c));
                     setFbConfig(c);
                     alert('Firebase 설정이 저장되었습니다. 앱을 다시 시작합니다.');
@@ -2374,7 +2603,7 @@
                     alert('유효한 JSON 형식이 아닙니다.');
                 }
             };
-            const resetFb = () => { if (confirm('서버 설정을 초기화하시겠습니까?')) { localStorage.removeItem(FIREBASE_CONFIG_KEY); setFbConfig(null); alert('설정이 초기화되었습니다.'); location.reload(); } };
+            const resetFb = async () => { if (confirm('서버 설정을 초기화하시겠습니까?')) { await unregisterNotificationDevice(user); localStorage.removeItem(FIREBASE_CONFIG_KEY); setFbConfig(null); alert('설정이 초기화되었습니다.'); location.reload(); } };
             const changePw = () => { if (newPw.length < 4) { alert('비밀번호는 4자리 이상이어야 합니다.'); return; } localStorage.setItem(PASSWORD_KEY, newPw); setNewPw(''); alert('비밀번호가 변경되었습니다.'); };
 
             const saveSharedId = () => {
@@ -2503,6 +2732,7 @@
                                                 <label className="auth-btn login" style={{ textAlign: 'center', cursor: 'pointer', margin: 0, flex: 1 }}><Icon name="upload" size={16} /> 복구 <input type="file" accept=".json" onChange={handleImportData} style={{ display: 'none' }} /></label>
                                             </div>
                                         </div>
+                                        <NotificationSettings fbConfig={fbConfig} user={user} isConnected={isConnected} />
                                     </div>
                                     <div className="settings-section">
                                         <h3>☁️ 서버 연동 (Firebase)</h3>
@@ -2539,6 +2769,9 @@ service cloud.firestore {
     }
     match /shared_data/{sharedId} {
       allow read, write: if request.auth != null;
+    }
+    match /notification_subscriptions/{userId}/devices/{deviceId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }`}
@@ -2722,6 +2955,17 @@ service cloud.firestore {
                 return !!user && !!fbConfig && window.firebase && firebase.apps.length > 0;
             }, [user, fbConfig]);
 
+            useEffect(() => {
+                if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
+                const workerUrl = new URL('firebase-messaging-sw.js', window.location.href);
+                if (fbConfig) {
+                    ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'].forEach(key => {
+                        if (fbConfig[key]) workerUrl.searchParams.set(key, fbConfig[key]);
+                    });
+                }
+                navigator.serviceWorker.register(workerUrl.href, { scope: './' }).catch(error => console.warn('Service worker registration failed:', error));
+            }, [fbConfig]);
+
             const syncToCloud = (newData) => {
                 if (user && window.firebase && firebase.apps.length) {
                     const sharedId = localStorage.getItem(SHARED_ID_KEY);
@@ -2835,6 +3079,37 @@ service cloud.firestore {
             }, [fbConfig]);
 
             useEffect(() => {
+                if (!user || !fbConfig || !isConnected || localStorage.getItem(NOTIFICATION_ENABLED_KEY) !== 'true') return;
+                if (!supportsWebPush() || Notification.permission !== 'granted') return;
+                const vapidKey = localStorage.getItem(NOTIFICATION_VAPID_KEY) || '';
+                if (!vapidKey) return;
+                let cancelled = false;
+                let unsubscribeMessage = null;
+
+                registerNotificationDevice({ firebaseConfig: fbConfig, user, vapidKey, requestPermission: false })
+                    .then(() => {
+                        if (cancelled) return;
+                        unsubscribeMessage = firebase.messaging().onMessage(async payload => {
+                            const notification = payload.notification || payload.data || {};
+                            const registration = await navigator.serviceWorker.ready;
+                            await registration.showNotification(notification.title || 'Smart Finance', {
+                                body: notification.body || '새로운 알림이 도착했습니다.',
+                                icon: notification.icon || './assets/icon-192.png',
+                                badge: './assets/icon-192.png',
+                                tag: payload.data?.tag || 'smart-finance-foreground',
+                                data: { url: payload.data?.url || './' }
+                            });
+                        });
+                    })
+                    .catch(error => console.warn('Push registration refresh failed:', error));
+
+                return () => {
+                    cancelled = true;
+                    if (unsubscribeMessage) unsubscribeMessage();
+                };
+            }, [user, fbConfig, isConnected]);
+
+            useEffect(() => {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
                 if (window.lucide) window.lucide.createIcons();
             }, [data]);
@@ -2865,6 +3140,11 @@ service cloud.firestore {
                 }
                 setTab(t);
                 setSidebarOpen(false);
+            };
+
+            const handleSignOut = async () => {
+                await unregisterNotificationDevice(user);
+                await firebase.auth().signOut();
             };
 
             const tabTitles = {
@@ -2909,7 +3189,7 @@ service cloud.firestore {
                         <div className={`nav-item ${tab === 'assets' ? 'active' : ''}`} onClick={() => menuClick('assets')}><Icon name="wallet" /> 자산 현황</div>
                         <div className={`nav-item ${tab === 'shopping' ? 'active' : ''}`} onClick={() => menuClick('shopping')}><Icon name="shopping-basket" /> 장바구니</div>
                         <div className={`nav-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => menuClick('settings')}><Icon name="settings" /> 설정</div>
-                        <div className="user-profile">{user ? <button onClick={() => firebase.auth().signOut()} className="auth-btn" style={{ background: 'transparent', color: '#8b949e' }}><Icon name="log-out" size={16} /> 로그아웃</button> : <button className="auth-btn login" onClick={() => { if (!fbConfig) setTab('settings'); else firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); }}><Icon name="log-in" size={16} /> 로그인</button>}</div>
+                        <div className="user-profile">{user ? <button onClick={handleSignOut} className="auth-btn" style={{ background: 'transparent', color: '#8b949e' }}><Icon name="log-out" size={16} /> 로그아웃</button> : <button className="auth-btn login" onClick={() => { if (!fbConfig) setTab('settings'); else firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); }}><Icon name="log-in" size={16} /> 로그인</button>}</div>
                     </div>
                     <div className={`main-content ${tab === 'home' ? 'home-content' : ''} ${tab === 'dashboard' ? 'dashboard-content' : ''}`}><div className="container">
                         {tab === 'home' && <HomePage data={data} setTab={setTab} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} onNavigate={menuClick} hideAssetAmounts={hideAssetAmounts} setHideAssetAmounts={setHideAssetAmounts} />}
