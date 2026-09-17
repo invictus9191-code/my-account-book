@@ -716,7 +716,7 @@ table {
 }
 
 .dashboard-back-button {
-  visibility: hidden;
+  visibility: visible;
 }
 
 .dashboard-author-filter {
@@ -1010,6 +1010,7 @@ table {
 }
 
 .dashboard-chart-grid {
+  grid-template-columns: minmax(0, 1fr);
   margin: 0 0 18px;
 }
 
@@ -2598,6 +2599,20 @@ textarea:focus {
   box-shadow: 0 5px 14px rgba(31, 42, 55, 0.08);
 }
 
+.asset-toolbar-tabs {
+  width: min(100%, 330px);
+  margin: 0 auto;
+  padding: 3px;
+  border-radius: 16px;
+}
+
+.asset-toolbar-tabs button {
+  min-height: 38px;
+  padding: 6px 8px;
+  border-radius: 13px;
+  font-size: 0.84rem;
+}
+
 .asset-type-percentage {
   margin-left: 8px;
   padding: 3px 8px;
@@ -3576,7 +3591,7 @@ textarea:focus {
 }
 
 .settings-assets-table {
-  min-width: 780px;
+  min-width: 900px;
 }
 
 .settings-assets-table th {

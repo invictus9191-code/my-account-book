@@ -280,19 +280,28 @@
             return <i data-lucide={name} className={className} style={{ width: size, height: size, display: 'inline-block', ...style }}></i>;
         };
 
-        const calculateAssetDebt = (asset, transactions, upToDate) => Math.max(0, Number(asset.initialDebt || 0) - transactions.reduce((sum, transaction) => {
+        const getAssetEvaluationDate = upToDate => upToDate || formatLocalDate(new Date());
+        const isAssetActiveOn = (asset, upToDate) => !asset.startDate || asset.startDate <= getAssetEvaluationDate(upToDate);
+
+        const calculateAssetDebt = (asset, transactions, upToDate) => {
+            if (!isAssetActiveOn(asset, upToDate)) return 0;
+            return Math.max(0, Number(asset.initialDebt || 0) - transactions.reduce((sum, transaction) => {
             if (upToDate && transaction.date > upToDate) return sum;
+            if (asset.startDate && transaction.date < asset.startDate) return sum;
             return sum + (transaction.type === 'Expense' && transaction.loanAssetId === asset.id ? Number(transaction.loanPrincipal || 0) : 0);
-        }, 0));
+            }, 0));
+        };
 
         const calculateAssetBalance = (assetId, assets, transactions, upToDate) => {
             const asset = assets.find(a => a.id === assetId);
             if (!asset) return 0;
+            if (!isAssetActiveOn(asset, upToDate)) return 0;
             if (asset.type === 'RealEstate') return Number(asset.initialBalance || 0) - calculateAssetDebt(asset, transactions, upToDate);
             const history = transactions.filter(t => {
                 const match = t.assetId === assetId || t.toAssetId === assetId;
-                if (upToDate) return match && t.date <= upToDate;
-                return match;
+                const afterStart = !asset.startDate || t.date >= asset.startDate;
+                if (upToDate) return match && afterStart && t.date <= upToDate;
+                return match && afterStart;
             });
             return history.reduce((sum, t) => {
                 const amt = Number(t.amount || 0);
@@ -874,12 +883,6 @@
 
             return (
                 <div className="fade-in page-shell dashboard-page">
-                    <div className="page-header dashboard-header">
-                        <div>
-                            <p className="page-eyebrow">월간 자금 흐름</p>
-                            <h1 className="page-title">대시보드</h1>
-                        </div>
-                    </div>
                     <section className="transaction-calendar-card dashboard-calendar-card">
                         <div className="transaction-toolbar dashboard-toolbar">
                             <button className="transaction-round-button dashboard-back-button" onClick={() => setTab('home')} aria-label="홈으로 돌아가기"><Icon name="chevron-left" size={20} /></button>
@@ -2144,15 +2147,14 @@
                 <div className="asset-page fade-in">
                     <div className="asset-page-toolbar">
                         <button className="asset-back-button" onClick={() => setTab('home')} aria-label="홈으로 돌아가기"><Icon name="chevron-left" size={21} /></button>
-                        <strong>자산</strong>
+                        <div className="asset-view-tabs asset-toolbar-tabs" role="tablist" aria-label="자산 보기 방식">
+                            <button type="button" role="tab" aria-selected={assetViewMode === 'asset'} className={assetViewMode === 'asset' ? 'active' : ''} onClick={() => setAssetViewMode('asset')}>자산별</button>
+                            <button type="button" role="tab" aria-selected={assetViewMode === 'type'} className={assetViewMode === 'type' ? 'active' : ''} onClick={() => setAssetViewMode('type')}>자산 유형별</button>
+                        </div>
                         <button className="asset-new-button" onClick={() => { setEditAsset(null); setShowAssetModal(true); }} aria-label="신규 자산 추가">
                             <Icon name="wallet" size={23} />
                             <span><Icon name="plus" size={10} /></span>
                         </button>
-                    </div>
-                    <div className="asset-view-tabs" role="tablist" aria-label="자산 보기 방식">
-                        <button type="button" role="tab" aria-selected={assetViewMode === 'asset'} className={assetViewMode === 'asset' ? 'active' : ''} onClick={() => setAssetViewMode('asset')}>자산별</button>
-                        <button type="button" role="tab" aria-selected={assetViewMode === 'type'} className={assetViewMode === 'type' ? 'active' : ''} onClick={() => setAssetViewMode('type')}>자산 유형별</button>
                     </div>
                     <div className="asset-total-card">
                         <div>
@@ -2205,7 +2207,7 @@
                         priority: editItem.priority !== undefined ? editItem.priority : ''
                     };
                 }
-                return { name: '', ownerId: data.owners[0]?.id || '', groupId: sortGroupsByPriority(data.groups)[0]?.id || '', type: 'Cash', initialBalance: 0, priority: '' };
+                return { name: '', ownerId: data.owners[0]?.id || '', groupId: sortGroupsByPriority(data.groups)[0]?.id || '', type: 'Cash', initialBalance: 0, priority: '', startDate: formatLocalDate(new Date()) };
             });
 
             const handleSubmit = (e) => {
@@ -2245,6 +2247,7 @@
                             <div className="form-row"><label>우선순위</label><input type="number" value={form.priority !== undefined ? form.priority : ''} onChange={e => setForm({ ...form, priority: e.target.value })} placeholder="예: 1 (낮은 숫자 우선)" /></div>
                             <div className="form-row"><label>소유자</label><select value={form.ownerId} onChange={e => setForm({ ...form, ownerId: e.target.value })} required><option value="">선택</option>{data.owners.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>
                             <div className="form-row"><label>그룹</label><select value={form.groupId} onChange={e => setForm({ ...form, groupId: e.target.value })}><option value="">선택 (선택사항)</option>{sortGroupsByPriority(data.groups).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+                            <div className="form-row"><label>시작일자</label><input type="date" value={form.startDate || ''} onChange={e => setForm({ ...form, startDate: e.target.value })} /></div>
                             <div className="form-row" style={{ alignItems: 'flex-start' }}>
                                 <label style={{ marginTop: '10px' }}>{form.type === 'RealEstate' ? '초기금액' : '초기 잔액'}</label>
                                 <div className="quick-amount-container">
@@ -3071,7 +3074,7 @@ service cloud.firestore {
                                     </div>
                                     <div className="settings-assets-table-wrap">
                                         <table className="settings-assets-table">
-                                            <thead><tr><th>자산명</th><th>우선순위</th><th>소유자</th><th>그룹</th><th>유형</th><th>초기금액</th><th>현재금액</th><th>관리</th></tr></thead>
+                                            <thead><tr><th>자산명</th><th>우선순위</th><th>소유자</th><th>그룹</th><th>유형</th><th>시작일자</th><th>초기금액</th><th>현재금액</th><th>관리</th></tr></thead>
                                             <tbody>
                                                 {data.assets.slice().sort((a, b) => Number(a.priority || 9999) - Number(b.priority || 9999)).map(a => {
                                                     const bal = calculateAssetBalance(a.id, data.assets, data.transactions);
@@ -3080,12 +3083,13 @@ service cloud.firestore {
                                                             <td data-label="자산명" className="settings-asset-name-cell">
                                                                 <strong>{a.name}</strong>
                                                                 <span className="settings-asset-mobile-meta">{getAssetTypeLabel(a.type, data)} · {data.groups?.find(g => g.id === a.groupId)?.name || '미지정'} · {data.owners.find(o => o.id === a.ownerId)?.name || '소유자 미지정'}</span>
-                                                                <span className="settings-asset-mobile-meta">우선순위 {a.priority !== undefined && a.priority !== 9999 ? a.priority : '-'} · 초기 {Number(a.initialBalance || 0).toLocaleString()}원</span>
+                                                                <span className="settings-asset-mobile-meta">{a.startDate || '시작일 미설정'} · 우선순위 {a.priority !== undefined && a.priority !== 9999 ? a.priority : '-'} · 초기 {Number(a.initialBalance || 0).toLocaleString()}원</span>
                                                             </td>
                                                             <td data-label="우선순위" className="settings-asset-desktop-detail">{a.priority !== undefined && a.priority !== 9999 ? a.priority : '-'}</td>
                                                             <td data-label="소유자" className="settings-asset-desktop-detail">{data.owners.find(o => o.id === a.ownerId)?.name}</td>
                                                             <td data-label="그룹" className="settings-asset-desktop-detail">{data.groups?.find(g => g.id === a.groupId)?.name || '-'}</td>
                                                             <td data-label="유형" className="settings-asset-desktop-detail">{getAssetTypeLabel(a.type, data)}</td>
+                                                            <td data-label="시작일자" className="settings-asset-desktop-detail">{a.startDate || '-'}</td>
                                                             <td data-label="초기금액" className="settings-asset-desktop-detail" style={{ color: '#8b949e' }}>{Number(a.initialBalance || 0).toLocaleString()}</td>
                                                             <td data-label="현재금액" className="settings-asset-current-balance" style={{ fontWeight: 600, color: '#58a6ff' }}>{bal.toLocaleString()}원</td>
                                                             <td data-label="관리" className="settings-asset-manage-cell">
@@ -3094,7 +3098,7 @@ service cloud.firestore {
                                                         </tr>
                                                     );
                                                 })}
-                                                {data.assets.length === 0 && <tr><td colSpan="8" style={{ textAlign: 'center', padding: '2rem' }}>등록된 자산이 없습니다.</td></tr>}
+                                                {data.assets.length === 0 && <tr><td colSpan="9" style={{ textAlign: 'center', padding: '2rem' }}>등록된 자산이 없습니다.</td></tr>}
                                             </tbody>
                                         </table>
                                     </div>
@@ -3127,7 +3131,8 @@ service cloud.firestore {
                 if (p.assets) p.assets = p.assets.map(a => ({
                     ...a,
                     initialBalance: a.initialBalance !== undefined ? a.initialBalance : 0,
-                    groupId: a.groupId || ''
+                    groupId: a.groupId || '',
+                    startDate: a.startDate || ''
                 }));
                 return p;
             });
