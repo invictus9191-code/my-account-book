@@ -3444,6 +3444,20 @@ textarea:focus {
   max-width: 620px;
 }
 
+.settings-asset-type-list {
+  max-width: 520px;
+  margin-top: 14px;
+}
+
+.settings-fixed-badge {
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #e8f1f8;
+  color: #60758a;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
 .settings-group-form input[type="number"] {
   flex: 0 1 170px;
 }
