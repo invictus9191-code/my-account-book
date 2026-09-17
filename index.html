@@ -177,6 +177,15 @@
             .sort((a, b) => a.priority - b.priority || a.index - b.index)
             .map(({ group }) => group);
 
+        const ASSET_TYPES = [
+            { value: 'Cash', label: '현금' },
+            { value: 'Bank', label: '은행' },
+            { value: 'Savings', label: '예적금' },
+            { value: 'Card', label: '카드' },
+            { value: 'RealEstate', label: '부동산' }
+        ];
+        const getAssetTypeLabel = type => ASSET_TYPES.find(item => item.value === type)?.label || '기타';
+
         const isIosDevice = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         const isStandaloneApp = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
         const supportsWebPush = () => window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && !!window.firebase?.messaging;
@@ -2030,6 +2039,7 @@
 
         function AssetManagementPage({ data, setEdit, setShowModal, setTab, setSearchTerm, setEditAsset, setShowAssetModal, hideAssetAmounts }) {
             const [selectedAsset, setSelectedAsset] = useState(null);
+            const [assetViewMode, setAssetViewMode] = useState('asset');
 
             useMobileEdgeSwipeBack(() => {
                 if (selectedAsset) setSelectedAsset(null);
@@ -2049,6 +2059,28 @@
             if (uncategorizedAssets.length > 0) {
                 groupGrouped.push({ id: 'uncategorized', name: '미지정 그룹', total: uncategorizedTotal, assets: uncategorizedAssets, order: 999 });
             }
+
+            const typeGrouped = ASSET_TYPES.map(type => {
+                const assets = data.assets
+                    .filter(asset => asset.type === type.value)
+                    .slice()
+                    .sort((a, b) => Number(a.priority ?? 9999) - Number(b.priority ?? 9999));
+                const total = assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions), 0);
+                return { id: `type-${type.value}`, name: type.label, total, assets };
+            }).filter(group => group.assets.length > 0);
+
+            const knownAssetTypes = new Set(ASSET_TYPES.map(type => type.value));
+            const otherAssets = data.assets.filter(asset => !knownAssetTypes.has(asset.type));
+            if (otherAssets.length > 0) {
+                typeGrouped.push({
+                    id: 'type-other',
+                    name: '기타',
+                    total: otherAssets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions), 0),
+                    assets: otherAssets
+                });
+            }
+
+            const displayedGroups = assetViewMode === 'type' ? typeGrouped : groupGrouped;
 
             const grandTotal = groupGrouped.reduce((sum, g) => sum + g.total, 0);
             const grandDebt = data.assets.reduce((sum, asset) => sum + calculateAssetDebt(asset, data.transactions), 0);
@@ -2133,6 +2165,10 @@
                             <span><Icon name="plus" size={10} /></span>
                         </button>
                     </div>
+                    <div className="asset-view-tabs" role="tablist" aria-label="자산 보기 방식">
+                        <button type="button" role="tab" aria-selected={assetViewMode === 'asset'} className={assetViewMode === 'asset' ? 'active' : ''} onClick={() => setAssetViewMode('asset')}>자산별</button>
+                        <button type="button" role="tab" aria-selected={assetViewMode === 'type'} className={assetViewMode === 'type' ? 'active' : ''} onClick={() => setAssetViewMode('type')}>자산 유형별</button>
+                    </div>
                     <div className="asset-total-card">
                         <div>
                             <div style={{ fontSize: '0.85rem', opacity: 0.9, marginBottom: '2px' }}>전체 자산 합계</div>
@@ -2142,7 +2178,7 @@
                         <Icon name="wallet" size={32} style={{ opacity: 0.4 }} />
                     </div>
                     <div className="card">
-                        {groupGrouped.map(g => {
+                        {displayedGroups.map(g => {
                             const groupDebt = g.assets.reduce((sum, asset) => sum + calculateAssetDebt(asset, data.transactions), 0);
                             return <div key={g.id} style={{ marginBottom: '2rem' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.8rem', borderBottom: '2px solid #30363d', marginBottom: '1rem' }}>
@@ -2166,7 +2202,7 @@
                                 </div>
                             </div>;
                         })}
-                        {groupGrouped.length === 0 && <div style={{ padding: '2rem', textAlign: 'center', color: '#8b949e' }}>등록된 자산이 없습니다. 설정에서 자산을 추가해주세요.</div>}
+                        {displayedGroups.length === 0 && <div style={{ padding: '2rem', textAlign: 'center', color: '#8b949e' }}>등록된 자산이 없습니다. 설정에서 자산을 추가해주세요.</div>}
                     </div>
                 </div>
             );
@@ -2215,7 +2251,7 @@
                             <button type="submit" form="asset-form" className="asset-modal-save" disabled={!form.name || !form.ownerId} aria-label="저장"><Icon name="check" size={27} /></button>
                         </header>
                         <form id="asset-form" className="asset-modal-form" onSubmit={handleSubmit}>
-                            <div className="form-row asset-type-row"><label>자산 유형</label><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}><option value="Cash">현금</option><option value="Bank">은행</option><option value="Card">카드</option><option value="RealEstate">자산</option></select></div>
+                            <div className="form-row asset-type-row"><label>자산 유형</label><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>{ASSET_TYPES.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
                             {form.type === 'RealEstate' && <div className="form-row"><label>현재 부채</label><input inputMode="numeric" value={Number(form.currentDebt || 0).toLocaleString()} onChange={e => setForm({ ...form, currentDebt: e.target.value.replace(/[^0-9]/g, '') })} aria-label="현재 부채" /></div>}
                             <div className="form-row asset-name-row"><label className="sr-only">자산 이름</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="자산 이름" autoFocus required /></div>
                             <div className="asset-extra-fields">
@@ -2967,7 +3003,7 @@ service cloud.firestore {
                                                             <td data-label="우선순위">{a.priority !== undefined && a.priority !== 9999 ? a.priority : '-'}</td>
                                                             <td data-label="소유자">{data.owners.find(o => o.id === a.ownerId)?.name}</td>
                                                             <td data-label="그룹">{data.groups?.find(g => g.id === a.groupId)?.name || '-'}</td>
-                                                            <td data-label="유형">{a.type === 'RealEstate' ? '자산' : a.type === 'Cash' ? '현금' : a.type === 'Bank' ? '은행' : '카드'}</td>
+                                                            <td data-label="유형">{getAssetTypeLabel(a.type)}</td>
                                                             <td data-label="초기금액" style={{ color: '#8b949e' }}>{Number(a.initialBalance || 0).toLocaleString()}</td>
                                                             <td data-label="현재금액" style={{ fontWeight: 600, color: '#58a6ff' }}>{bal.toLocaleString()}</td>
                                                             <td data-label="관리">
