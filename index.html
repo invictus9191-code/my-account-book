@@ -181,6 +181,7 @@
             { value: 'Cash', label: '현금' },
             { value: 'Bank', label: '은행' },
             { value: 'Savings', label: '예적금' },
+            { value: 'HousingSubscription', label: '청약' },
             { value: 'Stock', label: '주식' },
             { value: 'Card', label: '카드' },
             { value: 'RealEstate', label: '부동산' }
@@ -3003,14 +3004,18 @@ service cloud.firestore {
                                                     }, Number(a.initialBalance || 0));
                                                     return (
                                                         <tr key={a.id}>
-                                                            <td data-label="자산명" style={{ fontWeight: 500 }}>{a.name}</td>
-                                                            <td data-label="우선순위">{a.priority !== undefined && a.priority !== 9999 ? a.priority : '-'}</td>
-                                                            <td data-label="소유자">{data.owners.find(o => o.id === a.ownerId)?.name}</td>
-                                                            <td data-label="그룹">{data.groups?.find(g => g.id === a.groupId)?.name || '-'}</td>
-                                                            <td data-label="유형">{getAssetTypeLabel(a.type)}</td>
-                                                            <td data-label="초기금액" style={{ color: '#8b949e' }}>{Number(a.initialBalance || 0).toLocaleString()}</td>
-                                                            <td data-label="현재금액" style={{ fontWeight: 600, color: '#58a6ff' }}>{bal.toLocaleString()}</td>
-                                                            <td data-label="관리">
+                                                            <td data-label="자산명" className="settings-asset-name-cell">
+                                                                <strong>{a.name}</strong>
+                                                                <span className="settings-asset-mobile-meta">{getAssetTypeLabel(a.type)} · {data.groups?.find(g => g.id === a.groupId)?.name || '미지정'} · {data.owners.find(o => o.id === a.ownerId)?.name || '소유자 미지정'}</span>
+                                                                <span className="settings-asset-mobile-meta">우선순위 {a.priority !== undefined && a.priority !== 9999 ? a.priority : '-'} · 초기 {Number(a.initialBalance || 0).toLocaleString()}원</span>
+                                                            </td>
+                                                            <td data-label="우선순위" className="settings-asset-desktop-detail">{a.priority !== undefined && a.priority !== 9999 ? a.priority : '-'}</td>
+                                                            <td data-label="소유자" className="settings-asset-desktop-detail">{data.owners.find(o => o.id === a.ownerId)?.name}</td>
+                                                            <td data-label="그룹" className="settings-asset-desktop-detail">{data.groups?.find(g => g.id === a.groupId)?.name || '-'}</td>
+                                                            <td data-label="유형" className="settings-asset-desktop-detail">{getAssetTypeLabel(a.type)}</td>
+                                                            <td data-label="초기금액" className="settings-asset-desktop-detail" style={{ color: '#8b949e' }}>{Number(a.initialBalance || 0).toLocaleString()}</td>
+                                                            <td data-label="현재금액" className="settings-asset-current-balance" style={{ fontWeight: 600, color: '#58a6ff' }}>{bal.toLocaleString()}원</td>
+                                                            <td data-label="관리" className="settings-asset-manage-cell">
                                                                 <button onClick={() => { setEditingAsset(a); setShowAssetModal(true); }} style={{ background: 'transparent', color: '#58a6ff', padding: '0.3rem' }}>수정</button>
                                                             </td>
                                                         </tr>
