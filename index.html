@@ -252,6 +252,56 @@
             return formatLocalDate(date);
         };
 
+        const addLocalMonths = (dateString, monthCount) => {
+            const date = parseLocalDate(dateString);
+            const targetMonth = date.getMonth() + Number(monthCount || 0);
+            const lastDay = new Date(date.getFullYear(), targetMonth + 1, 0).getDate();
+            return formatLocalDate(new Date(date.getFullYear(), targetMonth, Math.min(date.getDate(), lastDay)));
+        };
+
+        const getLoanInstallmentNumber = (loanStartDate, paymentDate) => {
+            if (!loanStartDate || !paymentDate) return 0;
+            const loanStart = parseLocalDate(loanStartDate);
+            const payment = parseLocalDate(paymentDate);
+            const monthDifference = (payment.getFullYear() - loanStart.getFullYear()) * 12 + payment.getMonth() - loanStart.getMonth();
+            return monthDifference > 0 ? monthDifference : 0;
+        };
+
+        const calculateEqualPaymentInstallment = (principalValue, annualRateValue, termMonthsValue, installmentNumberValue) => {
+            const principal = Number(principalValue || 0);
+            const annualRate = Number(annualRateValue || 0);
+            const termMonths = Math.floor(Number(termMonthsValue || 0));
+            const installmentNumber = Math.floor(Number(installmentNumberValue || 0));
+            if (principal <= 0 || annualRate < 0 || termMonths <= 0 || installmentNumber <= 0 || installmentNumber > termMonths) return null;
+
+            const monthlyRate = annualRate / 100 / 12;
+            const exactPayment = monthlyRate === 0
+                ? principal / termMonths
+                : principal * monthlyRate * Math.pow(1 + monthlyRate, termMonths) / (Math.pow(1 + monthlyRate, termMonths) - 1);
+            const periodsBefore = installmentNumber - 1;
+            const balanceBefore = monthlyRate === 0
+                ? Math.max(0, principal - exactPayment * periodsBefore)
+                : Math.max(0, principal * Math.pow(1 + monthlyRate, periodsBefore) - exactPayment * (Math.pow(1 + monthlyRate, periodsBefore) - 1) / monthlyRate);
+            const interest = Math.max(0, Math.round(balanceBefore * monthlyRate));
+            const principalPayment = installmentNumber === termMonths
+                ? Math.max(0, Math.round(balanceBefore))
+                : Math.max(0, Math.min(Math.round(balanceBefore), Math.round(exactPayment) - interest));
+
+            return {
+                installmentNumber,
+                principal: principalPayment,
+                interest,
+                total: principalPayment + interest,
+                remainingAfter: Math.max(0, Math.round(balanceBefore) - principalPayment)
+            };
+        };
+
+        const getRecurringLoanInstallment = (recurring, paymentDate) => {
+            if (!recurring?.isLoanPayment || !recurring.loanStartDate) return null;
+            const installmentNumber = getLoanInstallmentNumber(recurring.loanStartDate, paymentDate);
+            return calculateEqualPaymentInstallment(recurring.loanOriginalPrincipal, recurring.loanAnnualRate, recurring.loanTermMonths, installmentNumber);
+        };
+
         const getRecurringOccurrences = (recurring, untilDate, maxOccurrences = 5000) => {
             if (!recurring.startDate) return [];
             const frequency = recurring.frequency || 'monthly';
@@ -298,7 +348,11 @@
             const todayString = formatLocalDate(new Date());
             const limit = new Date();
             limit.setFullYear(limit.getFullYear() + 5);
-            return getRecurringOccurrences(recurring, formatLocalDate(limit)).find(occurrence => occurrence.scheduledDate >= todayString)?.scheduledDate || null;
+            return getRecurringOccurrences(recurring, formatLocalDate(limit)).find(occurrence => {
+                if (occurrence.scheduledDate < todayString) return false;
+                const hasEqualPaymentSchedule = recurring.isLoanPayment && recurring.loanOriginalPrincipal && recurring.loanStartDate && recurring.loanTermMonths;
+                return !hasEqualPaymentSchedule || !!getRecurringLoanInstallment(recurring, occurrence.rawDate);
+            })?.scheduledDate || null;
         };
 
         const useMobileEdgeSwipeBack = onBack => {
@@ -1313,34 +1367,44 @@
         function RecurringModal({ data, setData, syncToCloud, editItem, user, onClose }) {
             const today = formatLocalDate(new Date());
             const [viewportStyle, setViewportStyle] = useState({});
-            const [form, setForm] = useState(() => editItem ? {
-                ...editItem,
-                frequency: editItem.frequency || 'monthly',
-                businessDayDirection: editItem.businessDayDirection || '',
-                loanAssetId: editItem.loanAssetId || '',
-                loanPrincipal: editItem.loanPrincipal || '',
-                loanInterest: editItem.loanInterest || '',
-                month: editItem.month || Number(editItem.startDate?.substring(5, 7)) || new Date().getMonth() + 1,
-                weekday: editItem.weekday ?? parseLocalDate(editItem.startDate || today).getDay()
-            } : {
-                type: 'Expense',
-                name: '',
-                amount: '',
-                assetId: data.assets[0]?.id || '',
-                toAssetId: data.assets[1]?.id || '',
-                categoryId: data.categories.find(category => category.type === 'Expense')?.id || '',
-                startDate: today,
-                endDate: '',
-                day: new Date().getDate(),
-                month: new Date().getMonth() + 1,
-                weekday: new Date().getDay(),
-                frequency: 'monthly',
-                businessDayDirection: '',
-                loanAssetId: '',
-                loanPrincipal: '',
-                loanInterest: '',
-                active: true,
-                authorEmail: user?.email || ''
+            const [form, setForm] = useState(() => {
+                if (editItem) {
+                    const linkedAsset = data.assets.find(asset => asset.id === editItem.loanAssetId);
+                    return {
+                        ...editItem,
+                        frequency: editItem.frequency || 'monthly',
+                        businessDayDirection: editItem.businessDayDirection || '',
+                        loanAssetId: editItem.loanAssetId || '',
+                        loanOriginalPrincipal: editItem.loanOriginalPrincipal || linkedAsset?.initialDebt || '',
+                        loanStartDate: editItem.loanStartDate || editItem.startDate || today,
+                        loanAnnualRate: editItem.loanAnnualRate ?? '',
+                        loanTermMonths: editItem.loanTermMonths || '',
+                        month: editItem.month || Number(editItem.startDate?.substring(5, 7)) || new Date().getMonth() + 1,
+                        weekday: editItem.weekday ?? parseLocalDate(editItem.startDate || today).getDay()
+                    };
+                }
+                return {
+                    type: 'Expense',
+                    name: '',
+                    amount: '',
+                    assetId: data.assets.find(asset => asset.type !== 'RealEstate')?.id || data.assets[0]?.id || '',
+                    toAssetId: data.assets[1]?.id || '',
+                    categoryId: data.categories.find(category => category.type === 'Expense')?.id || '',
+                    startDate: today,
+                    endDate: '',
+                    day: new Date().getDate(),
+                    month: new Date().getMonth() + 1,
+                    weekday: new Date().getDay(),
+                    frequency: 'monthly',
+                    businessDayDirection: '',
+                    loanAssetId: '',
+                    loanOriginalPrincipal: '',
+                    loanStartDate: today,
+                    loanAnnualRate: '',
+                    loanTermMonths: '',
+                    active: true,
+                    authorEmail: user?.email || ''
+                };
             });
 
             useEffect(() => {
@@ -1359,8 +1423,13 @@
             const categories = data.categories.filter(category => category.type === form.type || (form.type === 'Transfer' && category.type === 'Transfer'));
             const selectedCategory = data.categories.find(category => category.id === form.categoryId);
             const isLoanPayment = form.type === 'Expense' && selectedCategory?.name === '대출';
-            const paymentTotal = isLoanPayment ? Number(form.loanPrincipal || 0) + Number(form.loanInterest || 0) : Number(form.amount || 0);
-            const canSave = !!form.name && paymentTotal > 0 && !!form.assetId && !!form.categoryId && !!form.startDate && (!isLoanPayment || !!form.loanAssetId) && (form.type !== 'Transfer' || !!form.toAssetId);
+            const loanInstallmentNumber = isLoanPayment ? getLoanInstallmentNumber(form.loanStartDate, form.startDate) : 0;
+            const loanPreview = isLoanPayment ? calculateEqualPaymentInstallment(form.loanOriginalPrincipal, form.loanAnnualRate, form.loanTermMonths, loanInstallmentNumber) : null;
+            const loanMaturityRawDate = loanPreview ? addLocalMonths(form.startDate, Number(form.loanTermMonths) - loanPreview.installmentNumber) : '';
+            const loanMaturityDate = loanMaturityRawDate ? adjustToBusinessDay(loanMaturityRawDate, form.businessDayDirection || '') : '';
+            const paymentTotal = isLoanPayment ? Number(loanPreview?.total || 0) : Number(form.amount || 0);
+            const validLoanSchedule = !isLoanPayment || (!!form.loanAssetId && form.loanAnnualRate !== '' && !!loanPreview && form.loanStartDate <= form.startDate && (!!editItem || form.startDate >= today));
+            const canSave = !!form.name && paymentTotal > 0 && !!form.assetId && !!form.categoryId && !!form.startDate && validLoanSchedule && (form.type !== 'Transfer' || !!form.toAssetId);
 
             useEffect(() => {
                 if (!categories.some(category => category.id === form.categoryId)) {
@@ -1388,13 +1457,18 @@
                     amount: paymentTotal,
                     isLoanPayment,
                     loanAssetId: isLoanPayment ? form.loanAssetId : '',
-                    loanPrincipal: isLoanPayment ? Number(form.loanPrincipal || 0) : 0,
-                    loanInterest: isLoanPayment ? Number(form.loanInterest || 0) : 0,
+                    loanOriginalPrincipal: isLoanPayment ? Number(form.loanOriginalPrincipal || 0) : 0,
+                    loanStartDate: isLoanPayment ? form.loanStartDate : '',
+                    loanAnnualRate: isLoanPayment ? Number(form.loanAnnualRate || 0) : 0,
+                    loanTermMonths: isLoanPayment ? Number(form.loanTermMonths || 0) : 0,
+                    loanPrincipal: isLoanPayment ? Number(loanPreview?.principal || 0) : 0,
+                    loanInterest: isLoanPayment ? Number(loanPreview?.interest || 0) : 0,
                     day: Math.min(Math.max(Number(form.day || 1), 1), 31),
                     month: Math.min(Math.max(Number(form.month || 1), 1), 12),
                     weekday: Math.min(Math.max(Number(form.weekday ?? 0), 0), 6),
-                    frequency: form.frequency || 'monthly',
+                    frequency: isLoanPayment ? 'monthly' : (form.frequency || 'monthly'),
                     businessDayDirection: form.businessDayDirection || '',
+                    endDate: isLoanPayment ? loanMaturityDate : form.endDate,
                     authorEmail: form.authorEmail || user?.email || ''
                 };
                 const items = data.recurringTransactions || [];
@@ -1430,22 +1504,32 @@
                             <label><span>이름</span><input value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} onFocus={focusIntoView} placeholder="예: 월세, 구독료" autoFocus /></label>
                             <label><span>카테고리</span><select value={form.categoryId} onChange={event => setForm({ ...form, categoryId: event.target.value })}>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
                             {isLoanPayment ? <>
-                                <label><span>자산</span><select value={form.loanAssetId || ''} onChange={event => setForm({ ...form, loanAssetId: event.target.value })}><option value="">선택하세요</option>{data.assets.filter(asset => asset.type === 'RealEstate').map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
+                                <label><span>자산</span><select value={form.loanAssetId || ''} onChange={event => { const loanAssetId = event.target.value; const asset = data.assets.find(item => item.id === loanAssetId); setForm({ ...form, loanAssetId, loanOriginalPrincipal: form.loanOriginalPrincipal || asset?.initialDebt || '' }); }}><option value="">선택하세요</option>{data.assets.filter(asset => asset.type === 'RealEstate').map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
                                 {data.assets.filter(asset => asset.type === 'RealEstate').length === 0 && <p className="recurring-business-help">자산 페이지에서 부채가 있는 자산을 먼저 등록해주세요.</p>}
-                                <label><span>상환 원금</span><input type="text" inputMode="numeric" value={form.loanPrincipal ? Number(form.loanPrincipal).toLocaleString() : ''} onChange={event => setForm({ ...form, loanPrincipal: event.target.value.replace(/[^0-9]/g, '') })} onFocus={focusIntoView} placeholder="0원" /></label>
-                                <label><span>이자</span><input type="text" inputMode="numeric" value={form.loanInterest ? Number(form.loanInterest).toLocaleString() : ''} onChange={event => setForm({ ...form, loanInterest: event.target.value.replace(/[^0-9]/g, '') })} onFocus={focusIntoView} placeholder="0원" /></label>
-                                <label><span>총 출금액</span><strong>{paymentTotal.toLocaleString()}원</strong></label>
+                                <label><span>최초 대출금</span><input type="text" inputMode="numeric" value={form.loanOriginalPrincipal ? Number(form.loanOriginalPrincipal).toLocaleString() : ''} onChange={event => setForm({ ...form, loanOriginalPrincipal: event.target.value.replace(/[^0-9]/g, '') })} onFocus={focusIntoView} placeholder="0원" /></label>
+                                <label><span>대출 시작일</span><input type="date" value={form.loanStartDate || ''} max={form.startDate || undefined} onChange={event => setForm({ ...form, loanStartDate: event.target.value })} onFocus={focusIntoView} /></label>
+                                <label><span>연 이율</span><span className="recurring-number-unit"><input type="text" inputMode="decimal" value={form.loanAnnualRate ?? ''} onChange={event => { const value = event.target.value.replace(/[^0-9.]/g, ''); if ((value.match(/\./g) || []).length <= 1) setForm({ ...form, loanAnnualRate: value }); }} onFocus={focusIntoView} placeholder="0" /><b>%</b></span></label>
+                                <label><span>상환 기간</span><span className="recurring-number-unit"><input type="text" inputMode="numeric" value={form.loanTermMonths || ''} onChange={event => setForm({ ...form, loanTermMonths: event.target.value.replace(/[^0-9]/g, '') })} onFocus={focusIntoView} placeholder="360" /><b>개월</b></span></label>
                             </> : <label><span>금액</span><input type="text" inputMode="numeric" value={form.amount ? Number(form.amount).toLocaleString() : ''} onChange={event => setForm({ ...form, amount: event.target.value.replace(/[^0-9]/g, '') })} onFocus={focusIntoView} placeholder="0원" /></label>}
                             <label><span>{form.type === 'Transfer' ? '출금 자산' : '자산'}</span><select value={form.assetId} onChange={event => setForm({ ...form, assetId: event.target.value })}>{data.assets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
                             {form.type === 'Transfer' && <label><span>입금 자산</span><select value={form.toAssetId} onChange={event => setForm({ ...form, toAssetId: event.target.value })}>{data.assets.filter(asset => asset.id !== form.assetId).map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>}
-                            <label><span>반복 주기</span><select value={form.frequency} onChange={event => setForm({ ...form, frequency: event.target.value })}><option value="monthly">매월</option><option value="weekly">매주</option><option value="yearly">매년</option></select></label>
-                            <label><span>시작 날짜</span><input type="date" value={form.startDate} onChange={event => { const value = event.target.value; if (!value) { setForm({ ...form, startDate: '' }); return; } const date = parseLocalDate(value); setForm({ ...form, startDate: value, day: date.getDate(), month: date.getMonth() + 1, weekday: date.getDay() }); }} onFocus={focusIntoView} /></label>
-                            {form.frequency === 'weekly' && <label><span>실행 요일</span><select value={form.weekday} onChange={event => setForm({ ...form, weekday: Number(event.target.value) })}>{['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'].map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label>}
-                            {form.frequency === 'yearly' && <label><span>실행 월</span><select value={form.month} onChange={event => setForm({ ...form, month: Number(event.target.value) })}>{Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}월</option>)}</select></label>}
-                            {form.frequency !== 'weekly' && <label><span>{form.frequency === 'yearly' ? '실행일' : '매월 실행일'}</span><input type="number" min="1" max="31" value={form.day} onChange={event => setForm({ ...form, day: event.target.value })} onFocus={focusIntoView} /></label>}
+                            {isLoanPayment ? <label><span>반복 주기</span><strong>매월 · 원리금균등</strong></label> : <label><span>반복 주기</span><select value={form.frequency} onChange={event => setForm({ ...form, frequency: event.target.value })}><option value="monthly">매월</option><option value="weekly">매주</option><option value="yearly">매년</option></select></label>}
+                            <label><span>{isLoanPayment ? '다음 자동 생성일' : '시작 날짜'}</span><input type="date" value={form.startDate} min={isLoanPayment && !editItem ? today : undefined} onChange={event => { const value = event.target.value; if (!value) { setForm({ ...form, startDate: '' }); return; } const date = parseLocalDate(value); setForm({ ...form, startDate: value, day: date.getDate(), month: date.getMonth() + 1, weekday: date.getDay() }); }} onFocus={focusIntoView} /></label>
+                            {!isLoanPayment && form.frequency === 'weekly' && <label><span>실행 요일</span><select value={form.weekday} onChange={event => setForm({ ...form, weekday: Number(event.target.value) })}>{['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'].map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label>}
+                            {!isLoanPayment && form.frequency === 'yearly' && <label><span>실행 월</span><select value={form.month} onChange={event => setForm({ ...form, month: Number(event.target.value) })}>{Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}월</option>)}</select></label>}
+                            {!isLoanPayment && form.frequency !== 'weekly' && <label><span>{form.frequency === 'yearly' ? '실행일' : '매월 실행일'}</span><input type="number" min="1" max="31" value={form.day} onChange={event => setForm({ ...form, day: event.target.value })} onFocus={focusIntoView} /></label>}
                             <label><span>영업일 기준</span><select value={form.businessDayDirection} onChange={event => setForm({ ...form, businessDayDirection: event.target.value })}><option value="">미설정</option><option value="before">앞 (이전 영업일)</option><option value="after">뒤 (다음 영업일)</option></select></label>
                             <p className="recurring-business-help">주말 또는 한국 공휴일이면 선택한 방향의 가장 가까운 영업일에 거래가 생성됩니다.</p>
-                            <label><span>종료 날짜</span><input type="date" value={form.endDate || ''} min={form.startDate} onChange={event => setForm({ ...form, endDate: event.target.value })} onFocus={focusIntoView} /></label>
+                            {isLoanPayment ? <>
+                                <div className="recurring-loan-preview">
+                                    <div><span>계산 회차</span><strong>{loanPreview ? `${loanPreview.installmentNumber}회 / ${Number(form.loanTermMonths).toLocaleString()}회` : '-'}</strong></div>
+                                    <div><span>이번 원금</span><strong>{loanPreview ? `${loanPreview.principal.toLocaleString()}원` : '-'}</strong></div>
+                                    <div><span>이번 이자</span><strong>{loanPreview ? `${loanPreview.interest.toLocaleString()}원` : '-'}</strong></div>
+                                    <div className="total"><span>예상 출금액</span><strong>{loanPreview ? `${loanPreview.total.toLocaleString()}원` : '-'}</strong></div>
+                                    <small>첫 상환은 대출 시작 다음 달을 1회차로 계산합니다. 이미 지난 회차는 계산에만 반영되며 거래내역에는 생성되지 않습니다.</small>
+                                </div>
+                                <label><span>상환 종료 예정</span><strong>{loanMaturityDate || '-'}</strong></label>
+                            </> : <label><span>종료 날짜</span><input type="date" value={form.endDate || ''} min={form.startDate} onChange={event => setForm({ ...form, endDate: event.target.value })} onFocus={focusIntoView} /></label>}
                             {editItem && <button type="button" className="budget-delete-button" onClick={handleDelete}>반복 삭제</button>}
                         </form>
                     </section>
@@ -2668,13 +2752,16 @@ service cloud.firestore {
                     getRecurringOccurrences(item, today).forEach(occurrence => {
                         const transactionId = `recurring-${item.id}-${occurrence.occurrenceKey}`;
                         if (occurrence.scheduledDate <= today && !existingIds.has(transactionId)) {
+                            const hasEqualPaymentSchedule = item.isLoanPayment && item.loanOriginalPrincipal && item.loanStartDate && item.loanTermMonths;
+                            const loanInstallment = hasEqualPaymentSchedule ? getRecurringLoanInstallment(item, occurrence.rawDate) : null;
+                            if (hasEqualPaymentSchedule && !loanInstallment) return;
                             generated.push({
                                 id: transactionId,
                                 recurringId: item.id,
                                 recurringMonth: occurrence.rawDate.substring(0, 7),
                                 recurringOccurrence: occurrence.rawDate,
                                 type: item.type,
-                                amount: Number(item.amount || 0),
+                                amount: item.isLoanPayment && loanInstallment ? loanInstallment.total : Number(item.amount || 0),
                                 date: occurrence.scheduledDate,
                                 assetId: item.assetId,
                                 toAssetId: item.type === 'Transfer' ? item.toAssetId : undefined,
@@ -2683,8 +2770,9 @@ service cloud.firestore {
                                 authorEmail: item.authorEmail || '',
                                 isLoanPayment: !!item.isLoanPayment,
                                 loanAssetId: item.isLoanPayment ? item.loanAssetId : '',
-                                loanPrincipal: item.isLoanPayment ? Number(item.loanPrincipal || 0) : 0,
-                                loanInterest: item.isLoanPayment ? Number(item.loanInterest || 0) : 0
+                                loanPrincipal: item.isLoanPayment ? Number(loanInstallment?.principal ?? item.loanPrincipal ?? 0) : 0,
+                                loanInterest: item.isLoanPayment ? Number(loanInstallment?.interest ?? item.loanInterest ?? 0) : 0,
+                                loanInstallmentNumber: loanInstallment?.installmentNumber || null
                             });
                             existingIds.add(transactionId);
                         }
