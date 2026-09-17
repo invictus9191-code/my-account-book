@@ -2612,6 +2612,28 @@ textarea:focus {
   line-height: 1.2;
 }
 
+.asset-evaluation-preview {
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 3px 12px;
+  border-radius: 18px;
+  background: #eaf4ff;
+  color: #40566b;
+}
+
+.asset-evaluation-preview strong {
+  color: #1679c4;
+  font-size: 1.05rem;
+}
+
+.asset-evaluation-preview small {
+  grid-column: 1 / -1;
+  color: #748697;
+  font-size: 0.72rem;
+}
+
 .asset-back-button,
 .asset-new-button {
   width: 44px;
@@ -3456,6 +3478,29 @@ textarea:focus {
   color: #60758a;
   font-size: 0.74rem;
   font-weight: 700;
+}
+
+.settings-base-asset-type-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.settings-base-asset-type-row input {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 7px 10px !important;
+}
+
+.settings-base-asset-type-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.settings-base-asset-type-actions button {
+  min-height: 36px;
+  padding: 7px 10px;
 }
 
 .settings-group-form input[type="number"] {
