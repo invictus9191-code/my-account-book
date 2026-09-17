@@ -3400,6 +3400,51 @@ textarea:focus {
   background: #edf7ff;
 }
 
+.settings-group-list {
+  max-width: 620px;
+}
+
+.settings-group-form input[type="number"] {
+  flex: 0 1 170px;
+}
+
+.settings-group-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) auto auto;
+}
+
+.settings-group-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.settings-group-priority {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #7a838d;
+  font-size: 0.78rem;
+}
+
+.settings-group-priority input {
+  width: 78px !important;
+  min-height: 38px !important;
+  padding: 7px 9px !important;
+  text-align: center;
+}
+
+.settings-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-group-actions button {
+  min-height: 36px;
+  padding: 7px 10px;
+}
+
 .settings-delete-button {
   padding: 7px 10px;
   flex: 0 0 auto;
@@ -3513,6 +3558,24 @@ textarea:focus {
   .settings-inline-form button {
     min-height: 42px;
     flex: 1 1 auto;
+  }
+
+  .settings-group-form input[type="number"] {
+    flex-basis: 100% !important;
+  }
+
+  .settings-group-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .settings-group-priority {
+    justify-self: end;
+  }
+
+  .settings-group-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    width: 100%;
   }
 
   .settings-share-form input {

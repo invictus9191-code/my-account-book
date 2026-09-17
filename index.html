@@ -142,7 +142,7 @@
 
         const initialData = {
             owners: [{ id: 'o1', name: '홍길동' }],
-            groups: [{ id: 'g1', name: '주거래' }],
+            groups: [{ id: 'g1', name: '주거래', priority: 1 }],
             assets: [{ id: 'a1', ownerId: 'o1', groupId: 'g1', name: '현금', type: 'Cash', initialBalance: 0 }],
             categories: [
                 { id: 'ex1', type: 'Expense', name: '식비' }, { id: 'ex2', type: 'Expense', name: '카페/간식' },
@@ -163,6 +163,19 @@
             shoppingItems: [],
             shoppingFavorites: []
         };
+
+        const getGroupPriority = (group, fallbackIndex = 0) => {
+            const value = group?.priority ?? group?.order;
+            if (value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value))) {
+                return Math.max(1, Math.floor(Number(value)));
+            }
+            return fallbackIndex + 1;
+        };
+
+        const sortGroupsByPriority = (groups = []) => groups
+            .map((group, index) => ({ group, index, priority: getGroupPriority(group, index) }))
+            .sort((a, b) => a.priority - b.priority || a.index - b.index)
+            .map(({ group }) => group);
 
         const isIosDevice = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         const isStandaloneApp = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -828,7 +841,7 @@
 
             if (view === 'asset_detail') {
                 const upToDate = `${selectedMonth}-31`;
-                const groupGrouped = (data.groups || []).map(g => {
+                const groupGrouped = sortGroupsByPriority(data.groups).map(g => {
                     const assets = data.assets.filter(a => a.groupId === g.id);
                     const total = assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions, upToDate), 0);
                     return { ...g, total, assets };
@@ -2023,8 +2036,7 @@
                 else setTab('home');
             });
 
-            const groupGrouped = (data.groups || [])
-                .sort((a, b) => (a.order || 0) - (b.order || 0)) // 정렬 순서 적용
+            const groupGrouped = sortGroupsByPriority(data.groups)
                 .map(g => {
                     const assets = data.assets.filter(a => a.groupId === g.id);
                     const total = assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions), 0);
@@ -2169,7 +2181,7 @@
                         priority: editItem.priority !== undefined ? editItem.priority : ''
                     };
                 }
-                return { name: '', ownerId: data.owners[0]?.id || '', groupId: data.groups?.[0]?.id || '', type: 'Cash', initialBalance: 0, priority: '' };
+                return { name: '', ownerId: data.owners[0]?.id || '', groupId: sortGroupsByPriority(data.groups)[0]?.id || '', type: 'Cash', initialBalance: 0, priority: '' };
             });
 
             const handleSubmit = (e) => {
@@ -2209,7 +2221,7 @@
                             <div className="asset-extra-fields">
                             <div className="form-row"><label>우선순위</label><input type="number" value={form.priority !== undefined ? form.priority : ''} onChange={e => setForm({ ...form, priority: e.target.value })} placeholder="예: 1 (낮은 숫자 우선)" /></div>
                             <div className="form-row"><label>소유자</label><select value={form.ownerId} onChange={e => setForm({ ...form, ownerId: e.target.value })} required><option value="">선택</option>{data.owners.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>
-                            <div className="form-row"><label>그룹</label><select value={form.groupId} onChange={e => setForm({ ...form, groupId: e.target.value })}><option value="">선택 (선택사항)</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+                            <div className="form-row"><label>그룹</label><select value={form.groupId} onChange={e => setForm({ ...form, groupId: e.target.value })}><option value="">선택 (선택사항)</option>{sortGroupsByPriority(data.groups).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
                             <div className="form-row" style={{ alignItems: 'flex-start' }}>
                                 <label style={{ marginTop: '10px' }}>{form.type === 'RealEstate' ? '현재 평가금' : '초기 잔액'}</label>
                                 <div className="quick-amount-container">
@@ -2413,11 +2425,11 @@
                                         <button type="button" className="clear-btn" onClick={clearAmount} disabled={!isConnected}>지우기</button>
                                 </div>
                             </div>
-                            <label className="transaction-form-card"><span>그룹 {form.type === 'Transfer' ? '(출금)' : ''}</span><select value={form.groupId} onChange={e => setForm({ ...form, groupId: e.target.value })} disabled={!isConnected}><option value="">전체/미지정</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
+                            <label className="transaction-form-card"><span>그룹 {form.type === 'Transfer' ? '(출금)' : ''}</span><select value={form.groupId} onChange={e => setForm({ ...form, groupId: e.target.value })} disabled={!isConnected}><option value="">전체/미지정</option>{sortGroupsByPriority(data.groups).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
                             <label className="transaction-form-card"><span>{form.type === 'Transfer' ? '출금 자산' : '자산'}</span><select value={form.assetId} onChange={e => setForm({ ...form, assetId: e.target.value })} disabled={!isConnected}>{filteredAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
                             {form.type === 'Transfer' && (
                                 <React.Fragment>
-                                    <label className="transaction-form-card"><span>그룹 (입금)</span><select value={form.toGroupId} onChange={e => setForm({ ...form, toGroupId: e.target.value })} disabled={!isConnected}><option value="">전체/미지정</option>{(data.groups || []).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
+                                    <label className="transaction-form-card"><span>그룹 (입금)</span><select value={form.toGroupId} onChange={e => setForm({ ...form, toGroupId: e.target.value })} disabled={!isConnected}><option value="">전체/미지정</option>{sortGroupsByPriority(data.groups).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
                                     <label className="transaction-form-card"><span>입금 자산</span><select value={form.toAssetId} onChange={e => setForm({ ...form, toAssetId: e.target.value })} disabled={!isConnected}>{filteredToAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
                                 </React.Fragment>
                             )}
@@ -2576,6 +2588,8 @@
             const [newAbbr, setNewAbbr] = useState('');
             const [newDefaultGroupId, setNewDefaultGroupId] = useState('');
             const [newGroup, setNewGroup] = useState('');
+            const [newGroupPriority, setNewGroupPriority] = useState('');
+            const [groupPriorityDrafts, setGroupPriorityDrafts] = useState({});
             const [newCat, setNewCat] = useState({ name: '', type: 'Expense' });
             const [editingAbbr, setEditingAbbr] = useState(null); // 수정 중인 약칭 email
             const [editingAsset, setEditingAsset] = useState(null);
@@ -2647,7 +2661,40 @@
             const addOwner = () => { if (!newOwner) return; const newData = { ...data, owners: [...data.owners, { id: Date.now().toString(), name: newOwner }] }; setData(newData); syncToCloud(newData); setNewOwner(''); };
             const delOwner = (id) => { if (confirm('삭제하시겠습니까?')) { const newData = { ...data, owners: data.owners.filter(o => o.id !== id) }; setData(newData); syncToCloud(newData); } };
 
-            const addGroup = () => { if (!newGroup) return; const newData = { ...data, groups: [...(data.groups || []), { id: Date.now().toString(), name: newGroup }] }; setData(newData); syncToCloud(newData); setNewGroup(''); };
+            const addGroup = () => {
+                const name = newGroup.trim();
+                if (!name) return;
+                const groups = data.groups || [];
+                const enteredPriority = Number(newGroupPriority);
+                const nextPriority = groups.reduce((max, group, index) => Math.max(max, getGroupPriority(group, index)), 0) + 1;
+                const priority = newGroupPriority !== '' && Number.isFinite(enteredPriority)
+                    ? Math.max(1, Math.floor(enteredPriority))
+                    : nextPriority;
+                const newData = { ...data, groups: [...groups, { id: Date.now().toString(), name, priority }] };
+                setData(newData);
+                syncToCloud(newData);
+                setNewGroup('');
+                setNewGroupPriority('');
+            };
+            const updateGroupPriority = (id) => {
+                const draft = groupPriorityDrafts[id];
+                const priority = Number(draft);
+                if (draft === undefined || draft === '' || !Number.isFinite(priority) || priority < 1) {
+                    alert('우선순위는 1 이상의 숫자로 입력해주세요.');
+                    return;
+                }
+                const newData = {
+                    ...data,
+                    groups: (data.groups || []).map(group => group.id === id ? { ...group, priority: Math.floor(priority) } : group)
+                };
+                setData(newData);
+                syncToCloud(newData);
+                setGroupPriorityDrafts(current => {
+                    const next = { ...current };
+                    delete next[id];
+                    return next;
+                });
+            };
             const delGroup = (id) => { if (confirm('삭제하시겠습니까?')) { const newData = { ...data, groups: data.groups.filter(g => g.id !== id) }; setData(newData); syncToCloud(newData); } };
 
             const addCat = () => { if (!newCat.name) return; const newData = { ...data, categories: [...data.categories, { ...newCat, id: Date.now().toString() }] }; setData(newData); syncToCloud(newData); setNewCat({ ...newCat, name: '' }); };
@@ -2797,7 +2844,7 @@ service cloud.firestore {
                                             <input value={newAbbr} onChange={e => setNewAbbr(e.target.value)} placeholder="약칭 (예: TS)" style={{ width: '100px' }} />
                                             <select value={newDefaultGroupId} onChange={e => setNewDefaultGroupId(e.target.value)} style={{ padding: '8px', borderRadius: '6px', background: '#0d1117', color: 'white', border: '1px solid #30363d', flex: 2, minWidth: '130px' }}>
                                                 <option value="">초기그룹 선택 (선택사항)</option>
-                                                {(data.groups || []).map(g => (
+                                                {sortGroupsByPriority(data.groups).map(g => (
                                                     <option key={g.id} value={g.id}>{g.name}</option>
                                                 ))}
                                             </select>
@@ -2818,7 +2865,7 @@ service cloud.firestore {
                                                             style={{ padding: '4px 8px', borderRadius: '6px', background: '#0d1117', color: 'white', border: '1px solid #30363d', fontSize: '0.85rem' }}
                                                         >
                                                             <option value="">미지정</option>
-                                                            {(data.groups || []).map(g => (
+                                                            {sortGroupsByPriority(data.groups).map(g => (
                                                                 <option key={g.id} value={g.id}>{g.name}</option>
                                                             ))}
                                                         </select>
@@ -2848,10 +2895,39 @@ service cloud.firestore {
                             {activeTab === 'groups' && (
                                 <div className="settings-panel settings-section">
                                     <h3>자산 그룹 관리</h3>
-                                    <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>자산을 논리적으로 묶어주는 그룹을 등록합니다.</p>
-                                    <div className="settings-inline-form"><input value={newGroup} onChange={e => setNewGroup(e.target.value)} placeholder="그룹명" /><button className="primary" onClick={addGroup}>추가</button></div>
-                                    <div style={{ maxWidth: '400px' }}>
-                                        {(data.groups || []).map(g => (<div key={g.id} className="settings-list-row">{g.name} <button onClick={() => delGroup(g.id)} className="settings-delete-button">삭제</button></div>))}
+                                    <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>우선순위 숫자가 작을수록 자산 페이지의 위쪽에 표시됩니다.</p>
+                                    <div className="settings-inline-form settings-group-form">
+                                        <input value={newGroup} onChange={e => setNewGroup(e.target.value)} placeholder="그룹명" />
+                                        <input type="number" min="1" step="1" inputMode="numeric" value={newGroupPriority} onChange={e => setNewGroupPriority(e.target.value)} placeholder="우선순위 (자동)" aria-label="신규 그룹 우선순위" />
+                                        <button className="primary" onClick={addGroup}>추가</button>
+                                    </div>
+                                    <div className="settings-group-list">
+                                        {sortGroupsByPriority(data.groups).map(g => {
+                                            const originalIndex = (data.groups || []).findIndex(group => group.id === g.id);
+                                            const savedPriority = getGroupPriority(g, originalIndex < 0 ? 0 : originalIndex);
+                                            return (
+                                                <div key={g.id} className="settings-list-row settings-group-row">
+                                                    <span className="settings-group-name">{g.name}</span>
+                                                    <label className="settings-group-priority">
+                                                        <span>우선순위</span>
+                                                        <input
+                                                            type="number"
+                                                            min="1"
+                                                            step="1"
+                                                            inputMode="numeric"
+                                                            value={groupPriorityDrafts[g.id] ?? savedPriority}
+                                                            onChange={e => setGroupPriorityDrafts(current => ({ ...current, [g.id]: e.target.value }))}
+                                                            onKeyDown={e => { if (e.key === 'Enter') updateGroupPriority(g.id); }}
+                                                            aria-label={`${g.name} 우선순위`}
+                                                        />
+                                                    </label>
+                                                    <div className="settings-group-actions">
+                                                        <button className="secondary" onClick={() => updateGroupPriority(g.id)} disabled={groupPriorityDrafts[g.id] === undefined}>저장</button>
+                                                        <button onClick={() => delGroup(g.id)} className="settings-delete-button">삭제</button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
@@ -2920,6 +2996,10 @@ service cloud.firestore {
                 const p = JSON.parse(s);
                 if (!p.categories || p.categories.length < 10) p.categories = initialData.categories;
                 if (!p.groups) p.groups = initialData.groups;
+                p.groups = p.groups.map((group, index) => ({
+                    ...group,
+                    priority: getGroupPriority(group, index)
+                }));
                 if (!p.budgets) p.budgets = [];
                 if (!p.recurringTransactions) p.recurringTransactions = [];
                 if (!p.shoppingItems) p.shoppingItems = [];
