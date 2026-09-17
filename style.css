@@ -2598,6 +2598,20 @@ textarea:focus {
   box-shadow: 0 5px 14px rgba(31, 42, 55, 0.08);
 }
 
+.asset-type-percentage {
+  margin-left: 8px;
+  padding: 3px 8px;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  border-radius: 999px;
+  background: rgba(9, 105, 218, 0.1);
+  color: #51718f;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 .asset-back-button,
 .asset-new-button {
   width: 44px;
