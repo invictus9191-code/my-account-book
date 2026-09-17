@@ -2072,6 +2072,10 @@
 
             const grandTotal = data.assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions), 0);
             const grandDebt = data.assets.reduce((sum, asset) => sum + calculateAssetDebt(asset, data.transactions), 0);
+            const allocationGroups = displayedGroups.filter(group => group.total > 0);
+            const allocationTotal = allocationGroups.reduce((sum, group) => sum + group.total, 0);
+            const allocationColors = ['#7dd3fc', '#a7f3d0', '#fde68a', '#fca5a5', '#c4b5fd', '#fdba74', '#93c5fd', '#f9a8d4'];
+            const getAllocationPercent = group => allocationTotal > 0 && group.total > 0 ? (group.total / allocationTotal) * 100 : 0;
 
             // 자산 거래내역 뷰
             if (selectedAsset) {
@@ -2157,12 +2161,28 @@
                         </button>
                     </div>
                     <div className="asset-total-card">
-                        <div>
-                            <div style={{ fontSize: '0.85rem', opacity: 0.9, marginBottom: '2px' }}>전체 자산 합계</div>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{hideAssetAmounts ? '금액숨김' : `${grandTotal.toLocaleString()}원`}</div>
-                            {grandDebt > 0 && <small>{hideAssetAmounts ? '금액숨김' : `부채 ${grandDebt.toLocaleString()}원`}</small>}
+                        <div className="asset-total-summary">
+                            <div>
+                                <div style={{ fontSize: '0.85rem', opacity: 0.9, marginBottom: '2px' }}>전체 자산 합계</div>
+                                <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{hideAssetAmounts ? '금액숨김' : `${grandTotal.toLocaleString()}원`}</div>
+                                {grandDebt > 0 && <small>{hideAssetAmounts ? '금액숨김' : `부채 ${grandDebt.toLocaleString()}원`}</small>}
+                            </div>
+                            <Icon name="wallet" size={32} style={{ opacity: 0.4 }} />
                         </div>
-                        <Icon name="wallet" size={32} style={{ opacity: 0.4 }} />
+                        {allocationGroups.length > 0 && (
+                            <div className="asset-allocation">
+                                <div className="asset-allocation-bar" role="img" aria-label={`${assetViewMode === 'type' ? '자산 유형별' : '자산 그룹별'} 비중`}>
+                                    {allocationGroups.map((group, index) => (
+                                        <span key={group.id} style={{ width: `${getAllocationPercent(group)}%`, background: allocationColors[index % allocationColors.length] }} title={`${group.name} ${getAllocationPercent(group).toFixed(1)}%`} />
+                                    ))}
+                                </div>
+                                <div className="asset-allocation-legend">
+                                    {allocationGroups.map((group, index) => (
+                                        <span key={group.id}><i style={{ background: allocationColors[index % allocationColors.length] }} />{group.name} {getAllocationPercent(group).toFixed(1)}%</span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                     <div className="card">
                         {displayedGroups.map(g => {
@@ -2171,7 +2191,7 @@
                                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.8rem', borderBottom: '2px solid #30363d', marginBottom: '1rem' }}>
                                     <h3 style={{ color: '#58a6ff' }}>
                                         {g.name}
-                                        {assetViewMode === 'type' && <small className="asset-type-percentage">{grandTotal === 0 ? '0%' : `${((g.total / grandTotal) * 100).toFixed(1)}%`}</small>}
+                                        {assetViewMode === 'type' && <small className="asset-type-percentage">{`${getAllocationPercent(g).toFixed(1)}%`}</small>}
                                     </h3>
                                     <span className="asset-amount-stack"><b>{hideAssetAmounts ? '금액숨김' : `${g.total.toLocaleString()}원`}</b>{groupDebt > 0 && <small>{hideAssetAmounts ? '금액숨김' : `부채 ${groupDebt.toLocaleString()}원`}</small>}</span>
                                 </div>
