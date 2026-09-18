@@ -627,7 +627,7 @@
             });
             const [showMonthPicker, setShowMonthPicker] = useState(false);
             const selectedMonthRef = React.useRef(null);
-            const [view, setView] = useState('main'); // main, income_detail, expense_detail, asset_detail, category_list
+            const [view, setView] = useState('main'); // main, income_detail, expense_detail, asset_detail, asset_flow_detail, category_list
             const [selectedId, setSelectedId] = useState(null); // categoryId or assetGroupId
             const [chartType, setChartType] = useState('income_expense'); // income_expense or savings
 
@@ -734,6 +734,35 @@
                 });
                 return { labels: labels.map(m => `${m.substring(5)}월`), categoryData };
             }, [selectedMonth, selectedCategory, data.transactions]);
+
+            const fullAssetFlowData = useMemo(() => {
+                const today = formatLocalDate(new Date());
+                const endMonth = today.substring(0, 7);
+                const startedAssetMonths = data.assets
+                    .map(asset => asset.startDate?.substring(0, 7))
+                    .filter(month => month && month <= endMonth)
+                    .sort();
+                const transactionMonths = data.transactions
+                    .map(transaction => transaction.date?.substring(0, 7))
+                    .filter(Boolean)
+                    .sort();
+                const startMonth = startedAssetMonths.length > 0
+                    ? startedAssetMonths[startedAssetMonths.length - 1]
+                    : transactionMonths[0] || endMonth;
+                const [startYear, startMonthNumber] = startMonth.split('-').map(Number);
+                const [endYear, endMonthNumber] = endMonth.split('-').map(Number);
+                const monthCount = Math.max(1, (endYear - startYear) * 12 + endMonthNumber - startMonthNumber + 1);
+                const months = Array.from({ length: monthCount }, (_, index) => {
+                    const date = new Date(startYear, startMonthNumber - 1 + index, 1);
+                    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                });
+                return {
+                    startMonth,
+                    endMonth,
+                    labels: months.map(month => `${month.substring(0, 4)}.${Number(month.substring(5))}`),
+                    assetData: months.map(month => data.assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions, `${month}-31`), 0))
+                };
+            }, [data.assets, data.transactions]);
 
 
 
@@ -877,6 +906,42 @@
                 );
             }
 
+            if (view === 'asset_flow_detail') {
+                const firstValue = fullAssetFlowData.assetData[0] || 0;
+                const latestValue = fullAssetFlowData.assetData[fullAssetFlowData.assetData.length - 1] || 0;
+                return (
+                    <div className="fade-in page-shell dashboard-page dashboard-asset-flow-page">
+                        <div className="dashboard-detail-toolbar">
+                            <button className="transaction-round-button" onClick={() => setView('main')} aria-label="대시보드로 돌아가기"><Icon name="chevron-left" size={20} /></button>
+                            <strong>전체 자산 흐름</strong>
+                            <span />
+                        </div>
+                        <section className="dashboard-flow-summary">
+                            <div><small>조회 기간</small><strong>{fullAssetFlowData.startMonth.replace('-', '년 ')}월 ~ {fullAssetFlowData.endMonth.replace('-', '년 ')}월</strong></div>
+                            <div><small>기간 증감</small><strong className={latestValue - firstValue < 0 ? 'negative' : ''}>{latestValue - firstValue >= 0 ? '+' : ''}{(latestValue - firstValue).toLocaleString()}원</strong></div>
+                        </section>
+                        <section className="dashboard-chart-card dashboard-full-flow-card">
+                            <div className="dashboard-chart-heading">
+                                <span><Icon name="landmark" size={18} /></span>
+                                <h3>월별 전체 자산</h3>
+                            </div>
+                            <div className="dashboard-full-flow-scroll">
+                                <div style={{ minWidth: `${Math.max(620, fullAssetFlowData.labels.length * 62)}px` }}>
+                                    <ChartBar
+                                        chartId="chart-assets-full"
+                                        series={[{ name: '자산액', data: fullAssetFlowData.assetData }]}
+                                        colors={['#0969da']}
+                                        labels={fullAssetFlowData.labels}
+                                        height={340}
+                                    />
+                                </div>
+                            </div>
+                            <p className="dashboard-flow-note">시작일자가 설정된 자산 중 가장 늦은 시작 월부터 현재까지 표시합니다.</p>
+                        </section>
+                    </div>
+                );
+            }
+
             const dashboardIncome = filteredMonthTransactions.filter(transaction => transaction.type === 'Income').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
             const dashboardExpense = filteredMonthTransactions.filter(transaction => transaction.type === 'Expense').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
             const dashboardBalance = dashboardIncome - dashboardExpense;
@@ -979,7 +1044,11 @@
                     {/* 2. 연간자산흐름 & 3. 연간흐름 */}
                     <div className="dashboard-grid dashboard-chart-grid">
                         <section className="dashboard-chart-card">
-                            <div className="dashboard-chart-heading"><span><Icon name="landmark" size={18} /></span><h3>연간 자산 흐름</h3></div>
+                            <div className="dashboard-chart-heading">
+                                <span><Icon name="landmark" size={18} /></span>
+                                <h3>연간 자산 흐름</h3>
+                                <button className="dashboard-chart-detail-button" onClick={() => setView('asset_flow_detail')}>자세히 보기 <Icon name="chevron-right" size={14} /></button>
+                            </div>
                             <ChartBar
                                 chartId="chart-assets"
                                 series={[{ name: '자산액', data: annualData.assetData }]}
