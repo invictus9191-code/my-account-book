@@ -2211,7 +2211,10 @@
 
             const grandTotal = data.assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions), 0);
             const grandDebt = data.assets.reduce((sum, asset) => sum + calculateAssetDebt(asset, data.transactions), 0);
-            const allocationGroups = displayedGroups.filter(group => group.total > 0);
+            const allocationGroups = displayedGroups
+                .filter(group => group.total > 0)
+                .slice()
+                .sort((a, b) => b.total - a.total);
             const allocationTotal = allocationGroups.reduce((sum, group) => sum + group.total, 0);
             const allocationColors = ['#7dd3fc', '#a7f3d0', '#fde68a', '#fca5a5', '#c4b5fd', '#fdba74', '#93c5fd', '#f9a8d4'];
             const getAllocationPercent = group => allocationTotal > 0 && group.total > 0 ? (group.total / allocationTotal) * 100 : 0;
