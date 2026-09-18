@@ -2612,7 +2612,7 @@
                         <button className="asset-back-button" onClick={() => setTab('home')} aria-label="홈으로 돌아가기"><Icon name="chevron-left" size={21} /></button>
                         <div className="asset-view-tabs asset-toolbar-tabs" role="tablist" aria-label="자산 보기 방식">
                             <button type="button" role="tab" aria-selected={assetViewMode === 'asset'} className={assetViewMode === 'asset' ? 'active' : ''} onClick={() => setAssetViewMode('asset')}>자산별</button>
-                            <button type="button" role="tab" aria-selected={assetViewMode === 'type'} className={assetViewMode === 'type' ? 'active' : ''} onClick={() => setAssetViewMode('type')}>자산 유형별</button>
+                            <button type="button" role="tab" aria-selected={assetViewMode === 'type'} className={assetViewMode === 'type' ? 'active' : ''} onClick={() => setAssetViewMode('type')}>유형별</button>
                         </div>
                         <div className="asset-toolbar-actions">
                             <button className="asset-stock-add-button" onClick={() => {
@@ -2750,6 +2750,27 @@
                     }
                 }
 
+                if (existingHolding && !nextHolding.stockName && getKoreanStockCode(symbol)) {
+                    try {
+                        const quoteHolding = await fetchStockHoldingValuation(
+                            createStockHolding({ symbol, quantity: 0.000001 }),
+                            data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '',
+                            new Map(),
+                            getKoreaMarketApiKeys(data)
+                        );
+                        nextHolding = {
+                            ...nextHolding,
+                            stockName: quoteHolding.stockName || '',
+                            previousClose: quoteHolding.previousClose,
+                            currency: quoteHolding.currency,
+                            exchangeRate: quoteHolding.exchangeRate,
+                            priceDate: quoteHolding.priceDate,
+                            quoteUpdatedAt: quoteHolding.quoteUpdatedAt,
+                            priceProvider: quoteHolding.priceProvider
+                        };
+                    } catch (_) {}
+                }
+
                 nextHolding.quantity = currentQuantity + (form.type === 'Sell' ? -quantity : quantity);
                 const nextHoldings = [...holdings];
                 if (holdingIndex >= 0) nextHoldings[holdingIndex] = nextHolding;
@@ -2760,6 +2781,7 @@
                     type: form.type,
                     date: form.date,
                     symbol: nextHolding.symbol || symbol,
+                    stockName: nextHolding.stockName || '',
                     quantity,
                     unitPrice: Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice : 0,
                     memo: form.memo.trim(),
@@ -2815,7 +2837,7 @@
                     <section className="stock-holdings-summary">
                         {stockAssets.flatMap(asset => getStockHoldings(asset).filter(holding => Number(holding.quantity || 0) > 0).map(holding => (
                             <div className="stock-holdings-summary-row" key={`${asset.id}-${holding.id}`}>
-                                <span><strong>{holding.stockName || holding.symbol}</strong><small>{asset.name}</small></span>
+                                <span><strong>{holding.stockName || holding.symbol}</strong><small>{holding.stockName ? `${holding.symbol} · ${asset.name}` : asset.name}</small></span>
                                 <b>{Number(holding.quantity || 0).toLocaleString()}주</b>
                             </div>
                         )))}
@@ -2824,6 +2846,8 @@
                     <section className="stock-transaction-list">
                         {transactions.map(transaction => {
                             const asset = data.assets.find(item => item.id === transaction.assetId);
+                            const holding = asset ? getStockHoldings(asset).find(item => getStockSymbolKey(item.symbol) === getStockSymbolKey(transaction.symbol)) : null;
+                            const stockName = transaction.stockName || holding?.stockName || '';
                             const total = Number(transaction.quantity || 0) * Number(transaction.unitPrice || 0);
                             return <article className="stock-transaction-card" key={transaction.id}>
                                 <div className="stock-transaction-card-top">
@@ -2832,7 +2856,7 @@
                                     <button type="button" onClick={() => deleteTransaction(transaction)} aria-label="거래 삭제"><Icon name="trash-2" size={17} /></button>
                                 </div>
                                 <div className="stock-transaction-card-main">
-                                    <span><strong>{transaction.symbol}</strong><small>{asset?.name || '삭제된 자산'}{transaction.memo ? ` · ${transaction.memo}` : ''}</small></span>
+                                    <span><strong>{stockName || transaction.symbol}</strong><small>{stockName ? `${transaction.symbol} · ` : ''}{asset?.name || '삭제된 자산'}{transaction.memo ? ` · ${transaction.memo}` : ''}</small></span>
                                     <span><b>{Number(transaction.quantity || 0).toLocaleString()}주</b>{transaction.unitPrice > 0 && <small>{hideAssetAmounts ? '금액숨김' : `${Number(transaction.unitPrice).toLocaleString()}원 · ${total.toLocaleString()}원`}</small>}</span>
                                 </div>
                             </article>;
