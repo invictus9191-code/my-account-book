@@ -138,6 +138,8 @@
         const NOTIFICATION_ENABLED_KEY = 'INV_NOTIFICATION_ENABLED';
         const NOTIFICATION_TOKEN_KEY = 'INV_NOTIFICATION_TOKEN';
         const NOTIFICATION_DEVICE_ID_KEY = 'INV_NOTIFICATION_DEVICE_ID';
+        const TWELVE_DATA_API_KEY = 'INV_TWELVE_DATA_API_KEY';
+        const STOCK_QUOTE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
         const DEFAULT_PASSWORD = '9999';
 
         const initialData = {
@@ -194,6 +196,52 @@
             ...(data?.assetTypes || []).map(type => ({ value: type.value || `CustomAssetType-${type.id}`, label: type.label || type.name }))
         ];
         const getAssetTypeLabel = (type, data) => getAssetTypes(data).find(item => item.value === type)?.label || '기타';
+
+        const fetchTwelveDataJson = async (path, params, apiKey) => {
+            if (!apiKey) throw new Error('Twelve Data API 키가 필요합니다.');
+            const url = new URL(`https://api.twelvedata.com/${path}`);
+            Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 12000);
+            try {
+                const response = await fetch(url.toString(), { signal: controller.signal, headers: { Authorization: `apikey ${apiKey}` } });
+                const result = await response.json();
+                if (!response.ok || result.status === 'error' || result.code) throw new Error(result.message || '시장 데이터를 불러오지 못했습니다.');
+                return result;
+            } catch (error) {
+                if (error.name === 'AbortError') throw new Error('시장 데이터 요청 시간이 초과되었습니다.');
+                throw error;
+            } finally {
+                clearTimeout(timeout);
+            }
+        };
+
+        const fetchStockValuation = async (asset, apiKey) => {
+            const symbol = String(asset.stockSymbol || '').trim().toUpperCase();
+            const quantity = Number(asset.stockQuantity || 0);
+            if (!symbol) throw new Error('종목 코드를 입력해주세요.');
+            if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('수량을 0보다 크게 입력해주세요.');
+            const quote = await fetchTwelveDataJson('quote', { symbol }, apiKey);
+            const previousClose = Number(quote.previous_close);
+            if (!Number.isFinite(previousClose) || previousClose <= 0) throw new Error('전일 종가를 확인할 수 없습니다. 종목 코드를 확인해주세요.');
+            const currency = String(quote.currency || asset.stockCurrency || 'KRW').toUpperCase();
+            let exchangeRate = 1;
+            if (currency !== 'KRW') {
+                const exchange = await fetchTwelveDataJson('exchange_rate', { symbol: `${currency}/KRW` }, apiKey);
+                exchangeRate = Number(exchange.rate);
+                if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) throw new Error(`${currency}/KRW 환율을 확인할 수 없습니다.`);
+            }
+            return {
+                stockSymbol: symbol,
+                stockQuantity: quantity,
+                stockCurrency: currency,
+                stockPreviousClose: previousClose,
+                stockExchangeRate: exchangeRate,
+                stockPriceDate: quote.datetime ? String(quote.datetime).substring(0, 10) : '',
+                stockQuoteUpdatedAt: new Date().toISOString(),
+                initialBalance: Math.round(quantity * previousClose * exchangeRate)
+            };
+        };
 
         const isIosDevice = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         const isStandaloneApp = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -297,6 +345,9 @@
             if (!asset) return 0;
             if (!isAssetActiveOn(asset, upToDate)) return 0;
             if (asset.type === 'RealEstate') return Number(asset.initialBalance || 0) - calculateAssetDebt(asset, transactions, upToDate);
+            if (asset.type === 'Stock' && Number(asset.stockQuantity || 0) > 0 && Number(asset.stockPreviousClose || 0) > 0) {
+                return Math.round(Number(asset.stockQuantity) * Number(asset.stockPreviousClose) * Number(asset.stockExchangeRate || 1));
+            }
             const history = transactions.filter(t => {
                 const match = t.assetId === assetId || t.toAssetId === assetId;
                 const afterStart = !asset.startDate || t.date >= asset.startDate;
@@ -2163,9 +2214,51 @@
             );
         }
 
-        function AssetManagementPage({ data, setEdit, setShowModal, setTab, setSearchTerm, setEditAsset, setShowAssetModal, hideAssetAmounts }) {
+        function AssetManagementPage({ data, setData, syncToCloud, setEdit, setShowModal, setTab, setSearchTerm, setEditAsset, setShowAssetModal, hideAssetAmounts }) {
             const [selectedAsset, setSelectedAsset] = useState(null);
             const [assetViewMode, setAssetViewMode] = useState('asset');
+            const [stockRefreshState, setStockRefreshState] = useState({ loading: false, message: '' });
+
+            const refreshStockPrices = async (force = false) => {
+                const stockAssets = data.assets.filter(asset => asset.type === 'Stock' && asset.stockSymbol && Number(asset.stockQuantity || 0) > 0);
+                if (stockAssets.length === 0) return;
+                const apiKey = localStorage.getItem(TWELVE_DATA_API_KEY) || '';
+                if (!apiKey) {
+                    setStockRefreshState({ loading: false, message: '설정에서 시장 데이터 API 키를 등록해주세요.' });
+                    return;
+                }
+                const targets = stockAssets.filter(asset => {
+                    const updatedAt = new Date(asset.stockQuoteUpdatedAt || '').getTime();
+                    return force || !Number.isFinite(updatedAt) || Date.now() - updatedAt >= STOCK_QUOTE_MAX_AGE_MS;
+                });
+                if (targets.length === 0) {
+                    setStockRefreshState({ loading: false, message: '전일 종가가 최신 상태입니다.' });
+                    return;
+                }
+                setStockRefreshState({ loading: true, message: '전일 종가와 환율을 확인하고 있습니다.' });
+                const updates = new Map();
+                const failures = [];
+                for (const asset of targets) {
+                    try {
+                        updates.set(asset.id, await fetchStockValuation(asset, apiKey));
+                    } catch (error) {
+                        failures.push(`${asset.name}: ${error.message}`);
+                    }
+                }
+                if (updates.size > 0) {
+                    const newData = { ...data, assets: data.assets.map(asset => updates.has(asset.id) ? { ...asset, ...updates.get(asset.id) } : asset) };
+                    setData(newData);
+                    syncToCloud(newData);
+                }
+                setStockRefreshState({
+                    loading: false,
+                    message: failures.length > 0 ? `${updates.size}개 갱신 · ${failures[0]}` : `${updates.size}개 종목의 평가금을 갱신했습니다.`
+                });
+            };
+
+            useEffect(() => {
+                refreshStockPrices(false);
+            }, []);
 
             useMobileEdgeSwipeBack(() => {
                 if (selectedAsset) setSelectedAsset(null);
@@ -2325,6 +2418,12 @@
                                 </div>
                             </div>
                         )}
+                        {data.assets.some(asset => asset.type === 'Stock') && (
+                            <div className="asset-stock-sync">
+                                <span>{stockRefreshState.message || '주식은 전일 종가와 원화 환율 기준입니다.'}</span>
+                                <button type="button" onClick={() => refreshStockPrices(true)} disabled={stockRefreshState.loading}>{stockRefreshState.loading ? '조회 중' : '시세 갱신'}</button>
+                            </div>
+                        )}
                     </div>
                     <div className="card">
                         {displayedGroups.map(g => {
@@ -2343,9 +2442,9 @@
                                         const debt = calculateAssetDebt(a, data.transactions);
                                         return (
                                             <div key={a.id} onClick={() => { setSearchTerm(a.name); setTab('transactions'); }} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 1rem', background: 'rgba(9, 105, 218, 0.1)', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s' }} className="list-item">
-                                                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    {a.name}
-                                                    <Icon name="chevron-right" size={14} style={{ color: '#58a6ff', opacity: 0.7 }} />
+                                                <span className="asset-list-copy">
+                                                    <span>{a.name}<Icon name="chevron-right" size={14} style={{ color: '#58a6ff', opacity: 0.7 }} /></span>
+                                                    {a.type === 'Stock' && <small>{a.stockSymbol} · {Number(a.stockQuantity || 0).toLocaleString()}주 · 전일 {Number(a.stockPreviousClose || 0).toLocaleString()} {a.stockCurrency || ''}</small>}
                                                 </span>
                                                 <span className="asset-amount-stack"><b>{hideAssetAmounts ? '금액숨김' : `${bal.toLocaleString()}원`}</b>{a.type === 'RealEstate' && debt > 0 && <small>{hideAssetAmounts ? '금액숨김' : `부채 ${debt.toLocaleString()}원`}</small>}</span>
                                             </div>
@@ -2371,14 +2470,55 @@
                 }
                 return { name: '', ownerId: data.owners[0]?.id || '', groupId: sortGroupsByPriority(data.groups)[0]?.id || '', type: 'Cash', initialBalance: 0, priority: '', startDate: formatLocalDate(new Date()) };
             });
+            const [stockQuoteState, setStockQuoteState] = useState({ loading: false, message: '' });
 
-            const handleSubmit = (e) => {
+            const loadStockValuation = async () => {
+                const apiKey = localStorage.getItem(TWELVE_DATA_API_KEY) || '';
+                if (!apiKey) {
+                    setStockQuoteState({ loading: false, message: '설정에서 Twelve Data API 키를 먼저 등록해주세요.' });
+                    return null;
+                }
+                setStockQuoteState({ loading: true, message: '전일 종가와 환율을 조회하고 있습니다.' });
+                try {
+                    const valuation = await fetchStockValuation(form, apiKey);
+                    setForm(current => ({ ...current, ...valuation }));
+                    setStockQuoteState({ loading: false, message: `${valuation.stockPriceDate || '최근 거래일'} 전일 종가 기준으로 계산했습니다.` });
+                    return valuation;
+                } catch (error) {
+                    setStockQuoteState({ loading: false, message: error.message });
+                    return null;
+                }
+            };
+
+            const handleSubmit = async (e) => {
                 e.preventDefault();
                 if (!form.name || !form.ownerId) return;
                 if (editItem?.type === 'RealEstate' && form.type !== 'RealEstate' && data.transactions.some(t => t.loanAssetId === editItem.id)) { alert('상환 거래가 연결된 자산은 유형을 변경할 수 없습니다.'); return; }
+                let preparedForm = { ...form };
+                if (form.type === 'Stock') {
+                    if (!String(form.stockSymbol || '').trim() || Number(form.stockQuantity || 0) <= 0) {
+                        alert('주식 종목 코드와 수량을 입력해주세요.');
+                        return;
+                    }
+                    const quoteUpdatedAt = new Date(form.stockQuoteUpdatedAt || '').getTime();
+                    const hasFreshQuote = Number(form.stockPreviousClose || 0) > 0 && Number.isFinite(quoteUpdatedAt) && Date.now() - quoteUpdatedAt < STOCK_QUOTE_MAX_AGE_MS;
+                    const valuation = hasFreshQuote ? {
+                        stockSymbol: String(form.stockSymbol).trim().toUpperCase(),
+                        stockQuantity: Number(form.stockQuantity),
+                        stockCurrency: form.stockCurrency || 'KRW',
+                        stockPreviousClose: Number(form.stockPreviousClose),
+                        stockExchangeRate: Number(form.stockExchangeRate || 1),
+                        stockPriceDate: form.stockPriceDate || '',
+                        stockQuoteUpdatedAt: form.stockQuoteUpdatedAt,
+                        initialBalance: Math.round(Number(form.stockQuantity) * Number(form.stockPreviousClose) * Number(form.stockExchangeRate || 1))
+                    } : await loadStockValuation();
+                    if (!valuation) return;
+                    preparedForm = { ...preparedForm, ...valuation };
+                }
                 const formattedPriority = form.priority !== '' ? Number(form.priority) : 9999;
-                form.initialDebt = form.type === 'RealEstate' ? Number(form.currentDebt || 0) + data.transactions.reduce((sum, t) => sum + (t.type === 'Expense' && t.loanAssetId === editItem?.id ? Number(t.loanPrincipal || 0) : 0), 0) : 0;
-                const newData = { ...data, assets: editItem ? data.assets.map(a => a.id === editItem.id ? { ...form, initialBalance: Number(form.initialBalance || 0), priority: formattedPriority } : a) : [...data.assets, { ...form, id: Date.now().toString(), initialBalance: Number(form.initialBalance || 0), priority: formattedPriority }] };
+                preparedForm.initialDebt = form.type === 'RealEstate' ? Number(form.currentDebt || 0) + data.transactions.reduce((sum, t) => sum + (t.type === 'Expense' && t.loanAssetId === editItem?.id ? Number(t.loanPrincipal || 0) : 0), 0) : 0;
+                const savedAsset = { ...preparedForm, initialBalance: Number(preparedForm.initialBalance || 0), priority: formattedPriority };
+                const newData = { ...data, assets: editItem ? data.assets.map(a => a.id === editItem.id ? savedAsset : a) : [...data.assets, { ...savedAsset, id: Date.now().toString() }] };
                 setData(newData);
                 syncToCloud(newData);
                 onClose();
@@ -2400,7 +2540,7 @@
                         <header className="asset-modal-header">
                             <button type="button" onClick={onClose} aria-label="닫기"><Icon name="x" size={27} /></button>
                             <h2>자산 {editItem ? '수정' : '추가'}</h2>
-                            <button type="submit" form="asset-form" className="asset-modal-save" disabled={!form.name || !form.ownerId} aria-label="저장"><Icon name="check" size={27} /></button>
+                            <button type="submit" form="asset-form" className="asset-modal-save" disabled={!form.name || !form.ownerId || stockQuoteState.loading} aria-label="저장"><Icon name="check" size={27} /></button>
                         </header>
                         <form id="asset-form" className="asset-modal-form" onSubmit={handleSubmit}>
                             <div className="form-row asset-type-row"><label>자산 유형</label><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>{getAssetTypes(data).map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
@@ -2410,7 +2550,22 @@
                             <div className="form-row"><label>소유자</label><select value={form.ownerId} onChange={e => setForm({ ...form, ownerId: e.target.value })} required><option value="">선택</option>{data.owners.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>
                             <div className="form-row"><label>그룹</label><select value={form.groupId} onChange={e => setForm({ ...form, groupId: e.target.value })}><option value="">선택 (선택사항)</option>{sortGroupsByPriority(data.groups).map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
                             <div className="form-row"><label>시작일자</label><input type="date" value={form.startDate || ''} onChange={e => setForm({ ...form, startDate: e.target.value })} /></div>
-                            <div className="form-row" style={{ alignItems: 'flex-start' }}>
+                            {form.type === 'Stock' ? (
+                                <div className="asset-stock-fields">
+                                    <div className="form-row"><label>종목 코드</label><input value={form.stockSymbol || ''} onChange={e => setForm({ ...form, stockSymbol: e.target.value.toUpperCase(), stockPreviousClose: '', stockQuoteUpdatedAt: '' })} placeholder="예: AAPL, 005930:KRX" autoCapitalize="characters" /></div>
+                                    <small className="stock-symbol-help">Twelve Data에서 사용하는 종목 코드를 입력해주세요. 해외 종목은 거래소를 포함한 코드가 필요할 수 있습니다.</small>
+                                    <div className="form-row"><label>수량</label><input type="number" min="0" step="any" inputMode="decimal" value={form.stockQuantity ?? ''} onChange={e => setForm({ ...form, stockQuantity: e.target.value })} placeholder="보유 수량" /></div>
+                                    <button type="button" className="stock-quote-button" onClick={loadStockValuation} disabled={stockQuoteState.loading}>{stockQuoteState.loading ? '조회 중…' : '전일 종가로 평가금 계산'}</button>
+                                    {(form.stockPreviousClose || stockQuoteState.message) && (
+                                        <div className="asset-stock-valuation">
+                                            <span>평가금</span>
+                                            <strong>{form.stockPreviousClose ? `${Math.round(Number(form.stockQuantity || 0) * Number(form.stockPreviousClose) * Number(form.stockExchangeRate || 1)).toLocaleString()}원` : '조회 필요'}</strong>
+                                            {form.stockPreviousClose && <small>전일 종가 {Number(form.stockPreviousClose).toLocaleString()} {form.stockCurrency || ''} × {Number(form.stockQuantity || 0).toLocaleString()}주{form.stockCurrency && form.stockCurrency !== 'KRW' ? ` × 환율 ${Number(form.stockExchangeRate || 0).toLocaleString()}` : ''}</small>}
+                                            {stockQuoteState.message && <small className={stockQuoteState.message.includes('계산했습니다') ? 'success' : 'error'}>{stockQuoteState.message}</small>}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : <div className="form-row" style={{ alignItems: 'flex-start' }}>
                                 <label style={{ marginTop: '10px' }}>{form.type === 'RealEstate' ? '초기금액' : '초기 잔액'}</label>
                                 <div className="quick-amount-container">
                                     <input type="text" value={form.initialBalance ? Number(form.initialBalance).toLocaleString() : ''} onChange={e => {
@@ -2445,7 +2600,7 @@
                                         <button type="button" className="clear-btn" onClick={() => setForm({ ...form, initialBalance: '' })}>지우기</button>
                                     </div>
                                 </div>
-                            </div>
+                            </div>}
                             {form.type === 'RealEstate' && (
                                 <>
                                     <div className="form-row"><label>현재 부채</label><input inputMode="numeric" value={Number(form.currentDebt || 0).toLocaleString()} onChange={e => setForm({ ...form, currentDebt: e.target.value.replace(/[^0-9]/g, '') })} aria-label="현재 부채" /></div>
@@ -2778,6 +2933,7 @@
         function Settings({ data, setData, fbConfig, setFbConfig, syncToCloud, user, isConnected, setTab }) {
             const [fbVal, setFbVal] = useState(fbConfig ? JSON.stringify(fbConfig, null, 2) : '');
             const [newPw, setNewPw] = useState('');
+            const [marketApiKey, setMarketApiKey] = useState(() => localStorage.getItem(TWELVE_DATA_API_KEY) || '');
             const [activeTab, setActiveTab] = useState('general'); // general, owners, groups, categories, assets, authors
 
             // State for management tabs
@@ -2819,6 +2975,20 @@
             };
             const resetFb = async () => { if (confirm('서버 설정을 초기화하시겠습니까?')) { await unregisterNotificationDevice(user); localStorage.removeItem(FIREBASE_CONFIG_KEY); setFbConfig(null); alert('설정이 초기화되었습니다.'); location.reload(); } };
             const changePw = () => { if (newPw.length < 4) { alert('비밀번호는 4자리 이상이어야 합니다.'); return; } localStorage.setItem(PASSWORD_KEY, newPw); setNewPw(''); alert('비밀번호가 변경되었습니다.'); };
+            const saveMarketApiKey = () => {
+                const value = marketApiKey.trim();
+                if (!value) {
+                    alert('Twelve Data API 키를 입력해주세요.');
+                    return;
+                }
+                localStorage.setItem(TWELVE_DATA_API_KEY, value);
+                setMarketApiKey(value);
+                alert('시장 데이터 API 키가 이 브라우저에 저장되었습니다.');
+            };
+            const clearMarketApiKey = () => {
+                localStorage.removeItem(TWELVE_DATA_API_KEY);
+                setMarketApiKey('');
+            };
 
             const saveSharedId = () => {
                 if (tempSharedId.trim()) {
@@ -3011,6 +3181,16 @@
                                         <div className="settings-section">
                                             <h3>🔑 비밀번호 변경</h3>
                                             <div className="settings-inline-form"><input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="새 비밀번호 입력" /><button className="primary" onClick={changePw}>변경</button></div>
+                                        </div>
+                                        <div className="settings-section">
+                                            <h3>📈 주식 시장 데이터</h3>
+                                            <p style={{ color: '#8b949e', fontSize: '0.8rem', lineHeight: 1.5, marginBottom: '0.5rem' }}>Twelve Data API 키를 사용해 전일 종가와 원화 환율을 조회합니다. 키는 공유 데이터에 포함되지 않고 현재 브라우저에만 저장됩니다.</p>
+                                            <div className="settings-inline-form settings-market-api-form">
+                                                <input type="password" value={marketApiKey} onChange={e => setMarketApiKey(e.target.value)} placeholder="Twelve Data API 키" autoComplete="off" />
+                                                <button className="primary" onClick={saveMarketApiKey}>저장</button>
+                                                {marketApiKey && <button onClick={clearMarketApiKey}>삭제</button>}
+                                            </div>
+                                            <a className="settings-market-api-link" href="https://twelvedata.com/" target="_blank" rel="noopener noreferrer">Twelve Data에서 API 키 발급받기</a>
                                         </div>
                                         <div className="settings-section">
                                             <h3>🔗 데이터 공유 설정 (공유 ID)</h3>
@@ -3565,7 +3745,7 @@ service cloud.firestore {
                         {tab === 'recurring' && <RecurringPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} user={user} isConnected={isConnected} />}
                         {tab === 'shopping' && <ShoppingPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} isConnected={isConnected} />}
                         {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} setTab={setTab} backTab={transactionBackTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}
-                        {tab === 'assets' && <AssetManagementPage data={data} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} hideAssetAmounts={hideAssetAmounts} />}
+                        {tab === 'assets' && <AssetManagementPage data={data} setData={setData} syncToCloud={syncToCloud} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} hideAssetAmounts={hideAssetAmounts} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} setTab={setTab} />}
                     </div></div>
                     {showModal && <TransactionModal data={data} setData={setData} onClose={() => { setShowModal(false); setEdit(null); }} editItem={edit} syncToCloud={syncToCloud} isConnected={isConnected} user={user} />}
