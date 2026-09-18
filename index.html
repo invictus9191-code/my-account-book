@@ -2672,12 +2672,10 @@
                                     {g.assets.map(a => {
                                         const bal = calculateAssetBalance(a.id, data.assets, data.transactions, undefined, data.stockTransactions);
                                         const debt = calculateAssetDebt(a, data.transactions);
-                                        const stockHoldings = a.type === 'Stock' ? getStockHoldings(a).filter(holding => Number(holding.quantity || 0) > 0) : [];
                                         return (
                                             <div key={a.id} onClick={() => { setSearchTerm(a.name); setTab('transactions'); }} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 1rem', background: 'rgba(9, 105, 218, 0.1)', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s' }} className="list-item">
                                                 <span className="asset-list-copy">
                                                     <span>{a.name}<Icon name="chevron-right" size={14} style={{ color: '#58a6ff', opacity: 0.7 }} /></span>
-                                                    {a.type === 'Stock' && <small>{stockHoldings.length}개 종목 · {stockHoldings.slice(0, 3).map(holding => `${holding.symbol} ${Number(holding.quantity || 0).toLocaleString()}주`).join(' · ')}{stockHoldings.length > 3 ? ` 외 ${stockHoldings.length - 3}개` : ''}</small>}
                                                 </span>
                                                 <span className="asset-amount-stack"><b>{hideAssetAmounts ? '금액숨김' : `${bal.toLocaleString()}원`}</b>{a.type === 'RealEstate' && debt > 0 && <small>{hideAssetAmounts ? '금액숨김' : `부채 ${debt.toLocaleString()}원`}</small>}</span>
                                             </div>
