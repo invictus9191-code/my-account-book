@@ -630,6 +630,7 @@
             const [view, setView] = useState('main'); // main, income_detail, expense_detail, asset_detail, asset_flow_detail, category_list
             const [selectedId, setSelectedId] = useState(null); // categoryId or assetGroupId
             const [chartType, setChartType] = useState('income_expense'); // income_expense or savings
+            const [assetFlowPeriod, setAssetFlowPeriod] = useState('monthly'); // monthly or yearly
 
             useMobileEdgeSwipeBack(() => {
                 if (showMonthPicker) setShowMonthPicker(false);
@@ -756,11 +757,19 @@
                     const date = new Date(startYear, startMonthNumber - 1 + index, 1);
                     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
                 });
+                const assetData = months.map(month => data.assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions, `${month}-31`), 0));
+                const yearlyPoints = months.reduce((points, month, index) => {
+                    const year = month.substring(0, 4);
+                    points.set(year, assetData[index]);
+                    return points;
+                }, new Map());
                 return {
                     startMonth,
                     endMonth,
                     labels: months.map(month => `${month.substring(0, 4)}.${Number(month.substring(5))}`),
-                    assetData: months.map(month => data.assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions, `${month}-31`), 0))
+                    assetData,
+                    yearlyLabels: Array.from(yearlyPoints.keys()).map(year => `${year}년`),
+                    yearlyAssetData: Array.from(yearlyPoints.values())
                 };
             }, [data.assets, data.transactions]);
 
@@ -909,12 +918,18 @@
             if (view === 'asset_flow_detail') {
                 const firstValue = fullAssetFlowData.assetData[0] || 0;
                 const latestValue = fullAssetFlowData.assetData[fullAssetFlowData.assetData.length - 1] || 0;
+                const flowLabels = assetFlowPeriod === 'yearly' ? fullAssetFlowData.yearlyLabels : fullAssetFlowData.labels;
+                const flowValues = assetFlowPeriod === 'yearly' ? fullAssetFlowData.yearlyAssetData : fullAssetFlowData.assetData;
                 return (
                     <div className="fade-in page-shell dashboard-page dashboard-asset-flow-page">
                         <div className="dashboard-detail-toolbar">
                             <button className="transaction-round-button" onClick={() => setView('main')} aria-label="대시보드로 돌아가기"><Icon name="chevron-left" size={20} /></button>
                             <strong>전체 자산 흐름</strong>
                             <span />
+                        </div>
+                        <div className="dashboard-flow-period-tabs" role="tablist" aria-label="자산 흐름 조회 단위">
+                            <button type="button" role="tab" aria-selected={assetFlowPeriod === 'monthly'} className={assetFlowPeriod === 'monthly' ? 'active' : ''} onClick={() => setAssetFlowPeriod('monthly')}>월별</button>
+                            <button type="button" role="tab" aria-selected={assetFlowPeriod === 'yearly'} className={assetFlowPeriod === 'yearly' ? 'active' : ''} onClick={() => setAssetFlowPeriod('yearly')}>연도별</button>
                         </div>
                         <section className="dashboard-flow-summary">
                             <div><small>조회 기간</small><strong>{fullAssetFlowData.startMonth.replace('-', '년 ')}월 ~ {fullAssetFlowData.endMonth.replace('-', '년 ')}월</strong></div>
@@ -923,20 +938,20 @@
                         <section className="dashboard-chart-card dashboard-full-flow-card">
                             <div className="dashboard-chart-heading">
                                 <span><Icon name="landmark" size={18} /></span>
-                                <h3>월별 전체 자산</h3>
+                                <h3>{assetFlowPeriod === 'yearly' ? '연도별' : '월별'} 전체 자산</h3>
                             </div>
                             <div className="dashboard-full-flow-scroll">
-                                <div style={{ minWidth: `${Math.max(620, fullAssetFlowData.labels.length * 62)}px` }}>
+                                <div style={{ minWidth: `${Math.max(620, flowLabels.length * (assetFlowPeriod === 'yearly' ? 120 : 62))}px` }}>
                                     <ChartBar
-                                        chartId="chart-assets-full"
-                                        series={[{ name: '자산액', data: fullAssetFlowData.assetData }]}
+                                        chartId={`chart-assets-full-${assetFlowPeriod}`}
+                                        series={[{ name: '자산액', data: flowValues }]}
                                         colors={['#0969da']}
-                                        labels={fullAssetFlowData.labels}
+                                        labels={flowLabels}
                                         height={340}
                                     />
                                 </div>
                             </div>
-                            <p className="dashboard-flow-note">시작일자가 설정된 자산 중 가장 늦은 시작 월부터 현재까지 표시합니다.</p>
+                            <p className="dashboard-flow-note">{assetFlowPeriod === 'yearly' ? '각 연도의 마지막 조회 월 자산액을 표시합니다. 현재 연도는 현재 월 기준입니다.' : '시작일자가 설정된 자산 중 가장 늦은 시작 월부터 현재까지 표시합니다.'}</p>
                         </section>
                     </div>
                 );
