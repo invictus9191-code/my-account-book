@@ -1589,7 +1589,7 @@
                 const nextFavorites = favoriteOnAdd && !alreadyFavorite ? [...favorites, { id: `favorite-${Date.now()}`, name }] : favorites;
                 commit(nextItems, nextFavorites);
                 setItemName('');
-                inputRef.current?.focus();
+                inputRef.current?.blur();
             };
 
             const addFavoriteToList = favorite => {
@@ -2718,6 +2718,9 @@
                 .filter(holding => Number(holding.quantity || 0) > 0)
                 .map(holding => getStockSymbolKey(holding.symbol))
                 .filter(Boolean))).size;
+            const stockTotalValue = stockAssets.reduce((total, asset) => total + getStockHoldings(asset)
+                .filter(holding => Number(holding.quantity || 0) > 0)
+                .reduce((sum, holding) => sum + getStockHoldingValue(holding), 0), 0);
             const isDateRangeActive = Boolean(dateRange.start || dateRange.end);
             const defaultDateRange = getDefaultDateRange();
             const isDefaultDateRange = dateRange.start === defaultDateRange.start && dateRange.end === defaultDateRange.end;
@@ -2857,6 +2860,13 @@
                         <strong>주식</strong>
                         <span className="stock-transaction-count">{stockHoldingCount}종목</span>
                     </div>
+                    <section className="stock-total-value-card">
+                        <span>
+                            <small>주식 가격 합계</small>
+                            <strong>{hideAssetAmounts ? '금액숨김' : `${stockTotalValue.toLocaleString()}원`}</strong>
+                        </span>
+                        <span className="stock-total-value-icon"><Icon name="trending-up" size={22} /></span>
+                    </section>
                     <section className="stock-holdings-summary">
                         {stockAssets.flatMap(asset => getStockHoldings(asset).filter(holding => Number(holding.quantity || 0) > 0).map(holding => (
                             <div className="stock-holdings-summary-row" key={`${asset.id}-${holding.id}`}>
