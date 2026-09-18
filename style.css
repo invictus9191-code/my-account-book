@@ -1156,9 +1156,7 @@ table {
 }
 
 .dashboard-full-flow-scroll {
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  -webkit-overflow-scrolling: touch;
+  overflow: visible;
 }
 
 .dashboard-flow-note {

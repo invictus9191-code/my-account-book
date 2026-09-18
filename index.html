@@ -546,7 +546,7 @@
         };
 
         // ApexCharts를 useRef + useEffect로 직접 렌더링하는 컴포넌트
-        function ChartBar({ chartId, series, colors, labels, height }) {
+        function ChartBar({ chartId, series, colors, labels, height, horizontal = false }) {
             const ref = React.useRef(null);
             const chartRef = React.useRef(null);
 
@@ -566,11 +566,16 @@
                     colors: colors,
                     xaxis: {
                         categories: labels,
-                        labels: { style: { colors: '#57606a', fontSize: '11px' } },
+                        labels: {
+                            formatter: horizontal ? (value) => Number.isFinite(Number(value)) ? Math.floor(Number(value)).toLocaleString() : value : undefined,
+                            style: { colors: '#57606a', fontSize: '11px' }
+                        },
                         axisBorder: { color: '#d0d7de' },
                         axisTicks: { color: '#d0d7de' }
                     },
-                    yaxis: {
+                    yaxis: horizontal ? {
+                        labels: { style: { colors: '#57606a', fontSize: '11px' }, maxWidth: 88 }
+                    } : {
                         labels: {
                             formatter: (v) => Number.isFinite(v) ? Math.floor(v).toLocaleString() : '0',
                             style: { colors: '#57606a' }
@@ -584,7 +589,7 @@
                         theme: 'light',
                         y: { formatter: (v) => Number.isFinite(v) ? Math.floor(v).toLocaleString() + '원' : '0원' }
                     },
-                    plotOptions: { bar: { borderRadius: 3, columnWidth: '60%' } },
+                    plotOptions: { bar: horizontal ? { horizontal: true, borderRadius: 3, barHeight: '62%' } : { borderRadius: 3, columnWidth: '60%' } },
                     legend: { show: series.length > 1, position: 'top', labels: { colors: '#57606a' } }
                 };
 
@@ -602,7 +607,7 @@
                         chartRef.current = null;
                     }
                 };
-            }, [series, labels, colors, height]);
+            }, [series, labels, colors, height, horizontal]);
 
             return React.createElement('div', { ref: ref, id: chartId });
         }
@@ -918,8 +923,11 @@
             if (view === 'asset_flow_detail') {
                 const firstValue = fullAssetFlowData.assetData[0] || 0;
                 const latestValue = fullAssetFlowData.assetData[fullAssetFlowData.assetData.length - 1] || 0;
-                const flowLabels = assetFlowPeriod === 'yearly' ? fullAssetFlowData.yearlyLabels : fullAssetFlowData.labels;
-                const flowValues = assetFlowPeriod === 'yearly' ? fullAssetFlowData.yearlyAssetData : fullAssetFlowData.assetData;
+                const chronologicalLabels = assetFlowPeriod === 'yearly' ? fullAssetFlowData.yearlyLabels : fullAssetFlowData.labels;
+                const chronologicalValues = assetFlowPeriod === 'yearly' ? fullAssetFlowData.yearlyAssetData : fullAssetFlowData.assetData;
+                const flowLabels = [...chronologicalLabels].reverse();
+                const flowValues = [...chronologicalValues].reverse();
+                const flowChartHeight = Math.max(360, flowLabels.length * 38 + 70);
                 return (
                     <div className="fade-in page-shell dashboard-page dashboard-asset-flow-page">
                         <div className="dashboard-detail-toolbar">
@@ -941,13 +949,14 @@
                                 <h3>{assetFlowPeriod === 'yearly' ? '연도별' : '월별'} 전체 자산</h3>
                             </div>
                             <div className="dashboard-full-flow-scroll">
-                                <div style={{ minWidth: `${Math.max(620, flowLabels.length * (assetFlowPeriod === 'yearly' ? 120 : 62))}px` }}>
+                                <div>
                                     <ChartBar
                                         chartId={`chart-assets-full-${assetFlowPeriod}`}
                                         series={[{ name: '자산액', data: flowValues }]}
                                         colors={['#0969da']}
                                         labels={flowLabels}
-                                        height={340}
+                                        height={flowChartHeight}
+                                        horizontal={true}
                                     />
                                 </div>
                             </div>
