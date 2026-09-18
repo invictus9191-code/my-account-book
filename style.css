@@ -3696,11 +3696,37 @@ textarea:focus {
 }
 
 .settings-market-api-link {
-  margin-top: 10px;
   display: inline-flex;
   color: #188fe7;
   font-size: 0.76rem;
   font-weight: 700;
+}
+
+.settings-market-key-field {
+  margin-top: 10px;
+  display: grid;
+  gap: 5px;
+}
+
+.settings-market-key-field span {
+  color: #657382;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.settings-market-api-links {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 14px;
+}
+
+.settings-market-source {
+  margin-top: 9px;
+  display: block;
+  color: #8b949e;
+  font-size: 0.66rem;
+  line-height: 1.45;
 }
 
 .settings-market-refresh-status {

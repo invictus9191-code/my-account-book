@@ -139,6 +139,7 @@
         const NOTIFICATION_TOKEN_KEY = 'INV_NOTIFICATION_TOKEN';
         const NOTIFICATION_DEVICE_ID_KEY = 'INV_NOTIFICATION_DEVICE_ID';
         const TWELVE_DATA_API_KEY = 'INV_TWELVE_DATA_API_KEY';
+        const KOREA_MARKET_API_KEY = 'INV_KOREA_MARKET_API_KEY';
         const STOCK_QUOTE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
         const DEFAULT_PASSWORD = '9999';
 
@@ -166,7 +167,8 @@
             shoppingFavorites: [],
             assetTypes: [],
             assetTypeLabels: {},
-            marketDataApiKey: ''
+            marketDataApiKey: '',
+            koreaMarketApiKey: ''
         };
 
         const getGroupPriority = (group, fallbackIndex = 0) => {
@@ -270,11 +272,90 @@
             };
         };
 
-        const fetchStockHoldingValuation = async (holding, apiKey, exchangeRateCache = null) => {
+        const getKoreanStockCode = symbol => {
+            const match = String(symbol || '').trim().toUpperCase().match(/^(\d{6})(?::(?:KRX|KOSPI|KOSDAQ))?$/);
+            return match ? match[1] : '';
+        };
+
+        const normalizePublicDataApiKey = apiKey => {
+            const value = String(apiKey || '').trim();
+            if (!value.includes('%')) return value;
+            try { return decodeURIComponent(value); } catch (_) { return value; }
+        };
+
+        const fetchPublicDataMarketItem = async (serviceName, operation, stockCode, apiKey) => {
+            if (!apiKey) throw new Error('공공데이터포털 API 키가 필요합니다.');
+            const url = new URL(`https://apis.data.go.kr/1160100/service/${serviceName}/${operation}`);
+            url.searchParams.set('serviceKey', normalizePublicDataApiKey(apiKey));
+            url.searchParams.set('resultType', 'json');
+            url.searchParams.set('numOfRows', '10');
+            url.searchParams.set('pageNo', '1');
+            url.searchParams.set('likeSrtnCd', stockCode);
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 12000);
+            try {
+                const response = await fetch(url.toString(), { signal: controller.signal });
+                const result = await response.json().catch(() => null);
+                const header = result?.response?.header;
+                if (!response.ok || (header?.resultCode && header.resultCode !== '00')) {
+                    throw new Error(header?.resultMsg || result?.message || '공공데이터포털 시세를 불러오지 못했습니다.');
+                }
+                const rawItems = result?.response?.body?.items?.item;
+                const items = Array.isArray(rawItems) ? rawItems : rawItems ? [rawItems] : [];
+                return items.find(item => String(item.srtnCd || '').replace(/\D/g, '').endsWith(stockCode)) || null;
+            } catch (error) {
+                if (error.name === 'AbortError') throw new Error('국내 시세 요청 시간이 초과되었습니다.');
+                throw error;
+            } finally {
+                clearTimeout(timeout);
+            }
+        };
+
+        const fetchKoreanStockValuation = async (holding, apiKey) => {
+            const stockCode = getKoreanStockCode(holding.symbol);
+            const quantity = Number(holding.quantity || 0);
+            if (!stockCode) throw new Error('국내 종목 코드는 6자리 숫자 또는 005930:KRX 형식으로 입력해주세요.');
+            if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('수량을 0보다 크게 입력해주세요.');
+            const sources = [
+                ['GetStockSecuritiesInfoService', 'getStockPriceInfo'],
+                ['GetSecuritiesProductInfoService', 'getETFPriceInfo']
+            ];
+            const sourceErrors = [];
+            for (const [serviceName, operation] of sources) {
+                try {
+                    const item = await fetchPublicDataMarketItem(serviceName, operation, stockCode, apiKey);
+                    if (!item) continue;
+                    const previousClose = Number(String(item.clpr || '').replace(/,/g, ''));
+                    if (!Number.isFinite(previousClose) || previousClose <= 0) continue;
+                    const rawDate = String(item.basDt || '');
+                    const priceDate = rawDate.length === 8 ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}` : rawDate;
+                    const marketSuffix = String(item.mrktCtg || '').toUpperCase() === 'KOSDAQ' ? 'KOSDAQ' : 'KRX';
+                    return {
+                        ...holding,
+                        symbol: `${stockCode}:${marketSuffix}`,
+                        quantity,
+                        currency: 'KRW',
+                        previousClose,
+                        exchangeRate: 1,
+                        priceDate,
+                        quoteUpdatedAt: new Date().toISOString(),
+                        priceProvider: 'data.go.kr',
+                        stockName: item.itmsNm || holding.stockName || ''
+                    };
+                } catch (error) {
+                    sourceErrors.push(error.message);
+                }
+            }
+            if (sourceErrors.length > 0) throw new Error(`${sourceErrors[0]} 주식시세·증권상품시세 API 활용신청을 확인해주세요.`);
+            throw new Error('국내 종목을 찾을 수 없습니다. 종목 코드를 확인해주세요.');
+        };
+
+        const fetchStockHoldingValuation = async (holding, apiKey, exchangeRateCache = null, koreaApiKey = '') => {
             const symbol = String(holding.symbol || '').trim().toUpperCase();
             const quantity = Number(holding.quantity || 0);
             if (!symbol) throw new Error('종목 코드를 입력해주세요.');
             if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('수량을 0보다 크게 입력해주세요.');
+            if (getKoreanStockCode(symbol)) return fetchKoreanStockValuation({ ...holding, symbol, quantity }, koreaApiKey);
             const quote = await fetchTwelveDataJson('quote', { symbol }, apiKey);
             const previousClose = Number(quote.previous_close);
             if (!Number.isFinite(previousClose) || previousClose <= 0) throw new Error('전일 종가를 확인할 수 없습니다. 종목 코드를 확인해주세요.');
@@ -298,11 +379,12 @@
                 previousClose,
                 exchangeRate,
                 priceDate: quote.datetime ? String(quote.datetime).substring(0, 10) : '',
-                quoteUpdatedAt: new Date().toISOString()
+                quoteUpdatedAt: new Date().toISOString(),
+                priceProvider: 'twelve-data'
             };
         };
 
-        const refreshStockAssetQuotes = async (data, apiKey, force = false) => {
+        const refreshStockAssetQuotes = async (data, apiKey, force = false, koreaApiKey = '') => {
             const stockAssets = data.assets.filter(asset => asset.type === 'Stock' && getStockHoldings(asset).some(holding => holding.symbol && Number(holding.quantity || 0) > 0));
             if (stockAssets.length === 0) return { newData: data, stockAssetCount: 0, refreshedCount: 0, failures: [], changed: false, hasTargets: false };
             const hasTargets = stockAssets.some(asset => getStockHoldings(asset).some(holding => {
@@ -327,7 +409,7 @@
                         continue;
                     }
                     try {
-                        refreshedHoldings.push(await fetchStockHoldingValuation(holding, apiKey, exchangeRateCache));
+                        refreshedHoldings.push(await fetchStockHoldingValuation(holding, apiKey, exchangeRateCache, koreaApiKey));
                         refreshedCount += 1;
                         assetChanged = true;
                     } catch (error) {
@@ -2322,12 +2404,13 @@
 
             const refreshStockPrices = async (force = false) => {
                 const apiKey = data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
-                if (!apiKey) {
+                const koreaApiKey = data.koreaMarketApiKey || localStorage.getItem(KOREA_MARKET_API_KEY) || '';
+                if (!apiKey && !koreaApiKey) {
                     setStockRefreshState({ loading: false, message: '설정에서 시장 데이터 API 키를 등록해주세요.' });
                     return;
                 }
                 setStockRefreshState({ loading: true, message: '전일 종가와 환율을 확인하고 있습니다.' });
-                const result = await refreshStockAssetQuotes(data, apiKey, force);
+                const result = await refreshStockAssetQuotes(data, apiKey, force, koreaApiKey);
                 if (result.stockAssetCount === 0) {
                     setStockRefreshState({ loading: false, message: '' });
                     return;
@@ -2583,8 +2666,9 @@
 
             const loadStockValuation = async (force = true) => {
                 const apiKey = data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
-                if (!apiKey) {
-                    setStockQuoteState({ loading: false, message: '설정에서 Twelve Data API 키를 먼저 등록해주세요.' });
+                const koreaApiKey = data.koreaMarketApiKey || localStorage.getItem(KOREA_MARKET_API_KEY) || '';
+                if (!apiKey && !koreaApiKey) {
+                    setStockQuoteState({ loading: false, message: '설정에서 시장 데이터 API 키를 먼저 등록해주세요.' });
                     return null;
                 }
                 const holdings = getStockHoldings(form);
@@ -2604,7 +2688,7 @@
                         continue;
                     }
                     try {
-                        evaluatedHoldings.push(await fetchStockHoldingValuation(holding, apiKey, exchangeRateCache));
+                        evaluatedHoldings.push(await fetchStockHoldingValuation(holding, apiKey, exchangeRateCache, koreaApiKey));
                     } catch (error) {
                         evaluatedHoldings.push(holding);
                         failures.push(`${holding.symbol}: ${error.message}`);
@@ -2708,7 +2792,7 @@
                                             </div>
                                         ))}
                                     </div>
-                                    <small className="stock-symbol-help">해외 종목은 거래소를 포함한 코드가 필요할 수 있습니다. 종목 수에 따라 API 조회 시간이 늘어날 수 있습니다.</small>
+                                    <small className="stock-symbol-help">국내 종목은 6자리 코드 또는 329200:KRX, 해외 종목은 Twelve Data 코드를 입력하세요. 종목 수에 따라 조회 시간이 늘어날 수 있습니다.</small>
                                     <button type="button" className="stock-quote-button" onClick={() => loadStockValuation(true)} disabled={stockQuoteState.loading}>{stockQuoteState.loading ? '조회 중…' : '전체 종목 평가금 계산'}</button>
                                     {(getStockHoldings(form).some(holding => Number(holding.previousClose || 0) > 0) || stockQuoteState.message) && (
                                         <div className="asset-stock-valuation">
@@ -3087,6 +3171,7 @@
             const [fbVal, setFbVal] = useState(fbConfig ? JSON.stringify(fbConfig, null, 2) : '');
             const [newPw, setNewPw] = useState('');
             const [marketApiKey, setMarketApiKey] = useState(() => data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '');
+            const [koreaMarketApiKey, setKoreaMarketApiKey] = useState(() => data.koreaMarketApiKey || localStorage.getItem(KOREA_MARKET_API_KEY) || '');
             const [marketRefreshState, setMarketRefreshState] = useState({ loading: false, message: '' });
             const [activeTab, setActiveTab] = useState('general'); // general, owners, groups, categories, assets, authors
 
@@ -3113,7 +3198,8 @@
 
             useEffect(() => {
                 setMarketApiKey(data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '');
-            }, [data.marketDataApiKey]);
+                setKoreaMarketApiKey(data.koreaMarketApiKey || localStorage.getItem(KOREA_MARKET_API_KEY) || '');
+            }, [data.marketDataApiKey, data.koreaMarketApiKey]);
 
             const saveFb = async () => {
                 try {
@@ -3135,50 +3221,59 @@
             const changePw = () => { if (newPw.length < 4) { alert('비밀번호는 4자리 이상이어야 합니다.'); return; } localStorage.setItem(PASSWORD_KEY, newPw); setNewPw(''); alert('비밀번호가 변경되었습니다.'); };
             const saveMarketApiKey = () => {
                 const value = marketApiKey.trim();
-                if (!value) {
-                    alert('Twelve Data API 키를 입력해주세요.');
+                const koreaValue = koreaMarketApiKey.trim();
+                if (!value && !koreaValue) {
+                    alert('해외 또는 국내 시장 데이터 API 키를 입력해주세요.');
                     return;
                 }
                 if (!isConnected) {
-                    if (data.marketDataApiKey) {
+                    if (data.marketDataApiKey || data.koreaMarketApiKey) {
                         setMarketApiKey(data.marketDataApiKey);
+                        setKoreaMarketApiKey(data.koreaMarketApiKey || '');
                         alert('공용 API 키를 변경하려면 Firebase에 로그인해주세요.');
                         return;
                     }
-                    localStorage.setItem(TWELVE_DATA_API_KEY, value);
+                    if (value) localStorage.setItem(TWELVE_DATA_API_KEY, value);
+                    if (koreaValue) localStorage.setItem(KOREA_MARKET_API_KEY, koreaValue);
                     setMarketApiKey(value);
+                    setKoreaMarketApiKey(koreaValue);
                     alert('API 키를 임시 저장했습니다. Firebase 로그인 후 공용 설정으로 자동 이전됩니다.');
                     return;
                 }
-                const newData = { ...data, marketDataApiKey: value };
+                const newData = { ...data, marketDataApiKey: value, koreaMarketApiKey: koreaValue };
                 setData(newData);
                 syncToCloud(newData);
                 localStorage.removeItem(TWELVE_DATA_API_KEY);
+                localStorage.removeItem(KOREA_MARKET_API_KEY);
                 setMarketApiKey(value);
+                setKoreaMarketApiKey(koreaValue);
                 const sharedId = localStorage.getItem(SHARED_ID_KEY);
                 alert(sharedId
                     ? '시장 데이터 API 키가 공용 설정에 저장되었습니다. 같은 공유 ID 사용자는 별도 입력 없이 이용할 수 있습니다.'
                     : '시장 데이터 API 키가 개인 클라우드 설정에 저장되었습니다. 다른 사용자와 함께 사용하려면 동일한 공유 ID를 설정해주세요.');
             };
             const clearMarketApiKey = () => {
-                if (data.marketDataApiKey && !isConnected) {
+                if ((data.marketDataApiKey || data.koreaMarketApiKey) && !isConnected) {
                     alert('공용 API 키를 삭제하려면 Firebase에 로그인해주세요.');
                     return;
                 }
-                const newData = { ...data, marketDataApiKey: '' };
+                const newData = { ...data, marketDataApiKey: '', koreaMarketApiKey: '' };
                 setData(newData);
                 syncToCloud(newData);
                 localStorage.removeItem(TWELVE_DATA_API_KEY);
+                localStorage.removeItem(KOREA_MARKET_API_KEY);
                 setMarketApiKey('');
+                setKoreaMarketApiKey('');
             };
             const refreshMarketPrices = async () => {
                 const apiKey = marketApiKey.trim() || data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
-                if (!apiKey) {
-                    setMarketRefreshState({ loading: false, message: 'Twelve Data API 키를 먼저 입력해주세요.' });
+                const koreaApiKey = koreaMarketApiKey.trim() || data.koreaMarketApiKey || localStorage.getItem(KOREA_MARKET_API_KEY) || '';
+                if (!apiKey && !koreaApiKey) {
+                    setMarketRefreshState({ loading: false, message: '시장 데이터 API 키를 먼저 입력해주세요.' });
                     return;
                 }
                 setMarketRefreshState({ loading: true, message: '전체 종목의 전일 종가와 환율을 확인하고 있습니다.' });
-                const result = await refreshStockAssetQuotes(data, apiKey, true);
+                const result = await refreshStockAssetQuotes(data, apiKey, true, koreaApiKey);
                 if (result.stockAssetCount === 0) {
                     setMarketRefreshState({ loading: false, message: '시세를 갱신할 주식 종목이 없습니다.' });
                     return;
@@ -3389,15 +3484,21 @@
                                         </div>
                                         <div className="settings-section">
                                             <h3>📈 주식 시장 데이터</h3>
-                                            <p style={{ color: '#8b949e', fontSize: '0.8rem', lineHeight: 1.5, marginBottom: '0.5rem' }}>Twelve Data API 키를 공용 데이터에 저장해 전일 종가와 원화 환율을 조회합니다. 자동 시세는 12시간마다 갱신되며, 같은 공유 ID 사용자는 이 키를 함께 사용합니다.</p>
+                                            <p style={{ color: '#8b949e', fontSize: '0.8rem', lineHeight: 1.5, marginBottom: '0.5rem' }}>해외 종목은 Twelve Data, 국내 주식·ETF는 공공데이터포털의 무료 API로 자동 조회합니다. 자동 시세는 12시간마다 갱신되며 같은 공유 ID 사용자는 키를 함께 사용합니다.</p>
+                                            <label className="settings-market-key-field"><span>해외 주식 · 환율</span><input type="password" value={marketApiKey} onChange={e => setMarketApiKey(e.target.value)} placeholder="Twelve Data API 키" autoComplete="off" /></label>
+                                            <label className="settings-market-key-field"><span>국내 주식 · ETF</span><input type="password" value={koreaMarketApiKey} onChange={e => setKoreaMarketApiKey(e.target.value)} placeholder="공공데이터포털 API 키" autoComplete="off" /></label>
                                             <div className="settings-inline-form settings-market-api-form">
-                                                <input type="password" value={marketApiKey} onChange={e => setMarketApiKey(e.target.value)} placeholder="Twelve Data API 키" autoComplete="off" />
                                                 <button type="button" onClick={refreshMarketPrices} disabled={marketRefreshState.loading}>{marketRefreshState.loading ? '조회 중…' : '시세 갱신'}</button>
                                                 <button className="primary" onClick={saveMarketApiKey}>저장</button>
-                                                {marketApiKey && <button onClick={clearMarketApiKey}>삭제</button>}
+                                                {(marketApiKey || koreaMarketApiKey) && <button onClick={clearMarketApiKey}>삭제</button>}
                                             </div>
                                             {marketRefreshState.message && <p className="settings-market-refresh-status">{marketRefreshState.message}</p>}
-                                            <a className="settings-market-api-link" href="https://twelvedata.com/" target="_blank" rel="noopener noreferrer">Twelve Data에서 API 키 발급받기</a>
+                                            <div className="settings-market-api-links">
+                                                <a className="settings-market-api-link" href="https://twelvedata.com/" target="_blank" rel="noopener noreferrer">Twelve Data 무료키 발급</a>
+                                                <a className="settings-market-api-link" href="https://www.data.go.kr/data/15094805/openapi.do" target="_blank" rel="noopener noreferrer">국내 주식 API 신청</a>
+                                                <a className="settings-market-api-link" href="https://www.data.go.kr/data/15094806/openapi.do" target="_blank" rel="noopener noreferrer">국내 ETF API 신청</a>
+                                            </div>
+                                            <small className="settings-market-source">국내 시세 자료: 금융위원회 공공데이터포털 · 원천 한국거래소 (전 영업일 확정 종가)</small>
                                         </div>
                                         <div className="settings-section">
                                             <h3>🔗 데이터 공유 설정 (공유 ID)</h3>
@@ -3678,6 +3779,7 @@ service cloud.firestore {
                 if (!p.assetTypes) p.assetTypes = [];
                 if (!p.assetTypeLabels) p.assetTypeLabels = {};
                 if (!p.marketDataApiKey) p.marketDataApiKey = '';
+                if (!p.koreaMarketApiKey) p.koreaMarketApiKey = '';
                 if (p.assets) p.assets = p.assets.map(a => ({
                     ...a,
                     initialBalance: a.initialBalance !== undefined ? a.initialBalance : 0,
@@ -3805,24 +3907,33 @@ service cloud.firestore {
                                 // 클라우드에 데이터가 없으면 최초 1회 로컬 데이터를 업로드
                                 const currentLocalData = JSON.parse(localStorage.getItem(STORAGE_KEY) || JSON.stringify(initialData));
                                 const legacyMarketApiKey = localStorage.getItem(TWELVE_DATA_API_KEY) || '';
-                                const initialCloudData = legacyMarketApiKey
-                                    ? { ...currentLocalData, marketDataApiKey: legacyMarketApiKey }
-                                    : currentLocalData;
+                                const legacyKoreaMarketApiKey = localStorage.getItem(KOREA_MARKET_API_KEY) || '';
+                                const initialCloudData = {
+                                    ...currentLocalData,
+                                    ...(legacyMarketApiKey ? { marketDataApiKey: legacyMarketApiKey } : {}),
+                                    ...(legacyKoreaMarketApiKey ? { koreaMarketApiKey: legacyKoreaMarketApiKey } : {})
+                                };
                                 docRef.set(initialCloudData).then(() => {
                                     if (legacyMarketApiKey) localStorage.removeItem(TWELVE_DATA_API_KEY);
+                                    if (legacyKoreaMarketApiKey) localStorage.removeItem(KOREA_MARKET_API_KEY);
                                 }).catch(err => console.error("Initial Sync Fail:", err));
                                 setData(initialCloudData);
                             } else {
                                 let cloudData = d.data();
                                 const legacyMarketApiKey = localStorage.getItem(TWELVE_DATA_API_KEY) || '';
-                                if (!cloudData.marketDataApiKey && legacyMarketApiKey) {
-                                    cloudData = { ...cloudData, marketDataApiKey: legacyMarketApiKey };
-                                    docRef.set({ marketDataApiKey: legacyMarketApiKey }, { merge: true }).then(() => {
-                                        localStorage.removeItem(TWELVE_DATA_API_KEY);
+                                const legacyKoreaMarketApiKey = localStorage.getItem(KOREA_MARKET_API_KEY) || '';
+                                const migratedKeys = {};
+                                if (!cloudData.marketDataApiKey && legacyMarketApiKey) migratedKeys.marketDataApiKey = legacyMarketApiKey;
+                                if (!cloudData.koreaMarketApiKey && legacyKoreaMarketApiKey) migratedKeys.koreaMarketApiKey = legacyKoreaMarketApiKey;
+                                if (Object.keys(migratedKeys).length > 0) {
+                                    cloudData = { ...cloudData, ...migratedKeys };
+                                    docRef.set(migratedKeys, { merge: true }).then(() => {
+                                        if (migratedKeys.marketDataApiKey) localStorage.removeItem(TWELVE_DATA_API_KEY);
+                                        if (migratedKeys.koreaMarketApiKey) localStorage.removeItem(KOREA_MARKET_API_KEY);
                                     }).catch(err => console.error("Market API Key Migration Fail:", err));
-                                } else if (cloudData.marketDataApiKey && legacyMarketApiKey) {
-                                    localStorage.removeItem(TWELVE_DATA_API_KEY);
                                 }
+                                if (cloudData.marketDataApiKey && legacyMarketApiKey && !migratedKeys.marketDataApiKey) localStorage.removeItem(TWELVE_DATA_API_KEY);
+                                if (cloudData.koreaMarketApiKey && legacyKoreaMarketApiKey && !migratedKeys.koreaMarketApiKey) localStorage.removeItem(KOREA_MARKET_API_KEY);
                                 // 클라우드 데이터를 기준으로 상태 업데이트 (Source of Truth)
                                 setData(prev => {
                                     if (JSON.stringify(prev) !== JSON.stringify(cloudData)) {
