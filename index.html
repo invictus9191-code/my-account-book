@@ -302,7 +302,9 @@
             url.searchParams.set('resultType', 'json');
             url.searchParams.set('numOfRows', '10');
             url.searchParams.set('pageNo', '1');
-            url.searchParams.set('srtnCd', stockCode);
+            // 금융위원회 V2 시세 API는 종목코드 검색에 likeSrtnCd를 사용합니다.
+            // srtnCd는 응답 필드여서 요청에 넣어도 필터가 적용되지 않습니다.
+            url.searchParams.set('likeSrtnCd', stockCode);
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 12000);
             try {
