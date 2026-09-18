@@ -910,7 +910,6 @@
                 return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             });
             const [showMonthPicker, setShowMonthPicker] = useState(false);
-            const [dateRange, setDateRange] = useState({ start: '', end: '' });
             const selectedMonthRef = React.useRef(null);
             const [view, setView] = useState('main'); // main, income_detail, expense_detail, asset_detail, asset_flow_detail, category_list
             const [selectedId, setSelectedId] = useState(null); // categoryId or assetGroupId
@@ -2225,12 +2224,8 @@
             const assetById = useMemo(() => new Map(data.assets.map(asset => [asset.id, asset])), [data.assets]);
             const savingsCategoryIds = useMemo(() => new Set(data.categories.filter(category => category.name.includes('저축')).map(category => category.id)), [data.categories]);
             const isGlobalSearch = searchTerm.trim().length > 0;
-            const isDateRangeActive = Boolean(dateRange.start || dateRange.end);
-            const isAllPeriodView = isGlobalSearch || isDateRangeActive;
             const filteredTransactions = useMemo(() => data.transactions.filter(t => {
-                if (!isAllPeriodView && t.date.substring(0, 7) !== selectedMonth) return false;
-                if (dateRange.start && t.date < dateRange.start) return false;
-                if (dateRange.end && t.date > dateRange.end) return false;
+                if (!isGlobalSearch && t.date.substring(0, 7) !== selectedMonth) return false;
                 if (authorFilter !== 'ALL' && t.authorEmail !== authorFilter) return false;
                 if (!isGlobalSearch) return true;
                 const term = searchTerm.trim().toLowerCase();
@@ -2240,7 +2235,7 @@
                 const toAssetMatch = t.type === 'Transfer' && assetById.get(t.toAssetId)?.name?.toLowerCase().includes(term);
                 const recurringMatch = Boolean(t.recurringId) && '반복 자동 생성 정기'.includes(term);
                 return memoMatch || categoryMatch || assetMatch || toAssetMatch || recurringMatch;
-            }), [data.transactions, isGlobalSearch, isAllPeriodView, selectedMonth, dateRange, authorFilter, searchTerm, categoryById, assetById]);
+            }), [data.transactions, isGlobalSearch, selectedMonth, authorFilter, searchTerm, categoryById, assetById]);
 
             const groupedByDay = filteredTransactions.reduce((acc, t) => {
                 const day = t.date; // YYYY-MM-DD
@@ -2296,12 +2291,11 @@
 
             return (
                 <div className="transaction-page fade-in">
-                    <h1 className="transaction-page-title">거래내역</h1>
                     <section className="transaction-calendar-card">
                         <div className="transaction-toolbar">
                             <button className="transaction-round-button" onClick={() => setTab(backTab)} aria-label="이전 페이지로 돌아가기"><Icon name="chevron-left" size={20} /></button>
-                            <button className="transaction-month-control" onClick={() => setShowMonthPicker(true)} disabled={isAllPeriodView} aria-haspopup="dialog" aria-expanded={showMonthPicker}>
-                                <strong>{isDateRangeActive ? '기간 조회' : isGlobalSearch ? '전체 기간' : `${selectedMonth.split('-')[0]}년 ${Number(selectedMonth.split('-')[1])}월`}</strong>
+                            <button className="transaction-month-control" onClick={() => setShowMonthPicker(true)} disabled={isGlobalSearch} aria-haspopup="dialog" aria-expanded={showMonthPicker}>
+                                <strong>{isGlobalSearch ? '전체 기간' : `${selectedMonth.split('-')[0]}년 ${Number(selectedMonth.split('-')[1])}월`}</strong>
                             </button>
                             <div className="transaction-toolbar-actions">
                                 <div className={`transaction-connection ${isConnected ? 'connected' : 'disconnected'}`} title={isConnected ? 'Firebase 연결됨' : 'Firebase 연결 안 됨'}>
@@ -2315,12 +2309,6 @@
                         </div>
 
                         {showMobileSearch && <TransactionSearchInput value={searchTerm} onChange={setSearchTerm} />}
-                        <div className="transaction-date-range">
-                            <label><span>시작일</span><input type="date" value={dateRange.start} max={dateRange.end || undefined} onChange={event => setDateRange(current => ({ ...current, start: event.target.value }))} /></label>
-                            <span className="transaction-date-range-separator">~</span>
-                            <label><span>종료일</span><input type="date" value={dateRange.end} min={dateRange.start || undefined} onChange={event => setDateRange(current => ({ ...current, end: event.target.value }))} /></label>
-                            {isDateRangeActive && <button type="button" className="transaction-date-range-reset" onClick={() => setDateRange({ start: '', end: '' })} aria-label="거래 기간 초기화"><Icon name="x" size={16} /></button>}
-                        </div>
                     </section>
 
                     {showMonthPicker && (
@@ -2346,15 +2334,8 @@
                         </div>
                     )}
 
-                    {(searchTerm || authorFilter !== 'ALL' || isDateRangeActive) && (
+                    {(searchTerm || authorFilter !== 'ALL') && (
                         <div className="transaction-active-filters">
-                            {isDateRangeActive && (
-                                <div className="transaction-filter-chip">
-                                    <Icon name="calendar-days" size={14} />
-                                    <span>{dateRange.start || '처음'} ~ {dateRange.end || '오늘'}</span>
-                                    <button onClick={() => setDateRange({ start: '', end: '' })}><Icon name="x" size={16} /></button>
-                                </div>
-                            )}
                             {searchTerm && (
                                 <div className="transaction-filter-chip">
                                     <Icon name="filter" size={14} />
@@ -2389,7 +2370,7 @@
                             return (
                                 <section className="transaction-day-group" key={dayStr}>
                                     <header className="transaction-day-header">
-                                        <span>{isAllPeriodView && `${year}년 ${month}월 `}{day}일 {name}</span>
+                                        <span>{isGlobalSearch && `${year}년 ${month}월 `}{day}일 {name}</span>
                                         <div>
                                             {income > 0 && <span className="income">+{income.toLocaleString()}원</span>}
                                             {expense > 0 && <span className="expense">-{expense.toLocaleString()}원</span>}
@@ -2433,7 +2414,7 @@
                             <div className="transaction-empty-state">
                                 <span><Icon name="receipt" size={26} /></span>
                                 <strong>거래 내역이 없습니다</strong>
-                                <p>{isAllPeriodView ? '선택한 조건에 해당하는 거래가 없어요.' : '이 달에 등록된 거래가 아직 없어요.'}</p>
+                                <p>이 달에 등록된 거래가 아직 없어요.</p>
                             </div>
                         )}
                     </div>
@@ -2712,9 +2693,16 @@
         function StockTransactionPage({ data, setData, syncToCloud, onBack, hideAssetAmounts }) {
             const stockAssets = data.assets.filter(asset => asset.type === 'Stock');
             const [showForm, setShowForm] = useState(false);
+            const [dateRange, setDateRange] = useState({ start: '', end: '' });
             const [form, setForm] = useState({ assetId: stockAssets[0]?.id || '', type: 'Buy', date: formatLocalDate(new Date()), symbol: '', quantity: '', unitPrice: '', memo: '' });
             const [state, setState] = useState({ loading: false, message: '' });
-            const transactions = (data.stockTransactions || []).slice().sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+            const allTransactions = (data.stockTransactions || []).slice().sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+            const transactions = allTransactions.filter(transaction => {
+                if (dateRange.start && transaction.date < dateRange.start) return false;
+                if (dateRange.end && transaction.date > dateRange.end) return false;
+                return true;
+            });
+            const isDateRangeActive = Boolean(dateRange.start || dateRange.end);
 
             const resetForm = () => {
                 setForm({ assetId: stockAssets[0]?.id || '', type: 'Buy', date: formatLocalDate(new Date()), symbol: '', quantity: '', unitPrice: '', memo: '' });
@@ -2863,6 +2851,13 @@
                         )))}
                         {stockAssets.every(asset => getStockHoldings(asset).every(holding => Number(holding.quantity || 0) <= 0)) && <div className="stock-transaction-empty">매수 내역을 등록하면 보유 종목이 표시됩니다.</div>}
                     </section>
+                    <h1 className="stock-transaction-section-title">거래내역</h1>
+                    <div className="stock-transaction-date-range">
+                        <label><span>시작일</span><input type="date" value={dateRange.start} max={dateRange.end || undefined} onChange={event => setDateRange(current => ({ ...current, start: event.target.value }))} /></label>
+                        <span className="stock-transaction-date-separator">~</span>
+                        <label><span>종료일</span><input type="date" value={dateRange.end} min={dateRange.start || undefined} onChange={event => setDateRange(current => ({ ...current, end: event.target.value }))} /></label>
+                        {isDateRangeActive && <button type="button" onClick={() => setDateRange({ start: '', end: '' })} aria-label="주식 거래 기간 초기화"><Icon name="x" size={16} /></button>}
+                    </div>
                     <section className="stock-transaction-list">
                         {transactions.map(transaction => {
                             const asset = data.assets.find(item => item.id === transaction.assetId);
@@ -2881,7 +2876,7 @@
                                 </div>
                             </article>;
                         })}
-                        {transactions.length === 0 && <div className="stock-transaction-empty"><Icon name="trending-up" size={28} /><strong>주식 거래내역이 없습니다</strong><span>매수·매도를 기록하면 보유 수량이 자동으로 계산됩니다.</span></div>}
+                        {transactions.length === 0 && <div className="stock-transaction-empty"><Icon name="trending-up" size={28} /><strong>주식 거래내역이 없습니다</strong><span>{isDateRangeActive ? '선택한 기간에 해당하는 거래가 없습니다.' : '매수·매도를 기록하면 보유 수량이 자동으로 계산됩니다.'}</span></div>}
                     </section>
                     <button className="transaction-add-button stock-transaction-add-button" onClick={() => setShowForm(true)} aria-label="주식 거래 추가"><Icon name="plus" size={27} /></button>
                     {showForm && <div className="asset-modal-overlay">
