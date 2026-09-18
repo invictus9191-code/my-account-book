@@ -290,15 +290,22 @@
             url.searchParams.set('resultType', 'json');
             url.searchParams.set('numOfRows', '10');
             url.searchParams.set('pageNo', '1');
-            url.searchParams.set('likeSrtnCd', stockCode);
+            url.searchParams.set('srtnCd', stockCode);
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 12000);
             try {
                 const response = await fetch(url.toString(), { signal: controller.signal });
                 const result = await response.json().catch(() => null);
+                const serviceError = result?.OpenAPI_ServiceResponse?.cmmMsgHeader;
+                if (serviceError) {
+                    const reason = serviceError.returnAuthMsg || serviceError.errMsg || '공공데이터포털 인증 오류';
+                    const code = serviceError.returnReasonCode ? ` (${serviceError.returnReasonCode})` : '';
+                    throw new Error(`${reason}${code}`);
+                }
                 const header = result?.response?.header;
                 if (!response.ok || (header?.resultCode && header.resultCode !== '00')) {
-                    throw new Error(header?.resultMsg || result?.message || '공공데이터포털 시세를 불러오지 못했습니다.');
+                    const status = !response.ok ? `HTTP ${response.status}` : '';
+                    throw new Error(header?.resultMsg || result?.message || `공공데이터포털 시세를 불러오지 못했습니다${status ? ` (${status})` : ''}.`);
                 }
                 const rawItems = result?.response?.body?.items?.item;
                 const items = Array.isArray(rawItems) ? rawItems : rawItems ? [rawItems] : [];
@@ -317,11 +324,11 @@
             if (!stockCode) throw new Error('국내 종목 코드는 6자리 숫자 또는 005930:KRX 형식으로 입력해주세요.');
             if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('수량을 0보다 크게 입력해주세요.');
             const sources = [
-                ['GetStockSecuritiesInfoService', 'getStockPriceInfo'],
-                ['GetSecuritiesProductInfoService', 'getETFPriceInfo']
+                ['국내 주식', 'GetStockSecuritiesInfoService', 'getStockPriceInfo'],
+                ['국내 ETF', 'GetSecuritiesProductInfoService', 'getETFPriceInfo']
             ];
             const sourceErrors = [];
-            for (const [serviceName, operation] of sources) {
+            for (const [sourceLabel, serviceName, operation] of sources) {
                 try {
                     const item = await fetchPublicDataMarketItem(serviceName, operation, stockCode, apiKey);
                     if (!item) continue;
@@ -343,10 +350,10 @@
                         stockName: item.itmsNm || holding.stockName || ''
                     };
                 } catch (error) {
-                    sourceErrors.push(error.message);
+                    sourceErrors.push(`${sourceLabel}: ${error.message}`);
                 }
             }
-            if (sourceErrors.length > 0) throw new Error(`${sourceErrors[0]} 주식시세·증권상품시세 API 활용신청을 확인해주세요.`);
+            if (sourceErrors.length > 0) throw new Error(`${sourceErrors.join(' / ')} · API 활용신청과 서비스키를 확인해주세요.`);
             throw new Error('국내 종목을 찾을 수 없습니다. 종목 코드를 확인해주세요.');
         };
 
@@ -2572,7 +2579,7 @@
                                     return;
                                 }
                                 setShowStockHoldingModal(true);
-                            }} aria-label="기존 주식 자산에 종목 추가"><Icon name="trending-up" size={17} /><span>주식</span><Icon name="plus" size={12} /></button>
+                            }} aria-label="기존 주식 자산에 종목 추가"><Icon name="trending-up" size={22} /><span><Icon name="plus" size={10} /></span></button>
                             <button className="asset-new-button" onClick={() => { setEditAsset(null); setShowAssetModal(true); }} aria-label="신규 자산 추가">
                                 <Icon name="wallet" size={23} />
                                 <span><Icon name="plus" size={10} /></span>
@@ -2582,11 +2589,11 @@
                     <div className="asset-total-card">
                         <div className="asset-total-summary">
                             <div>
-                                <div style={{ fontSize: '0.85rem', opacity: 0.9, marginBottom: '2px' }}>전체 자산 합계</div>
-                                <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{hideAssetAmounts ? '금액숨김' : `${grandTotal.toLocaleString()}원`}</div>
-                                {grandDebt > 0 && <small>{hideAssetAmounts ? '금액숨김' : `부채 ${grandDebt.toLocaleString()}원`}</small>}
+                                <div className="asset-total-label">전체 자산 합계</div>
+                                <div className="asset-total-amount">{hideAssetAmounts ? '금액숨김' : `${grandTotal.toLocaleString()}원`}</div>
+                                {grandDebt > 0 && <small className="asset-total-debt">{hideAssetAmounts ? '금액숨김' : `부채 ${grandDebt.toLocaleString()}원`}</small>}
                             </div>
-                            <Icon name="wallet" size={32} style={{ opacity: 0.4 }} />
+                            <span className="asset-total-icon"><Icon name="wallet" size={24} /></span>
                         </div>
                         {allocationGroups.length > 0 && (
                             <div className="asset-allocation">
@@ -3568,7 +3575,7 @@
                                             {marketRefreshState.message && <p className="settings-market-refresh-status">{marketRefreshState.message}</p>}
                                             <div className="settings-market-api-links">
                                                 <a className="settings-market-api-link" href="https://twelvedata.com/" target="_blank" rel="noopener noreferrer">Twelve Data 무료키 발급</a>
-                                                <a className="settings-market-api-link" href="https://www.data.go.kr/data/15094805/openapi.do" target="_blank" rel="noopener noreferrer">국내 주식 API 신청</a>
+                                                <a className="settings-market-api-link" href="https://www.data.go.kr/data/15094808/openapi.do" target="_blank" rel="noopener noreferrer">국내 주식 API 신청</a>
                                                 <a className="settings-market-api-link" href="https://www.data.go.kr/data/15094806/openapi.do" target="_blank" rel="noopener noreferrer">국내 ETF API 신청</a>
                                             </div>
                                             <small className="settings-market-source">국내 시세 자료: 금융위원회 공공데이터포털 · 원천 한국거래소 (전 영업일 확정 종가)</small>
