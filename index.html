@@ -636,9 +636,13 @@
             const [selectedId, setSelectedId] = useState(null); // categoryId or assetGroupId
             const [chartType, setChartType] = useState('income_expense'); // income_expense or savings
             const [assetFlowPeriod, setAssetFlowPeriod] = useState('monthly'); // monthly or yearly
+            const [assetFlowRange, setAssetFlowRange] = useState({ startMonth: '', endMonth: '' });
+            const [assetFlowRangeDraft, setAssetFlowRangeDraft] = useState({ startMonth: '', endMonth: '' });
+            const [showAssetFlowRangePicker, setShowAssetFlowRangePicker] = useState(false);
 
             useMobileEdgeSwipeBack(() => {
-                if (showMonthPicker) setShowMonthPicker(false);
+                if (showAssetFlowRangePicker) setShowAssetFlowRangePicker(false);
+                else if (showMonthPicker) setShowMonthPicker(false);
                 else if (view !== 'main') setView('main');
                 else setTab('home');
             });
@@ -752,11 +756,13 @@
                     .map(transaction => transaction.date?.substring(0, 7))
                     .filter(Boolean)
                     .sort();
-                const startMonth = startedAssetMonths.length > 0
+                const defaultStartMonth = startedAssetMonths.length > 0
                     ? startedAssetMonths[startedAssetMonths.length - 1]
                     : transactionMonths[0] || endMonth;
+                const startMonth = assetFlowRange.startMonth || defaultStartMonth;
+                const selectedEndMonth = assetFlowRange.endMonth || endMonth;
                 const [startYear, startMonthNumber] = startMonth.split('-').map(Number);
-                const [endYear, endMonthNumber] = endMonth.split('-').map(Number);
+                const [endYear, endMonthNumber] = selectedEndMonth.split('-').map(Number);
                 const monthCount = Math.max(1, (endYear - startYear) * 12 + endMonthNumber - startMonthNumber + 1);
                 const months = Array.from({ length: monthCount }, (_, index) => {
                     const date = new Date(startYear, startMonthNumber - 1 + index, 1);
@@ -770,13 +776,15 @@
                 }, new Map());
                 return {
                     startMonth,
-                    endMonth,
+                    endMonth: selectedEndMonth,
+                    defaultStartMonth,
+                    defaultEndMonth: endMonth,
                     labels: months.map(month => `${month.substring(0, 4)}.${Number(month.substring(5))}`),
                     assetData,
                     yearlyLabels: Array.from(yearlyPoints.keys()).map(year => `${year}년`),
                     yearlyAssetData: Array.from(yearlyPoints.values())
                 };
-            }, [data.assets, data.transactions]);
+            }, [data.assets, data.transactions, assetFlowRange]);
 
 
 
@@ -928,6 +936,22 @@
                 const flowLabels = [...chronologicalLabels].reverse();
                 const flowValues = [...chronologicalValues].reverse();
                 const flowChartHeight = Math.max(360, flowLabels.length * 38 + 70);
+                const openAssetFlowRangePicker = () => {
+                    setAssetFlowRangeDraft({ startMonth: fullAssetFlowData.startMonth, endMonth: fullAssetFlowData.endMonth });
+                    setShowAssetFlowRangePicker(true);
+                };
+                const applyAssetFlowRange = () => {
+                    if (!assetFlowRangeDraft.startMonth || !assetFlowRangeDraft.endMonth) {
+                        alert('시작 월과 종료 월을 모두 선택해주세요.');
+                        return;
+                    }
+                    if (assetFlowRangeDraft.startMonth > assetFlowRangeDraft.endMonth) {
+                        alert('시작 월은 종료 월보다 늦을 수 없습니다.');
+                        return;
+                    }
+                    setAssetFlowRange(assetFlowRangeDraft);
+                    setShowAssetFlowRangePicker(false);
+                };
                 return (
                     <div className="fade-in page-shell dashboard-page dashboard-asset-flow-page">
                         <div className="dashboard-detail-toolbar">
@@ -940,9 +964,31 @@
                             <button type="button" role="tab" aria-selected={assetFlowPeriod === 'yearly'} className={assetFlowPeriod === 'yearly' ? 'active' : ''} onClick={() => setAssetFlowPeriod('yearly')}>연도별</button>
                         </div>
                         <section className="dashboard-flow-summary">
-                            <div><small>조회 기간</small><strong>{fullAssetFlowData.startMonth.replace('-', '년 ')}월 ~ {fullAssetFlowData.endMonth.replace('-', '년 ')}월</strong></div>
+                            <button type="button" className="dashboard-flow-range-button" onClick={openAssetFlowRangePicker} aria-haspopup="dialog" aria-expanded={showAssetFlowRangePicker}>
+                                <span><small>조회 기간</small><strong>{fullAssetFlowData.startMonth.replace('-', '년 ')}월 ~ {fullAssetFlowData.endMonth.replace('-', '년 ')}월</strong></span>
+                                <Icon name="chevron-down" size={18} />
+                            </button>
                             <div><small>기간 증감</small><strong className={latestValue - firstValue < 0 ? 'negative' : ''}>{latestValue - firstValue >= 0 ? '+' : ''}{(latestValue - firstValue).toLocaleString()}원</strong></div>
                         </section>
+                        {showAssetFlowRangePicker && (
+                            <div className="month-picker-overlay" role="presentation" onClick={() => setShowAssetFlowRangePicker(false)}>
+                                <section className="month-picker-sheet dashboard-range-picker-sheet" role="dialog" aria-modal="true" aria-labelledby="asset-flow-range-title" onClick={event => event.stopPropagation()}>
+                                    <header>
+                                        <button onClick={() => setShowAssetFlowRangePicker(false)} aria-label="기간 선택 닫기"><Icon name="x" size={27} /></button>
+                                        <strong id="asset-flow-range-title">조회 기간 선택</strong>
+                                        <span />
+                                    </header>
+                                    <div className="dashboard-range-picker-form">
+                                        <label><span>시작 월</span><input type="month" value={assetFlowRangeDraft.startMonth} max={assetFlowRangeDraft.endMonth || fullAssetFlowData.defaultEndMonth} onChange={event => setAssetFlowRangeDraft(current => ({ ...current, startMonth: event.target.value }))} /></label>
+                                        <label><span>종료 월</span><input type="month" value={assetFlowRangeDraft.endMonth} min={assetFlowRangeDraft.startMonth} max={fullAssetFlowData.defaultEndMonth} onChange={event => setAssetFlowRangeDraft(current => ({ ...current, endMonth: event.target.value }))} /></label>
+                                        <div className="dashboard-range-picker-actions">
+                                            <button type="button" onClick={() => { setAssetFlowRange({ startMonth: '', endMonth: '' }); setShowAssetFlowRangePicker(false); }}>기본 기간</button>
+                                            <button type="button" className="primary" onClick={applyAssetFlowRange}>적용</button>
+                                        </div>
+                                    </div>
+                                </section>
+                            </div>
+                        )}
                         <section className="dashboard-chart-card dashboard-full-flow-card">
                             <div className="dashboard-chart-heading">
                                 <span><Icon name="landmark" size={18} /></span>

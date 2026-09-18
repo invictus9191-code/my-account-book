@@ -1127,11 +1127,35 @@ table {
   background: #fff;
 }
 
-.dashboard-flow-summary > div {
+.dashboard-flow-summary > div,
+.dashboard-flow-summary > button {
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 5px;
+}
+
+.dashboard-flow-range-button {
+  padding: 0;
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px !important;
+  background: transparent;
+  text-align: left;
+}
+
+.dashboard-flow-range-button > span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dashboard-flow-range-button > svg,
+.dashboard-flow-range-button > i {
+  flex: 0 0 auto;
+  color: #7d8791;
 }
 
 .dashboard-flow-summary small {
@@ -1149,6 +1173,54 @@ table {
 
 .dashboard-flow-summary strong.negative {
   color: #c94451;
+}
+
+.dashboard-range-picker-sheet {
+  max-width: 520px;
+}
+
+.dashboard-range-picker-form {
+  padding: 8px 22px 24px;
+  display: grid;
+  gap: 13px;
+}
+
+.dashboard-range-picker-form label {
+  display: grid;
+  gap: 7px;
+  color: #606a74;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.dashboard-range-picker-form input {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 13px;
+  border: 1px solid #dfe4ea;
+  border-radius: 15px;
+  background: #f7f9fb;
+  color: #2a3036;
+}
+
+.dashboard-range-picker-actions {
+  margin-top: 5px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.dashboard-range-picker-actions button {
+  min-height: 44px;
+  border-radius: 14px;
+  background: #edf1f5;
+  color: #59636e;
+  font-weight: 700;
+}
+
+.dashboard-range-picker-actions button.primary {
+  background: #188fe7;
+  color: #fff;
 }
 
 .dashboard-full-flow-card {
