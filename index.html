@@ -2692,8 +2692,20 @@
 
         function StockTransactionPage({ data, setData, syncToCloud, onBack, hideAssetAmounts }) {
             const stockAssets = data.assets.filter(asset => asset.type === 'Stock');
+            const getDefaultDateRange = () => {
+                const end = new Date();
+                const start = new Date(end);
+                const targetMonth = start.getMonth() - 3;
+                const targetDay = start.getDate();
+                start.setDate(1);
+                start.setMonth(targetMonth);
+                const lastDay = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+                start.setDate(Math.min(targetDay, lastDay));
+                return { start: formatLocalDate(start), end: formatLocalDate(end) };
+            };
             const [showForm, setShowForm] = useState(false);
-            const [dateRange, setDateRange] = useState({ start: '', end: '' });
+            const [showDateRangePicker, setShowDateRangePicker] = useState(false);
+            const [dateRange, setDateRange] = useState(getDefaultDateRange);
             const [form, setForm] = useState({ assetId: stockAssets[0]?.id || '', type: 'Buy', date: formatLocalDate(new Date()), symbol: '', quantity: '', unitPrice: '', memo: '' });
             const [state, setState] = useState({ loading: false, message: '' });
             const allTransactions = (data.stockTransactions || []).slice().sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
@@ -2703,6 +2715,8 @@
                 return true;
             });
             const isDateRangeActive = Boolean(dateRange.start || dateRange.end);
+            const defaultDateRange = getDefaultDateRange();
+            const isDefaultDateRange = dateRange.start === defaultDateRange.start && dateRange.end === defaultDateRange.end;
 
             const resetForm = () => {
                 setForm({ assetId: stockAssets[0]?.id || '', type: 'Buy', date: formatLocalDate(new Date()), symbol: '', quantity: '', unitPrice: '', memo: '' });
@@ -2851,13 +2865,20 @@
                         )))}
                         {stockAssets.every(asset => getStockHoldings(asset).every(holding => Number(holding.quantity || 0) <= 0)) && <div className="stock-transaction-empty">매수 내역을 등록하면 보유 종목이 표시됩니다.</div>}
                     </section>
-                    <h1 className="stock-transaction-section-title">거래내역</h1>
-                    <div className="stock-transaction-date-range">
+                    <div className="stock-transaction-section-header">
+                        <h1 className="stock-transaction-section-title">거래내역</h1>
+                        <button type="button" className={`stock-transaction-period-button ${showDateRangePicker ? 'active' : ''}`} onClick={() => setShowDateRangePicker(current => !current)} aria-expanded={showDateRangePicker}>
+                            <Icon name="calendar-days" size={15} />
+                            <span>{isDefaultDateRange ? '3개월' : '직접 설정'}</span>
+                            <Icon name={showDateRangePicker ? 'chevron-up' : 'chevron-down'} size={14} />
+                        </button>
+                    </div>
+                    {showDateRangePicker && <div className="stock-transaction-date-range">
                         <label><span>시작일</span><input type="date" value={dateRange.start} max={dateRange.end || undefined} onChange={event => setDateRange(current => ({ ...current, start: event.target.value }))} /></label>
                         <span className="stock-transaction-date-separator">~</span>
                         <label><span>종료일</span><input type="date" value={dateRange.end} min={dateRange.start || undefined} onChange={event => setDateRange(current => ({ ...current, end: event.target.value }))} /></label>
-                        {isDateRangeActive && <button type="button" onClick={() => setDateRange({ start: '', end: '' })} aria-label="주식 거래 기간 초기화"><Icon name="x" size={16} /></button>}
-                    </div>
+                        {!isDefaultDateRange && <button type="button" onClick={() => setDateRange(getDefaultDateRange())} aria-label="최근 3개월로 초기화"><Icon name="rotate-ccw" size={16} /></button>}
+                    </div>}
                     <section className="stock-transaction-list">
                         {transactions.map(transaction => {
                             const asset = data.assets.find(item => item.id === transaction.assetId);

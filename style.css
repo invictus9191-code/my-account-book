@@ -3293,12 +3293,44 @@ textarea:focus {
   box-shadow: 0 7px 22px rgba(31, 42, 55, 0.05);
 }
 
+.stock-transaction-section-header {
+  min-height: 42px;
+  margin: 18px 2px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .stock-transaction-section-title {
-  margin: 22px 2px 10px;
+  margin: 0;
   color: #242a30;
   font-size: 1.05rem;
   font-weight: 800;
   letter-spacing: -0.025em;
+}
+
+.stock-transaction-period-button {
+  min-width: 96px;
+  height: 36px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid #dfe4e9;
+  border-radius: 999px;
+  background: #fff;
+  color: #68727c;
+  font-size: 0.76rem;
+  font-weight: 750;
+  box-shadow: 0 4px 14px rgba(31, 42, 55, 0.05);
+}
+
+.stock-transaction-period-button.active {
+  border-color: #bddcff;
+  background: #edf6ff;
+  color: #1679c4;
 }
 
 .stock-transaction-date-range {
