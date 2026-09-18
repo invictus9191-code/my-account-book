@@ -140,6 +140,8 @@
         const NOTIFICATION_DEVICE_ID_KEY = 'INV_NOTIFICATION_DEVICE_ID';
         const TWELVE_DATA_API_KEY = 'INV_TWELVE_DATA_API_KEY';
         const KOREA_MARKET_API_KEY = 'INV_KOREA_MARKET_API_KEY';
+        const KOREA_STOCK_API_KEY = 'INV_KOREA_STOCK_API_KEY';
+        const KOREA_ETF_API_KEY = 'INV_KOREA_ETF_API_KEY';
         const STOCK_QUOTE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
         const DEFAULT_PASSWORD = '9999';
 
@@ -168,7 +170,9 @@
             assetTypes: [],
             assetTypeLabels: {},
             marketDataApiKey: '',
-            koreaMarketApiKey: ''
+            koreaMarketApiKey: '',
+            koreaStockApiKey: '',
+            koreaEtfApiKey: ''
         };
 
         const getGroupPriority = (group, fallbackIndex = 0) => {
@@ -283,9 +287,17 @@
             try { return decodeURIComponent(value); } catch (_) { return value; }
         };
 
+        const getKoreaMarketApiKeys = (data = {}, overrides = {}) => {
+            const legacyKey = overrides.legacyKey ?? (data.koreaMarketApiKey || localStorage.getItem(KOREA_MARKET_API_KEY) || '');
+            return {
+                stock: Object.prototype.hasOwnProperty.call(overrides, 'stock') ? overrides.stock : (data.koreaStockApiKey || localStorage.getItem(KOREA_STOCK_API_KEY) || legacyKey),
+                etf: Object.prototype.hasOwnProperty.call(overrides, 'etf') ? overrides.etf : (data.koreaEtfApiKey || localStorage.getItem(KOREA_ETF_API_KEY) || legacyKey)
+            };
+        };
+
         const fetchPublicDataMarketItem = async (serviceName, operation, stockCode, apiKey) => {
             if (!apiKey) throw new Error('공공데이터포털 API 키가 필요합니다.');
-            const url = new URL(`https://apis.data.go.kr/1160100/service/${serviceName}/${operation}`);
+            const url = new URL(`https://apis.data.go.kr/1160100/${serviceName}/${operation}`);
             url.searchParams.set('serviceKey', normalizePublicDataApiKey(apiKey));
             url.searchParams.set('resultType', 'json');
             url.searchParams.set('numOfRows', '10');
@@ -318,17 +330,21 @@
             }
         };
 
-        const fetchKoreanStockValuation = async (holding, apiKey) => {
+        const fetchKoreanStockValuation = async (holding, apiKeys = {}) => {
             const stockCode = getKoreanStockCode(holding.symbol);
             const quantity = Number(holding.quantity || 0);
             if (!stockCode) throw new Error('국내 종목 코드는 6자리 숫자 또는 005930:KRX 형식으로 입력해주세요.');
             if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('수량을 0보다 크게 입력해주세요.');
             const sources = [
-                ['국내 주식', 'GetStockSecuritiesInfoService', 'getStockPriceInfo'],
-                ['국내 ETF', 'GetSecuritiesProductInfoService', 'getETFPriceInfo']
+                ['국내 주식', 'GetStockSecuritiesInfoService_V2', 'getStockPriceInfo_V2', typeof apiKeys === 'string' ? apiKeys : apiKeys.stock],
+                ['국내 ETF', 'GetSecuritiesProductInfoService_V2', 'getETFPriceInfo_V2', typeof apiKeys === 'string' ? apiKeys : apiKeys.etf]
             ];
             const sourceErrors = [];
-            for (const [sourceLabel, serviceName, operation] of sources) {
+            for (const [sourceLabel, serviceName, operation, apiKey] of sources) {
+                if (!apiKey) {
+                    sourceErrors.push(`${sourceLabel}: API 키가 필요합니다.`);
+                    continue;
+                }
                 try {
                     const item = await fetchPublicDataMarketItem(serviceName, operation, stockCode, apiKey);
                     if (!item) continue;
@@ -357,12 +373,12 @@
             throw new Error('국내 종목을 찾을 수 없습니다. 종목 코드를 확인해주세요.');
         };
 
-        const fetchStockHoldingValuation = async (holding, apiKey, exchangeRateCache = null, koreaApiKey = '') => {
+        const fetchStockHoldingValuation = async (holding, apiKey, exchangeRateCache = null, koreaApiKeys = {}) => {
             const symbol = String(holding.symbol || '').trim().toUpperCase();
             const quantity = Number(holding.quantity || 0);
             if (!symbol) throw new Error('종목 코드를 입력해주세요.');
             if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('수량을 0보다 크게 입력해주세요.');
-            if (getKoreanStockCode(symbol)) return fetchKoreanStockValuation({ ...holding, symbol, quantity }, koreaApiKey);
+            if (getKoreanStockCode(symbol)) return fetchKoreanStockValuation({ ...holding, symbol, quantity }, koreaApiKeys);
             const quote = await fetchTwelveDataJson('quote', { symbol }, apiKey);
             const previousClose = Number(quote.previous_close);
             if (!Number.isFinite(previousClose) || previousClose <= 0) throw new Error('전일 종가를 확인할 수 없습니다. 종목 코드를 확인해주세요.');
@@ -391,7 +407,7 @@
             };
         };
 
-        const refreshStockAssetQuotes = async (data, apiKey, force = false, koreaApiKey = '') => {
+        const refreshStockAssetQuotes = async (data, apiKey, force = false, koreaApiKeys = {}) => {
             const stockAssets = data.assets.filter(asset => asset.type === 'Stock' && getStockHoldings(asset).some(holding => holding.symbol && Number(holding.quantity || 0) > 0));
             if (stockAssets.length === 0) return { newData: data, stockAssetCount: 0, refreshedCount: 0, failures: [], changed: false, hasTargets: false };
             const hasTargets = stockAssets.some(asset => getStockHoldings(asset).some(holding => {
@@ -416,7 +432,7 @@
                         continue;
                     }
                     try {
-                        refreshedHoldings.push(await fetchStockHoldingValuation(holding, apiKey, exchangeRateCache, koreaApiKey));
+                        refreshedHoldings.push(await fetchStockHoldingValuation(holding, apiKey, exchangeRateCache, koreaApiKeys));
                         refreshedCount += 1;
                         assetChanged = true;
                     } catch (error) {
@@ -2412,13 +2428,13 @@
 
             const refreshStockPrices = async (force = false) => {
                 const apiKey = data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
-                const koreaApiKey = data.koreaMarketApiKey || localStorage.getItem(KOREA_MARKET_API_KEY) || '';
-                if (!apiKey && !koreaApiKey) {
+                const koreaApiKeys = getKoreaMarketApiKeys(data);
+                if (!apiKey && !koreaApiKeys.stock && !koreaApiKeys.etf) {
                     setStockRefreshState({ loading: false, message: '설정에서 시장 데이터 API 키를 등록해주세요.' });
                     return;
                 }
                 setStockRefreshState({ loading: true, message: '전일 종가와 환율을 확인하고 있습니다.' });
-                const result = await refreshStockAssetQuotes(data, apiKey, force, koreaApiKey);
+                const result = await refreshStockAssetQuotes(data, apiKey, force, koreaApiKeys);
                 if (result.stockAssetCount === 0) {
                     setStockRefreshState({ loading: false, message: '' });
                     return;
@@ -2676,10 +2692,10 @@
                     return;
                 }
                 const apiKey = data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
-                const koreaApiKey = data.koreaMarketApiKey || localStorage.getItem(KOREA_MARKET_API_KEY) || '';
+                const koreaApiKeys = getKoreaMarketApiKeys(data);
                 setState({ loading: true, message: '전일 종가를 조회하고 있습니다.' });
                 try {
-                    const holding = await fetchStockHoldingValuation(createStockHolding({ symbol, quantity }), apiKey, new Map(), koreaApiKey);
+                    const holding = await fetchStockHoldingValuation(createStockHolding({ symbol, quantity }), apiKey, new Map(), koreaApiKeys);
                     const holdings = [...getStockHoldings(targetAsset), holding];
                     const updatedAsset = { ...targetAsset, ...getStockAssetValuationFields(holdings) };
                     const newData = { ...data, assets: data.assets.map(asset => asset.id === targetAsset.id ? updatedAsset : asset) };
@@ -2746,8 +2762,8 @@
 
             const loadStockValuation = async (force = true) => {
                 const apiKey = data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
-                const koreaApiKey = data.koreaMarketApiKey || localStorage.getItem(KOREA_MARKET_API_KEY) || '';
-                if (!apiKey && !koreaApiKey) {
+                const koreaApiKeys = getKoreaMarketApiKeys(data);
+                if (!apiKey && !koreaApiKeys.stock && !koreaApiKeys.etf) {
                     setStockQuoteState({ loading: false, message: '설정에서 시장 데이터 API 키를 먼저 등록해주세요.' });
                     return null;
                 }
@@ -2768,7 +2784,7 @@
                         continue;
                     }
                     try {
-                        evaluatedHoldings.push(await fetchStockHoldingValuation(holding, apiKey, exchangeRateCache, koreaApiKey));
+                        evaluatedHoldings.push(await fetchStockHoldingValuation(holding, apiKey, exchangeRateCache, koreaApiKeys));
                     } catch (error) {
                         evaluatedHoldings.push(holding);
                         failures.push(`${holding.symbol}: ${error.message}`);
@@ -3251,7 +3267,9 @@
             const [fbVal, setFbVal] = useState(fbConfig ? JSON.stringify(fbConfig, null, 2) : '');
             const [newPw, setNewPw] = useState('');
             const [marketApiKey, setMarketApiKey] = useState(() => data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '');
-            const [koreaMarketApiKey, setKoreaMarketApiKey] = useState(() => data.koreaMarketApiKey || localStorage.getItem(KOREA_MARKET_API_KEY) || '');
+            const initialKoreaApiKeys = getKoreaMarketApiKeys(data);
+            const [koreaStockApiKey, setKoreaStockApiKey] = useState(() => initialKoreaApiKeys.stock);
+            const [koreaEtfApiKey, setKoreaEtfApiKey] = useState(() => initialKoreaApiKeys.etf);
             const [marketRefreshState, setMarketRefreshState] = useState({ loading: false, message: '' });
             const [activeTab, setActiveTab] = useState('general'); // general, owners, groups, categories, assets, authors
 
@@ -3278,8 +3296,10 @@
 
             useEffect(() => {
                 setMarketApiKey(data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '');
-                setKoreaMarketApiKey(data.koreaMarketApiKey || localStorage.getItem(KOREA_MARKET_API_KEY) || '');
-            }, [data.marketDataApiKey, data.koreaMarketApiKey]);
+                const koreaKeys = getKoreaMarketApiKeys(data);
+                setKoreaStockApiKey(koreaKeys.stock);
+                setKoreaEtfApiKey(koreaKeys.etf);
+            }, [data.marketDataApiKey, data.koreaMarketApiKey, data.koreaStockApiKey, data.koreaEtfApiKey]);
 
             const saveFb = async () => {
                 try {
@@ -3301,59 +3321,70 @@
             const changePw = () => { if (newPw.length < 4) { alert('비밀번호는 4자리 이상이어야 합니다.'); return; } localStorage.setItem(PASSWORD_KEY, newPw); setNewPw(''); alert('비밀번호가 변경되었습니다.'); };
             const saveMarketApiKey = () => {
                 const value = marketApiKey.trim();
-                const koreaValue = koreaMarketApiKey.trim();
-                if (!value && !koreaValue) {
+                const koreaStockValue = koreaStockApiKey.trim();
+                const koreaEtfValue = koreaEtfApiKey.trim();
+                if (!value && !koreaStockValue && !koreaEtfValue) {
                     alert('해외 또는 국내 시장 데이터 API 키를 입력해주세요.');
                     return;
                 }
                 if (!isConnected) {
-                    if (data.marketDataApiKey || data.koreaMarketApiKey) {
+                    if (data.marketDataApiKey || data.koreaMarketApiKey || data.koreaStockApiKey || data.koreaEtfApiKey) {
                         setMarketApiKey(data.marketDataApiKey);
-                        setKoreaMarketApiKey(data.koreaMarketApiKey || '');
+                        const koreaKeys = getKoreaMarketApiKeys(data);
+                        setKoreaStockApiKey(koreaKeys.stock);
+                        setKoreaEtfApiKey(koreaKeys.etf);
                         alert('공용 API 키를 변경하려면 Firebase에 로그인해주세요.');
                         return;
                     }
                     if (value) localStorage.setItem(TWELVE_DATA_API_KEY, value);
-                    if (koreaValue) localStorage.setItem(KOREA_MARKET_API_KEY, koreaValue);
+                    if (koreaStockValue) localStorage.setItem(KOREA_STOCK_API_KEY, koreaStockValue);
+                    if (koreaEtfValue) localStorage.setItem(KOREA_ETF_API_KEY, koreaEtfValue);
                     setMarketApiKey(value);
-                    setKoreaMarketApiKey(koreaValue);
+                    setKoreaStockApiKey(koreaStockValue);
+                    setKoreaEtfApiKey(koreaEtfValue);
                     alert('API 키를 임시 저장했습니다. Firebase 로그인 후 공용 설정으로 자동 이전됩니다.');
                     return;
                 }
-                const newData = { ...data, marketDataApiKey: value, koreaMarketApiKey: koreaValue };
+                const newData = { ...data, marketDataApiKey: value, koreaMarketApiKey: '', koreaStockApiKey: koreaStockValue, koreaEtfApiKey: koreaEtfValue };
                 setData(newData);
                 syncToCloud(newData);
                 localStorage.removeItem(TWELVE_DATA_API_KEY);
                 localStorage.removeItem(KOREA_MARKET_API_KEY);
+                localStorage.removeItem(KOREA_STOCK_API_KEY);
+                localStorage.removeItem(KOREA_ETF_API_KEY);
                 setMarketApiKey(value);
-                setKoreaMarketApiKey(koreaValue);
+                setKoreaStockApiKey(koreaStockValue);
+                setKoreaEtfApiKey(koreaEtfValue);
                 const sharedId = localStorage.getItem(SHARED_ID_KEY);
                 alert(sharedId
                     ? '시장 데이터 API 키가 공용 설정에 저장되었습니다. 같은 공유 ID 사용자는 별도 입력 없이 이용할 수 있습니다.'
                     : '시장 데이터 API 키가 개인 클라우드 설정에 저장되었습니다. 다른 사용자와 함께 사용하려면 동일한 공유 ID를 설정해주세요.');
             };
             const clearMarketApiKey = () => {
-                if ((data.marketDataApiKey || data.koreaMarketApiKey) && !isConnected) {
+                if ((data.marketDataApiKey || data.koreaMarketApiKey || data.koreaStockApiKey || data.koreaEtfApiKey) && !isConnected) {
                     alert('공용 API 키를 삭제하려면 Firebase에 로그인해주세요.');
                     return;
                 }
-                const newData = { ...data, marketDataApiKey: '', koreaMarketApiKey: '' };
+                const newData = { ...data, marketDataApiKey: '', koreaMarketApiKey: '', koreaStockApiKey: '', koreaEtfApiKey: '' };
                 setData(newData);
                 syncToCloud(newData);
                 localStorage.removeItem(TWELVE_DATA_API_KEY);
                 localStorage.removeItem(KOREA_MARKET_API_KEY);
+                localStorage.removeItem(KOREA_STOCK_API_KEY);
+                localStorage.removeItem(KOREA_ETF_API_KEY);
                 setMarketApiKey('');
-                setKoreaMarketApiKey('');
+                setKoreaStockApiKey('');
+                setKoreaEtfApiKey('');
             };
             const refreshMarketPrices = async () => {
                 const apiKey = marketApiKey.trim() || data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
-                const koreaApiKey = koreaMarketApiKey.trim() || data.koreaMarketApiKey || localStorage.getItem(KOREA_MARKET_API_KEY) || '';
-                if (!apiKey && !koreaApiKey) {
+                const koreaApiKeys = getKoreaMarketApiKeys(data, { stock: koreaStockApiKey.trim(), etf: koreaEtfApiKey.trim() });
+                if (!apiKey && !koreaApiKeys.stock && !koreaApiKeys.etf) {
                     setMarketRefreshState({ loading: false, message: '시장 데이터 API 키를 먼저 입력해주세요.' });
                     return;
                 }
                 setMarketRefreshState({ loading: true, message: '전체 종목의 전일 종가와 환율을 확인하고 있습니다.' });
-                const result = await refreshStockAssetQuotes(data, apiKey, true, koreaApiKey);
+                const result = await refreshStockAssetQuotes(data, apiKey, true, koreaApiKeys);
                 if (result.stockAssetCount === 0) {
                     setMarketRefreshState({ loading: false, message: '시세를 갱신할 주식 종목이 없습니다.' });
                     return;
@@ -3564,13 +3595,14 @@
                                         </div>
                                         <div className="settings-section">
                                             <h3>📈 주식 시장 데이터</h3>
-                                            <p style={{ color: '#8b949e', fontSize: '0.8rem', lineHeight: 1.5, marginBottom: '0.5rem' }}>해외 종목은 Twelve Data, 국내 주식·ETF는 공공데이터포털의 무료 API로 자동 조회합니다. 자동 시세는 12시간마다 갱신되며 같은 공유 ID 사용자는 키를 함께 사용합니다.</p>
+                                            <p style={{ color: '#8b949e', fontSize: '0.8rem', lineHeight: 1.5, marginBottom: '0.5rem' }}>해외 종목은 Twelve Data, 국내 주식·ETF는 공공데이터포털의 무료 API로 자동 조회합니다. 국내 API를 따로 신청했다면 각 서비스키를 입력하세요. 자동 시세는 12시간마다 갱신됩니다.</p>
                                             <label className="settings-market-key-field"><span>해외 주식 · 환율</span><input type="password" value={marketApiKey} onChange={e => setMarketApiKey(e.target.value)} placeholder="Twelve Data API 키" autoComplete="off" /></label>
-                                            <label className="settings-market-key-field"><span>국내 주식 · ETF</span><input type="password" value={koreaMarketApiKey} onChange={e => setKoreaMarketApiKey(e.target.value)} placeholder="공공데이터포털 API 키" autoComplete="off" /></label>
+                                            <label className="settings-market-key-field"><span>국내 주식</span><input type="password" value={koreaStockApiKey} onChange={e => setKoreaStockApiKey(e.target.value)} placeholder="주식시세정보 서비스키" autoComplete="off" /></label>
+                                            <label className="settings-market-key-field"><span>국내 ETF</span><input type="password" value={koreaEtfApiKey} onChange={e => setKoreaEtfApiKey(e.target.value)} placeholder="증권상품시세정보 서비스키" autoComplete="off" /></label>
                                             <div className="settings-inline-form settings-market-api-form">
                                                 <button type="button" onClick={refreshMarketPrices} disabled={marketRefreshState.loading}>{marketRefreshState.loading ? '조회 중…' : '시세 갱신'}</button>
                                                 <button className="primary" onClick={saveMarketApiKey}>저장</button>
-                                                {(marketApiKey || koreaMarketApiKey) && <button onClick={clearMarketApiKey}>삭제</button>}
+                                                {(marketApiKey || koreaStockApiKey || koreaEtfApiKey) && <button onClick={clearMarketApiKey}>삭제</button>}
                                             </div>
                                             {marketRefreshState.message && <p className="settings-market-refresh-status">{marketRefreshState.message}</p>}
                                             <div className="settings-market-api-links">
@@ -3860,6 +3892,8 @@ service cloud.firestore {
                 if (!p.assetTypeLabels) p.assetTypeLabels = {};
                 if (!p.marketDataApiKey) p.marketDataApiKey = '';
                 if (!p.koreaMarketApiKey) p.koreaMarketApiKey = '';
+                if (!p.koreaStockApiKey) p.koreaStockApiKey = p.koreaMarketApiKey || '';
+                if (!p.koreaEtfApiKey) p.koreaEtfApiKey = p.koreaMarketApiKey || '';
                 if (p.assets) p.assets = p.assets.map(a => ({
                     ...a,
                     initialBalance: a.initialBalance !== undefined ? a.initialBalance : 0,
@@ -3988,32 +4022,46 @@ service cloud.firestore {
                                 const currentLocalData = JSON.parse(localStorage.getItem(STORAGE_KEY) || JSON.stringify(initialData));
                                 const legacyMarketApiKey = localStorage.getItem(TWELVE_DATA_API_KEY) || '';
                                 const legacyKoreaMarketApiKey = localStorage.getItem(KOREA_MARKET_API_KEY) || '';
+                                const localKoreaStockApiKey = localStorage.getItem(KOREA_STOCK_API_KEY) || legacyKoreaMarketApiKey;
+                                const localKoreaEtfApiKey = localStorage.getItem(KOREA_ETF_API_KEY) || legacyKoreaMarketApiKey;
                                 const initialCloudData = {
                                     ...currentLocalData,
                                     ...(legacyMarketApiKey ? { marketDataApiKey: legacyMarketApiKey } : {}),
-                                    ...(legacyKoreaMarketApiKey ? { koreaMarketApiKey: legacyKoreaMarketApiKey } : {})
+                                    ...(legacyKoreaMarketApiKey ? { koreaMarketApiKey: legacyKoreaMarketApiKey } : {}),
+                                    ...(localKoreaStockApiKey ? { koreaStockApiKey: localKoreaStockApiKey } : {}),
+                                    ...(localKoreaEtfApiKey ? { koreaEtfApiKey: localKoreaEtfApiKey } : {})
                                 };
                                 docRef.set(initialCloudData).then(() => {
                                     if (legacyMarketApiKey) localStorage.removeItem(TWELVE_DATA_API_KEY);
                                     if (legacyKoreaMarketApiKey) localStorage.removeItem(KOREA_MARKET_API_KEY);
+                                    if (localKoreaStockApiKey) localStorage.removeItem(KOREA_STOCK_API_KEY);
+                                    if (localKoreaEtfApiKey) localStorage.removeItem(KOREA_ETF_API_KEY);
                                 }).catch(err => console.error("Initial Sync Fail:", err));
                                 setData(initialCloudData);
                             } else {
                                 let cloudData = d.data();
                                 const legacyMarketApiKey = localStorage.getItem(TWELVE_DATA_API_KEY) || '';
                                 const legacyKoreaMarketApiKey = localStorage.getItem(KOREA_MARKET_API_KEY) || '';
+                                const localKoreaStockApiKey = localStorage.getItem(KOREA_STOCK_API_KEY) || '';
+                                const localKoreaEtfApiKey = localStorage.getItem(KOREA_ETF_API_KEY) || '';
                                 const migratedKeys = {};
                                 if (!cloudData.marketDataApiKey && legacyMarketApiKey) migratedKeys.marketDataApiKey = legacyMarketApiKey;
                                 if (!cloudData.koreaMarketApiKey && legacyKoreaMarketApiKey) migratedKeys.koreaMarketApiKey = legacyKoreaMarketApiKey;
+                                if (!cloudData.koreaStockApiKey && localKoreaStockApiKey) migratedKeys.koreaStockApiKey = localKoreaStockApiKey;
+                                if (!cloudData.koreaEtfApiKey && localKoreaEtfApiKey) migratedKeys.koreaEtfApiKey = localKoreaEtfApiKey;
                                 if (Object.keys(migratedKeys).length > 0) {
                                     cloudData = { ...cloudData, ...migratedKeys };
                                     docRef.set(migratedKeys, { merge: true }).then(() => {
                                         if (migratedKeys.marketDataApiKey) localStorage.removeItem(TWELVE_DATA_API_KEY);
                                         if (migratedKeys.koreaMarketApiKey) localStorage.removeItem(KOREA_MARKET_API_KEY);
+                                        if (migratedKeys.koreaStockApiKey) localStorage.removeItem(KOREA_STOCK_API_KEY);
+                                        if (migratedKeys.koreaEtfApiKey) localStorage.removeItem(KOREA_ETF_API_KEY);
                                     }).catch(err => console.error("Market API Key Migration Fail:", err));
                                 }
                                 if (cloudData.marketDataApiKey && legacyMarketApiKey && !migratedKeys.marketDataApiKey) localStorage.removeItem(TWELVE_DATA_API_KEY);
                                 if (cloudData.koreaMarketApiKey && legacyKoreaMarketApiKey && !migratedKeys.koreaMarketApiKey) localStorage.removeItem(KOREA_MARKET_API_KEY);
+                                if (cloudData.koreaStockApiKey && localKoreaStockApiKey && !migratedKeys.koreaStockApiKey) localStorage.removeItem(KOREA_STOCK_API_KEY);
+                                if (cloudData.koreaEtfApiKey && localKoreaEtfApiKey && !migratedKeys.koreaEtfApiKey) localStorage.removeItem(KOREA_ETF_API_KEY);
                                 // 클라우드 데이터를 기준으로 상태 업데이트 (Source of Truth)
                                 setData(prev => {
                                     if (JSON.stringify(prev) !== JSON.stringify(cloudData)) {
