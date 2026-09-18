@@ -2401,6 +2401,7 @@
             const [selectedAsset, setSelectedAsset] = useState(null);
             const [assetViewMode, setAssetViewMode] = useState('asset');
             const [stockRefreshState, setStockRefreshState] = useState({ loading: false, message: '' });
+            const [showStockHoldingModal, setShowStockHoldingModal] = useState(false);
 
             const refreshStockPrices = async (force = false) => {
                 const apiKey = data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
@@ -2434,7 +2435,8 @@
             }, []);
 
             useMobileEdgeSwipeBack(() => {
-                if (selectedAsset) setSelectedAsset(null);
+                if (showStockHoldingModal) setShowStockHoldingModal(false);
+                else if (selectedAsset) setSelectedAsset(null);
                 else setTab('home');
             });
 
@@ -2563,10 +2565,19 @@
                             <button type="button" role="tab" aria-selected={assetViewMode === 'asset'} className={assetViewMode === 'asset' ? 'active' : ''} onClick={() => setAssetViewMode('asset')}>자산별</button>
                             <button type="button" role="tab" aria-selected={assetViewMode === 'type'} className={assetViewMode === 'type' ? 'active' : ''} onClick={() => setAssetViewMode('type')}>자산 유형별</button>
                         </div>
-                        <button className="asset-new-button" onClick={() => { setEditAsset(null); setShowAssetModal(true); }} aria-label="신규 자산 추가">
-                            <Icon name="wallet" size={23} />
-                            <span><Icon name="plus" size={10} /></span>
-                        </button>
+                        <div className="asset-toolbar-actions">
+                            <button className="asset-stock-add-button" onClick={() => {
+                                if (!data.assets.some(asset => asset.type === 'Stock')) {
+                                    alert('먼저 주식 유형의 자산을 추가해주세요.');
+                                    return;
+                                }
+                                setShowStockHoldingModal(true);
+                            }} aria-label="기존 주식 자산에 종목 추가"><Icon name="trending-up" size={17} /><span>주식</span><Icon name="plus" size={12} /></button>
+                            <button className="asset-new-button" onClick={() => { setEditAsset(null); setShowAssetModal(true); }} aria-label="신규 자산 추가">
+                                <Icon name="wallet" size={23} />
+                                <span><Icon name="plus" size={10} /></span>
+                            </button>
+                        </div>
                     </div>
                     <div className="asset-total-card">
                         <div className="asset-total-summary">
@@ -2627,6 +2638,68 @@
                             </div>;
                         })}
                         {displayedGroups.length === 0 && <div style={{ padding: '2rem', textAlign: 'center', color: '#8b949e' }}>등록된 자산이 없습니다. 설정에서 자산을 추가해주세요.</div>}
+                    </div>
+                    {showStockHoldingModal && <StockHoldingModal data={data} setData={setData} syncToCloud={syncToCloud} onClose={() => setShowStockHoldingModal(false)} />}
+                </div>
+            );
+        }
+
+        function StockHoldingModal({ data, setData, syncToCloud, onClose }) {
+            const stockAssets = data.assets.filter(asset => asset.type === 'Stock');
+            const [form, setForm] = useState({ assetId: stockAssets[0]?.id || '', symbol: '', quantity: '' });
+            const [state, setState] = useState({ loading: false, message: '' });
+
+            const handleSubmit = async event => {
+                event.preventDefault();
+                const targetAsset = data.assets.find(asset => asset.id === form.assetId && asset.type === 'Stock');
+                if (!targetAsset) {
+                    setState({ loading: false, message: '종목을 추가할 주식 자산을 선택해주세요.' });
+                    return;
+                }
+                const symbol = String(form.symbol || '').trim().toUpperCase();
+                const quantity = Number(form.quantity || 0);
+                if (!symbol || !Number.isFinite(quantity) || quantity <= 0) {
+                    setState({ loading: false, message: '종목 코드와 0보다 큰 수량을 입력해주세요.' });
+                    return;
+                }
+                const normalizedSymbol = getKoreanStockCode(symbol) || symbol;
+                const alreadyExists = getStockHoldings(targetAsset).some(holding => (getKoreanStockCode(holding.symbol) || String(holding.symbol || '').toUpperCase()) === normalizedSymbol);
+                if (alreadyExists) {
+                    setState({ loading: false, message: '이미 등록된 종목입니다. 자산 수정에서 수량을 변경해주세요.' });
+                    return;
+                }
+                const apiKey = data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
+                const koreaApiKey = data.koreaMarketApiKey || localStorage.getItem(KOREA_MARKET_API_KEY) || '';
+                setState({ loading: true, message: '전일 종가를 조회하고 있습니다.' });
+                try {
+                    const holding = await fetchStockHoldingValuation(createStockHolding({ symbol, quantity }), apiKey, new Map(), koreaApiKey);
+                    const holdings = [...getStockHoldings(targetAsset), holding];
+                    const updatedAsset = { ...targetAsset, ...getStockAssetValuationFields(holdings) };
+                    const newData = { ...data, assets: data.assets.map(asset => asset.id === targetAsset.id ? updatedAsset : asset) };
+                    setData(newData);
+                    syncToCloud(newData);
+                    onClose();
+                } catch (error) {
+                    setState({ loading: false, message: error.message });
+                }
+            };
+
+            return (
+                <div className="asset-modal-overlay">
+                    <div className="asset-modal-panel stock-holding-modal-panel">
+                        <header className="asset-modal-header">
+                            <button type="button" onClick={onClose} aria-label="닫기"><Icon name="x" size={27} /></button>
+                            <h2>주식 추가</h2>
+                            <button type="submit" form="stock-holding-form" className="asset-modal-save" disabled={state.loading || !form.assetId || !form.symbol || Number(form.quantity || 0) <= 0} aria-label="주식 종목 추가"><Icon name="check" size={27} /></button>
+                        </header>
+                        <form id="stock-holding-form" className="asset-modal-form stock-holding-add-form" onSubmit={handleSubmit}>
+                            <div className="stock-holding-add-intro"><Icon name="chart-no-axes-combined" size={22} /><div><strong>보유 종목 등록</strong><small>추가할 주식 자산과 종목을 선택하세요.</small></div></div>
+                            <div className="form-row"><label>주식 자산</label><select value={form.assetId} onChange={e => setForm({ ...form, assetId: e.target.value })} required><option value="">선택</option>{stockAssets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></div>
+                            <div className="form-row"><label>종목 코드</label><input value={form.symbol} onChange={e => setForm({ ...form, symbol: e.target.value.toUpperCase() })} placeholder="예: 329200:KRX, AAPL" autoCapitalize="characters" required autoFocus /></div>
+                            <div className="form-row"><label>보유 수량</label><input type="number" min="0" step="any" inputMode="decimal" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="0" required /></div>
+                            <small className="stock-symbol-help">국내 종목은 6자리 코드, 해외 종목은 Twelve Data 종목 코드를 입력하세요. 저장할 때 전일 종가를 자동 조회합니다.</small>
+                            {state.message && <div className={`stock-holding-add-message ${state.loading ? 'loading' : 'error'}`}>{state.loading && <Icon name="loader-circle" size={15} />}{state.message}</div>}
+                        </form>
                     </div>
                 </div>
             );

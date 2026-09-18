@@ -2834,8 +2834,9 @@ textarea:focus {
 
 .asset-page-toolbar {
   display: grid;
-  grid-template-columns: 46px 1fr 46px;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
   align-items: center;
+  gap: 8px;
   margin-bottom: 16px;
 }
 
@@ -3118,7 +3119,6 @@ textarea:focus {
 
 .asset-new-button {
   position: relative;
-  justify-self: end;
 }
 
 .asset-new-button > span {
@@ -3134,6 +3134,79 @@ textarea:focus {
   border-radius: 50%;
   background: #20252b;
   color: white;
+}
+
+.asset-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.asset-stock-add-button {
+  height: 44px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid rgba(118, 184, 230, 0.72);
+  border-radius: 22px;
+  background: #edf7ff;
+  color: #1679c4;
+  box-shadow: 0 8px 22px rgba(31, 42, 55, 0.06);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.stock-holding-modal-panel {
+  max-width: 520px;
+}
+
+.stock-holding-add-form {
+  gap: 14px;
+}
+
+.stock-holding-add-intro {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border-radius: 19px;
+  background: #edf7ff;
+  color: #1679c4;
+}
+
+.stock-holding-add-intro > div {
+  display: grid;
+  gap: 3px;
+}
+
+.stock-holding-add-intro strong {
+  color: #31475a;
+  font-size: 0.9rem;
+}
+
+.stock-holding-add-intro small {
+  color: #718395;
+  font-size: 0.7rem;
+}
+
+.stock-holding-add-message {
+  padding: 11px 13px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 14px;
+  background: #fff0f1;
+  color: #c94451;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.stock-holding-add-message.loading {
+  background: #edf7ff;
+  color: #1679c4;
 }
 
 .asset-modal-overlay {
@@ -3292,6 +3365,10 @@ textarea:focus {
     margin-bottom: 10px;
   }
 
+  .asset-stock-add-button {
+    padding: 0 9px;
+  }
+
   .asset-modal-overlay {
     padding: 0;
     align-items: flex-end;
@@ -3321,6 +3398,22 @@ textarea:focus {
 
   .asset-modal-form .form-row label {
     flex-basis: 92px;
+  }
+}
+
+@media (max-width: 380px) {
+  .asset-stock-add-button {
+    width: 44px;
+    padding: 0;
+  }
+
+  .asset-stock-add-button span {
+    display: none;
+  }
+
+  .asset-toolbar-tabs button {
+    padding-inline: 4px;
+    font-size: 0.75rem;
   }
 }
 
