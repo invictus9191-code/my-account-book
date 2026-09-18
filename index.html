@@ -163,6 +163,7 @@
                 { id: 'tr1', type: 'Transfer', name: '저축' }, { id: 'tr2', type: 'Transfer', name: '이체' }
             ],
             transactions: [],
+            stockTransactions: [],
             budgets: [],
             recurringTransactions: [],
             shoppingItems: [],
@@ -231,7 +232,10 @@
             previousClose: overrides.previousClose ?? '',
             exchangeRate: overrides.exchangeRate ?? 1,
             priceDate: overrides.priceDate || '',
-            quoteUpdatedAt: overrides.quoteUpdatedAt || ''
+            quoteUpdatedAt: overrides.quoteUpdatedAt || '',
+            priceProvider: overrides.priceProvider || '',
+            stockName: overrides.stockName || '',
+            ledgerBaseQuantity: overrides.ledgerBaseQuantity
         });
 
         const getStockHoldings = asset => {
@@ -259,6 +263,19 @@
         const getStockHoldingValue = holding => Math.round(
             Number(holding.quantity || 0) * Number(holding.previousClose || 0) * Number(holding.exchangeRate || 1)
         );
+
+        const getStockSymbolKey = symbol => getKoreanStockCode(symbol) || String(symbol || '').trim().toUpperCase();
+
+        const getStockHoldingQuantityAtDate = (asset, holding, stockTransactions = [], upToDate = '') => {
+            if (holding.ledgerBaseQuantity === undefined || holding.ledgerBaseQuantity === null) return Number(holding.quantity || 0);
+            const symbolKey = getStockSymbolKey(holding.symbol);
+            return stockTransactions.reduce((quantity, transaction) => {
+                if (transaction.assetId !== asset.id || getStockSymbolKey(transaction.symbol) !== symbolKey) return quantity;
+                if (upToDate && transaction.date > upToDate) return quantity;
+                const amount = Number(transaction.quantity || 0);
+                return quantity + (transaction.type === 'Sell' ? -amount : amount);
+            }, Number(holding.ledgerBaseQuantity || 0));
+        };
 
         const getStockAssetValuationFields = holdings => {
             const first = holdings[0] || {};
@@ -547,14 +564,17 @@
             }, 0));
         };
 
-        const calculateAssetBalance = (assetId, assets, transactions, upToDate) => {
+        const calculateAssetBalance = (assetId, assets, transactions, upToDate, stockTransactions = []) => {
             const asset = assets.find(a => a.id === assetId);
             if (!asset) return 0;
             if (!isAssetActiveOn(asset, upToDate)) return 0;
             if (asset.type === 'RealEstate') return Number(asset.initialBalance || 0) - calculateAssetDebt(asset, transactions, upToDate);
             if (asset.type === 'Stock') {
                 const holdings = getStockHoldings(asset);
-                if (holdings.length > 0) return holdings.reduce((sum, holding) => sum + getStockHoldingValue(holding), 0);
+                if (holdings.length > 0) return holdings.reduce((sum, holding) => {
+                    const quantity = getStockHoldingQuantityAtDate(asset, holding, stockTransactions, upToDate);
+                    return sum + getStockHoldingValue({ ...holding, quantity: Math.max(0, quantity) });
+                }, 0);
             }
             const history = transactions.filter(t => {
                 const match = t.assetId === assetId || t.toAssetId === assetId;
@@ -960,7 +980,7 @@
                 const prevExpense = prevRawExpense - prevMonthT.filter(t => t.type === 'Expense' && savingsCategories.includes(t.categoryId)).reduce((s, t) => s + Number(t.amount), 0);
 
                 // Assets up to selected month
-                const totalAssets = data.assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions, `${selectedMonth}-31`), 0);
+                const totalAssets = data.assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions, `${selectedMonth}-31`, data.stockTransactions), 0);
 
                 return { income, expense, savings, totalAssets, prevIncome, prevExpense };
             }, [selectedMonth, data.transactions, data.assets]);
@@ -984,7 +1004,7 @@
                 });
 
                 const assetData = labels.map(m => {
-                    return data.assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions, `${m}-31`), 0);
+                    return data.assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions, `${m}-31`, data.stockTransactions), 0);
                 });
 
                 return { labels: labels.map(m => `${m.substring(5)}월`), incomeData, expenseData, savingsData, assetData };
@@ -1027,7 +1047,7 @@
                     const date = new Date(startYear, startMonthNumber - 1 + index, 1);
                     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
                 });
-                const assetData = months.map(month => data.assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions, `${month}-31`), 0));
+                const assetData = months.map(month => data.assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions, `${month}-31`, data.stockTransactions), 0));
                 const yearlyPoints = months.reduce((points, month, index) => {
                     const year = month.substring(0, 4);
                     points.set(year, assetData[index]);
@@ -1155,7 +1175,7 @@
                 const upToDate = `${selectedMonth}-31`;
                 const groupGrouped = sortGroupsByPriority(data.groups).map(g => {
                     const assets = data.assets.filter(a => a.groupId === g.id);
-                    const total = assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions, upToDate), 0);
+                    const total = assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions, upToDate, data.stockTransactions), 0);
                     return { ...g, total, assets };
                 }).filter(g => g.total !== 0 || g.assets.length > 0);
 
@@ -1172,7 +1192,7 @@
                                         {g.name} <span>{g.total.toLocaleString()}원</span>
                                     </h3>
                                     {g.assets.map(a => {
-                                        const bal = calculateAssetBalance(a.id, data.assets, data.transactions, upToDate);
+                                        const bal = calculateAssetBalance(a.id, data.assets, data.transactions, upToDate, data.stockTransactions);
                                         return (
                                             <div key={a.id} onClick={() => { setEditAsset(a); setShowAssetModal(true); }} style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '1rem', paddingBottom: '0.3rem', color: '#8b949e', cursor: 'pointer' }} className="list-item">
                                                 <span>{a.name}</span>
@@ -1456,7 +1476,7 @@
             const monthExpense = data.transactions
                 .filter(t => t.type === 'Expense' && t.date.startsWith(currentMonth))
                 .reduce((sum, t) => sum + Number(t.amount || 0), 0);
-            const totalAssets = data.assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions), 0);
+            const totalAssets = data.assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions, undefined, data.stockTransactions), 0);
             const recentTransactions = [...data.transactions]
                 .sort((a, b) => b.date.localeCompare(a.date) || String(b.id).localeCompare(String(a.id)))
                 .slice(0, 3);
@@ -2426,7 +2446,7 @@
             const [selectedAsset, setSelectedAsset] = useState(null);
             const [assetViewMode, setAssetViewMode] = useState('asset');
             const [stockRefreshState, setStockRefreshState] = useState({ loading: false, message: '' });
-            const [showStockHoldingModal, setShowStockHoldingModal] = useState(false);
+            const [showStockTransactions, setShowStockTransactions] = useState(false);
 
             const refreshStockPrices = async (force = false) => {
                 const apiKey = data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
@@ -2460,7 +2480,7 @@
             }, []);
 
             useMobileEdgeSwipeBack(() => {
-                if (showStockHoldingModal) setShowStockHoldingModal(false);
+                if (showStockTransactions) setShowStockTransactions(false);
                 else if (selectedAsset) setSelectedAsset(null);
                 else setTab('home');
             });
@@ -2468,12 +2488,12 @@
             const groupGrouped = sortGroupsByPriority(data.groups)
                 .map(g => {
                     const assets = data.assets.filter(a => a.groupId === g.id);
-                    const total = assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions), 0);
+                    const total = assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions, undefined, data.stockTransactions), 0);
                     return { ...g, total, assets };
                 }).filter(g => g.assets.length > 0);
 
             const uncategorizedAssets = data.assets.filter(a => !a.groupId);
-            const uncategorizedTotal = uncategorizedAssets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions), 0);
+            const uncategorizedTotal = uncategorizedAssets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions, undefined, data.stockTransactions), 0);
 
             if (uncategorizedAssets.length > 0) {
                 groupGrouped.push({ id: 'uncategorized', name: '미지정 그룹', total: uncategorizedTotal, assets: uncategorizedAssets, order: 999 });
@@ -2485,7 +2505,7 @@
                     .filter(asset => asset.type === type.value)
                     .slice()
                     .sort((a, b) => Number(a.priority ?? 9999) - Number(b.priority ?? 9999));
-                const total = assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions), 0);
+                const total = assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions, undefined, data.stockTransactions), 0);
                 return { id: `type-${type.value}`, name: type.label, total, assets };
             }).filter(group => group.assets.length > 0);
 
@@ -2495,14 +2515,14 @@
                 typeGrouped.push({
                     id: 'type-other',
                     name: '기타',
-                    total: otherAssets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions), 0),
+                    total: otherAssets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions, undefined, data.stockTransactions), 0),
                     assets: otherAssets
                 });
             }
 
             const displayedGroups = assetViewMode === 'type' ? typeGrouped : groupGrouped;
 
-            const grandTotal = data.assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions), 0);
+            const grandTotal = data.assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions, undefined, data.stockTransactions), 0);
             const grandDebt = data.assets.reduce((sum, asset) => sum + calculateAssetDebt(asset, data.transactions), 0);
             const allocationGroups = displayedGroups
                 .filter(group => group.total > 0)
@@ -2511,6 +2531,10 @@
             const allocationTotal = allocationGroups.reduce((sum, group) => sum + group.total, 0);
             const allocationColors = ['#7dd3fc', '#a7f3d0', '#fde68a', '#fca5a5', '#c4b5fd', '#fdba74', '#93c5fd', '#f9a8d4'];
             const getAllocationPercent = group => allocationTotal > 0 && group.total > 0 ? (group.total / allocationTotal) * 100 : 0;
+
+            if (showStockTransactions) {
+                return <StockTransactionPage data={data} setData={setData} syncToCloud={syncToCloud} onBack={() => setShowStockTransactions(false)} hideAssetAmounts={hideAssetAmounts} />;
+            }
 
             // 자산 거래내역 뷰
             if (selectedAsset) {
@@ -2596,8 +2620,8 @@
                                     alert('먼저 주식 유형의 자산을 추가해주세요.');
                                     return;
                                 }
-                                setShowStockHoldingModal(true);
-                            }} aria-label="기존 주식 자산에 종목 추가"><Icon name="trending-up" size={22} /><span><Icon name="plus" size={10} /></span></button>
+                                setShowStockTransactions(true);
+                            }} aria-label="주식 거래내역"><Icon name="trending-up" size={22} /></button>
                             <button className="asset-new-button" onClick={() => { setEditAsset(null); setShowAssetModal(true); }} aria-label="신규 자산 추가">
                                 <Icon name="wallet" size={23} />
                                 <span><Icon name="plus" size={10} /></span>
@@ -2646,9 +2670,9 @@
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                     {g.assets.map(a => {
-                                        const bal = calculateAssetBalance(a.id, data.assets, data.transactions);
+                                        const bal = calculateAssetBalance(a.id, data.assets, data.transactions, undefined, data.stockTransactions);
                                         const debt = calculateAssetDebt(a, data.transactions);
-                                        const stockHoldings = a.type === 'Stock' ? getStockHoldings(a) : [];
+                                        const stockHoldings = a.type === 'Stock' ? getStockHoldings(a).filter(holding => Number(holding.quantity || 0) > 0) : [];
                                         return (
                                             <div key={a.id} onClick={() => { setSearchTerm(a.name); setTab('transactions'); }} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 1rem', background: 'rgba(9, 105, 218, 0.1)', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s' }} className="list-item">
                                                 <span className="asset-list-copy">
@@ -2664,68 +2688,180 @@
                         })}
                         {displayedGroups.length === 0 && <div style={{ padding: '2rem', textAlign: 'center', color: '#8b949e' }}>등록된 자산이 없습니다. 설정에서 자산을 추가해주세요.</div>}
                     </div>
-                    {showStockHoldingModal && <StockHoldingModal data={data} setData={setData} syncToCloud={syncToCloud} onClose={() => setShowStockHoldingModal(false)} />}
                 </div>
             );
         }
 
-        function StockHoldingModal({ data, setData, syncToCloud, onClose }) {
+        function StockTransactionPage({ data, setData, syncToCloud, onBack, hideAssetAmounts }) {
             const stockAssets = data.assets.filter(asset => asset.type === 'Stock');
-            const [form, setForm] = useState({ assetId: stockAssets[0]?.id || '', symbol: '', quantity: '' });
+            const [showForm, setShowForm] = useState(false);
+            const [form, setForm] = useState({ assetId: stockAssets[0]?.id || '', type: 'Buy', date: formatLocalDate(new Date()), symbol: '', quantity: '', unitPrice: '', memo: '' });
             const [state, setState] = useState({ loading: false, message: '' });
+            const transactions = (data.stockTransactions || []).slice().sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+
+            const resetForm = () => {
+                setForm({ assetId: stockAssets[0]?.id || '', type: 'Buy', date: formatLocalDate(new Date()), symbol: '', quantity: '', unitPrice: '', memo: '' });
+                setState({ loading: false, message: '' });
+            };
+
+            const closeForm = () => { setShowForm(false); resetForm(); };
 
             const handleSubmit = async event => {
                 event.preventDefault();
                 const targetAsset = data.assets.find(asset => asset.id === form.assetId && asset.type === 'Stock');
-                if (!targetAsset) {
-                    setState({ loading: false, message: '종목을 추가할 주식 자산을 선택해주세요.' });
-                    return;
-                }
                 const symbol = String(form.symbol || '').trim().toUpperCase();
+                const symbolKey = getStockSymbolKey(symbol);
                 const quantity = Number(form.quantity || 0);
-                if (!symbol || !Number.isFinite(quantity) || quantity <= 0) {
-                    setState({ loading: false, message: '종목 코드와 0보다 큰 수량을 입력해주세요.' });
+                const unitPrice = Number(form.unitPrice || 0);
+                if (!targetAsset || !form.date || !symbolKey || !Number.isFinite(quantity) || quantity <= 0) {
+                    setState({ loading: false, message: '자산, 거래일, 종목 코드와 수량을 확인해주세요.' });
                     return;
                 }
-                const normalizedSymbol = getKoreanStockCode(symbol) || symbol;
-                const alreadyExists = getStockHoldings(targetAsset).some(holding => (getKoreanStockCode(holding.symbol) || String(holding.symbol || '').toUpperCase()) === normalizedSymbol);
-                if (alreadyExists) {
-                    setState({ loading: false, message: '이미 등록된 종목입니다. 자산 수정에서 수량을 변경해주세요.' });
+
+                const holdings = getStockHoldings(targetAsset);
+                const holdingIndex = holdings.findIndex(holding => getStockSymbolKey(holding.symbol) === symbolKey);
+                const existingHolding = holdingIndex >= 0 ? holdings[holdingIndex] : null;
+                const currentQuantity = Number(existingHolding?.quantity || 0);
+                if (form.type === 'Sell' && (!existingHolding || currentQuantity < quantity)) {
+                    setState({ loading: false, message: `매도 가능 수량은 ${currentQuantity.toLocaleString()}주입니다.` });
                     return;
                 }
-                const apiKey = data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
-                const koreaApiKeys = getKoreaMarketApiKeys(data);
-                setState({ loading: true, message: '전일 종가를 조회하고 있습니다.' });
-                try {
-                    const holding = await fetchStockHoldingValuation(createStockHolding({ symbol, quantity }), apiKey, new Map(), koreaApiKeys);
-                    const holdings = [...getStockHoldings(targetAsset), holding];
-                    const updatedAsset = { ...targetAsset, ...getStockAssetValuationFields(holdings) };
-                    const newData = { ...data, assets: data.assets.map(asset => asset.id === targetAsset.id ? updatedAsset : asset) };
-                    setData(newData);
-                    syncToCloud(newData);
-                    onClose();
-                } catch (error) {
-                    setState({ loading: false, message: error.message });
+
+                setState({ loading: true, message: form.type === 'Buy' && !existingHolding ? '종목 시세를 확인하고 있습니다.' : '거래를 저장하고 있습니다.' });
+                let nextHolding = existingHolding ? { ...existingHolding } : createStockHolding({ symbol, quantity: 0 });
+                if (nextHolding.ledgerBaseQuantity === undefined) nextHolding.ledgerBaseQuantity = currentQuantity;
+
+                if (form.type === 'Buy' && !existingHolding) {
+                    const apiKey = data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
+                    const koreaApiKeys = getKoreaMarketApiKeys(data);
+                    try {
+                        nextHolding = await fetchStockHoldingValuation(createStockHolding({ symbol, quantity: 0.000001 }), apiKey, new Map(), koreaApiKeys);
+                        nextHolding.quantity = 0;
+                        nextHolding.ledgerBaseQuantity = 0;
+                    } catch (_) {
+                        nextHolding = createStockHolding({
+                            symbol: getKoreanStockCode(symbol) ? `${getKoreanStockCode(symbol)}:KRX` : symbol,
+                            quantity: 0,
+                            previousClose: unitPrice > 0 ? unitPrice : '',
+                            currency: getKoreanStockCode(symbol) ? 'KRW' : '',
+                            exchangeRate: 1,
+                            ledgerBaseQuantity: 0
+                        });
+                    }
                 }
+
+                nextHolding.quantity = currentQuantity + (form.type === 'Sell' ? -quantity : quantity);
+                const nextHoldings = [...holdings];
+                if (holdingIndex >= 0) nextHoldings[holdingIndex] = nextHolding;
+                else nextHoldings.push(nextHolding);
+                const transaction = {
+                    id: `stock-tx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                    assetId: targetAsset.id,
+                    type: form.type,
+                    date: form.date,
+                    symbol: nextHolding.symbol || symbol,
+                    quantity,
+                    unitPrice: Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice : 0,
+                    memo: form.memo.trim(),
+                    createdAt: new Date().toISOString()
+                };
+                const updatedAsset = {
+                    ...targetAsset,
+                    startDate: !targetAsset.startDate || form.date < targetAsset.startDate ? form.date : targetAsset.startDate,
+                    ...getStockAssetValuationFields(nextHoldings)
+                };
+                const newData = {
+                    ...data,
+                    stockTransactions: [...(data.stockTransactions || []), transaction],
+                    assets: data.assets.map(asset => asset.id === targetAsset.id ? updatedAsset : asset)
+                };
+                setData(newData);
+                syncToCloud(newData);
+                closeForm();
+            };
+
+            const deleteTransaction = transaction => {
+                if (!confirm(`${transaction.symbol} ${transaction.type === 'Sell' ? '매도' : '매수'} 내역을 삭제하시겠습니까?`)) return;
+                const targetAsset = data.assets.find(asset => asset.id === transaction.assetId && asset.type === 'Stock');
+                if (!targetAsset) return;
+                const remainingTransactions = (data.stockTransactions || []).filter(item => item.id !== transaction.id);
+                const holdings = getStockHoldings(targetAsset);
+                const holdingIndex = holdings.findIndex(holding => getStockSymbolKey(holding.symbol) === getStockSymbolKey(transaction.symbol));
+                if (holdingIndex < 0) return;
+                const holding = holdings[holdingIndex];
+                const recalculatedQuantity = getStockHoldingQuantityAtDate(targetAsset, holding, remainingTransactions);
+                if (recalculatedQuantity < 0) {
+                    alert('이 매수 내역을 삭제하면 보유 수량이 음수가 됩니다. 이후 매도 내역을 먼저 삭제해주세요.');
+                    return;
+                }
+                const nextHoldings = holdings.map((item, index) => index === holdingIndex ? { ...item, quantity: recalculatedQuantity } : item);
+                const updatedAsset = { ...targetAsset, ...getStockAssetValuationFields(nextHoldings) };
+                const newData = {
+                    ...data,
+                    stockTransactions: remainingTransactions,
+                    assets: data.assets.map(asset => asset.id === targetAsset.id ? updatedAsset : asset)
+                };
+                setData(newData);
+                syncToCloud(newData);
             };
 
             return (
-                <div className="asset-modal-overlay">
-                    <div className="asset-modal-panel stock-holding-modal-panel">
-                        <header className="asset-modal-header">
-                            <button type="button" onClick={onClose} aria-label="닫기"><Icon name="x" size={27} /></button>
-                            <h2>주식 추가</h2>
-                            <button type="submit" form="stock-holding-form" className="asset-modal-save" disabled={state.loading || !form.assetId || !form.symbol || Number(form.quantity || 0) <= 0} aria-label="주식 종목 추가"><Icon name="check" size={27} /></button>
-                        </header>
-                        <form id="stock-holding-form" className="asset-modal-form stock-holding-add-form" onSubmit={handleSubmit}>
-                            <div className="stock-holding-add-intro"><Icon name="chart-no-axes-combined" size={22} /><div><strong>보유 종목 등록</strong><small>추가할 주식 자산과 종목을 선택하세요.</small></div></div>
-                            <div className="form-row"><label>주식 자산</label><select value={form.assetId} onChange={e => setForm({ ...form, assetId: e.target.value })} required><option value="">선택</option>{stockAssets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></div>
-                            <div className="form-row"><label>종목 코드</label><input value={form.symbol} onChange={e => setForm({ ...form, symbol: e.target.value.toUpperCase() })} placeholder="예: 329200:KRX, AAPL" autoCapitalize="characters" required autoFocus /></div>
-                            <div className="form-row"><label>보유 수량</label><input type="number" min="0" step="any" inputMode="decimal" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="0" required /></div>
-                            <small className="stock-symbol-help">국내 종목은 6자리 코드, 해외 종목은 Twelve Data 종목 코드를 입력하세요. 저장할 때 전일 종가를 자동 조회합니다.</small>
-                            {state.message && <div className={`stock-holding-add-message ${state.loading ? 'loading' : 'error'}`}>{state.loading && <Icon name="loader-circle" size={15} />}{state.message}</div>}
-                        </form>
+                <div className="asset-page stock-transaction-page fade-in">
+                    <div className="stock-transaction-toolbar">
+                        <button className="asset-back-button" onClick={onBack} aria-label="자산으로 돌아가기"><Icon name="chevron-left" size={21} /></button>
+                        <strong>주식 거래내역</strong>
+                        <span className="stock-transaction-count">{transactions.length}건</span>
                     </div>
+                    <section className="stock-holdings-summary">
+                        {stockAssets.flatMap(asset => getStockHoldings(asset).filter(holding => Number(holding.quantity || 0) > 0).map(holding => (
+                            <div className="stock-holdings-summary-row" key={`${asset.id}-${holding.id}`}>
+                                <span><strong>{holding.stockName || holding.symbol}</strong><small>{asset.name}</small></span>
+                                <b>{Number(holding.quantity || 0).toLocaleString()}주</b>
+                            </div>
+                        )))}
+                        {stockAssets.every(asset => getStockHoldings(asset).every(holding => Number(holding.quantity || 0) <= 0)) && <div className="stock-transaction-empty">매수 내역을 등록하면 보유 종목이 표시됩니다.</div>}
+                    </section>
+                    <section className="stock-transaction-list">
+                        {transactions.map(transaction => {
+                            const asset = data.assets.find(item => item.id === transaction.assetId);
+                            const total = Number(transaction.quantity || 0) * Number(transaction.unitPrice || 0);
+                            return <article className="stock-transaction-card" key={transaction.id}>
+                                <div className="stock-transaction-card-top">
+                                    <span className={`stock-transaction-type ${transaction.type.toLowerCase()}`}>{transaction.type === 'Sell' ? '매도' : '매수'}</span>
+                                    <time>{transaction.date}</time>
+                                    <button type="button" onClick={() => deleteTransaction(transaction)} aria-label="거래 삭제"><Icon name="trash-2" size={17} /></button>
+                                </div>
+                                <div className="stock-transaction-card-main">
+                                    <span><strong>{transaction.symbol}</strong><small>{asset?.name || '삭제된 자산'}{transaction.memo ? ` · ${transaction.memo}` : ''}</small></span>
+                                    <span><b>{Number(transaction.quantity || 0).toLocaleString()}주</b>{transaction.unitPrice > 0 && <small>{hideAssetAmounts ? '금액숨김' : `${Number(transaction.unitPrice).toLocaleString()}원 · ${total.toLocaleString()}원`}</small>}</span>
+                                </div>
+                            </article>;
+                        })}
+                        {transactions.length === 0 && <div className="stock-transaction-empty"><Icon name="trending-up" size={28} /><strong>주식 거래내역이 없습니다</strong><span>매수·매도를 기록하면 보유 수량이 자동으로 계산됩니다.</span></div>}
+                    </section>
+                    <button className="transaction-add-button stock-transaction-add-button" onClick={() => setShowForm(true)} aria-label="주식 거래 추가"><Icon name="plus" size={27} /></button>
+                    {showForm && <div className="asset-modal-overlay">
+                        <div className="asset-modal-panel stock-holding-modal-panel">
+                            <header className="asset-modal-header">
+                                <button type="button" onClick={closeForm} aria-label="닫기"><Icon name="x" size={27} /></button>
+                                <h2>주식 거래 추가</h2>
+                                <button type="submit" form="stock-transaction-form" className="asset-modal-save" disabled={state.loading} aria-label="저장"><Icon name="check" size={27} /></button>
+                            </header>
+                            <form id="stock-transaction-form" className="asset-modal-form stock-holding-add-form" onSubmit={handleSubmit}>
+                                <div className="stock-transaction-type-selector">
+                                    <button type="button" className={form.type === 'Buy' ? 'active buy' : ''} onClick={() => setForm({ ...form, type: 'Buy' })}>매수</button>
+                                    <button type="button" className={form.type === 'Sell' ? 'active sell' : ''} onClick={() => setForm({ ...form, type: 'Sell' })}>매도</button>
+                                </div>
+                                <div className="form-row"><label>주식 자산</label><select value={form.assetId} onChange={e => setForm({ ...form, assetId: e.target.value })} required><option value="">선택</option>{stockAssets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></div>
+                                <div className="form-row"><label>거래일</label><input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required /></div>
+                                <div className="form-row"><label>종목 코드</label><input value={form.symbol} onChange={e => setForm({ ...form, symbol: e.target.value.toUpperCase() })} placeholder="예: 329200:KRX, AAPL" autoCapitalize="characters" required /></div>
+                                <div className="form-row"><label>수량</label><input type="number" min="0" step="any" inputMode="decimal" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="0" required /></div>
+                                <div className="form-row"><label>주당 단가</label><input type="number" min="0" step="any" inputMode="decimal" value={form.unitPrice} onChange={e => setForm({ ...form, unitPrice: e.target.value })} placeholder="선택 입력" /></div>
+                                <div className="form-row"><label>메모</label><input value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} placeholder="선택 입력" /></div>
+                                {state.message && <div className={`stock-holding-add-message ${state.loading ? 'loading' : 'error'}`}>{state.loading && <Icon name="loader-circle" size={15} />}{state.message}</div>}
+                            </form>
+                        </div>
+                    </div>}
                 </div>
             );
         }
@@ -3841,7 +3977,7 @@ service cloud.firestore {
                                             <thead><tr><th>자산명</th><th>우선순위</th><th>소유자</th><th>그룹</th><th>유형</th><th>시작일자</th><th>초기금액</th><th>현재금액</th><th>관리</th></tr></thead>
                                             <tbody>
                                                 {data.assets.slice().sort((a, b) => Number(a.priority || 9999) - Number(b.priority || 9999)).map(a => {
-                                                    const bal = calculateAssetBalance(a.id, data.assets, data.transactions);
+                                                    const bal = calculateAssetBalance(a.id, data.assets, data.transactions, undefined, data.stockTransactions);
                                                     return (
                                                         <tr key={a.id}>
                                                             <td data-label="자산명" className="settings-asset-name-cell">
@@ -3887,6 +4023,7 @@ service cloud.firestore {
                     priority: getGroupPriority(group, index)
                 }));
                 if (!p.budgets) p.budgets = [];
+                if (!p.stockTransactions) p.stockTransactions = [];
                 if (!p.recurringTransactions) p.recurringTransactions = [];
                 if (!p.shoppingItems) p.shoppingItems = [];
                 if (!p.shoppingFavorites) p.shoppingFavorites = [];
