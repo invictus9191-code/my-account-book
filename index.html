@@ -910,6 +910,7 @@
                 return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             });
             const [showMonthPicker, setShowMonthPicker] = useState(false);
+            const [dateRange, setDateRange] = useState({ start: '', end: '' });
             const selectedMonthRef = React.useRef(null);
             const [view, setView] = useState('main'); // main, income_detail, expense_detail, asset_detail, asset_flow_detail, category_list
             const [selectedId, setSelectedId] = useState(null); // categoryId or assetGroupId
@@ -2224,8 +2225,12 @@
             const assetById = useMemo(() => new Map(data.assets.map(asset => [asset.id, asset])), [data.assets]);
             const savingsCategoryIds = useMemo(() => new Set(data.categories.filter(category => category.name.includes('저축')).map(category => category.id)), [data.categories]);
             const isGlobalSearch = searchTerm.trim().length > 0;
+            const isDateRangeActive = Boolean(dateRange.start || dateRange.end);
+            const isAllPeriodView = isGlobalSearch || isDateRangeActive;
             const filteredTransactions = useMemo(() => data.transactions.filter(t => {
-                if (!isGlobalSearch && t.date.substring(0, 7) !== selectedMonth) return false;
+                if (!isAllPeriodView && t.date.substring(0, 7) !== selectedMonth) return false;
+                if (dateRange.start && t.date < dateRange.start) return false;
+                if (dateRange.end && t.date > dateRange.end) return false;
                 if (authorFilter !== 'ALL' && t.authorEmail !== authorFilter) return false;
                 if (!isGlobalSearch) return true;
                 const term = searchTerm.trim().toLowerCase();
@@ -2235,7 +2240,7 @@
                 const toAssetMatch = t.type === 'Transfer' && assetById.get(t.toAssetId)?.name?.toLowerCase().includes(term);
                 const recurringMatch = Boolean(t.recurringId) && '반복 자동 생성 정기'.includes(term);
                 return memoMatch || categoryMatch || assetMatch || toAssetMatch || recurringMatch;
-            }), [data.transactions, isGlobalSearch, selectedMonth, authorFilter, searchTerm, categoryById, assetById]);
+            }), [data.transactions, isGlobalSearch, isAllPeriodView, selectedMonth, dateRange, authorFilter, searchTerm, categoryById, assetById]);
 
             const groupedByDay = filteredTransactions.reduce((acc, t) => {
                 const day = t.date; // YYYY-MM-DD
@@ -2291,11 +2296,12 @@
 
             return (
                 <div className="transaction-page fade-in">
+                    <h1 className="transaction-page-title">거래내역</h1>
                     <section className="transaction-calendar-card">
                         <div className="transaction-toolbar">
                             <button className="transaction-round-button" onClick={() => setTab(backTab)} aria-label="이전 페이지로 돌아가기"><Icon name="chevron-left" size={20} /></button>
-                            <button className="transaction-month-control" onClick={() => setShowMonthPicker(true)} disabled={isGlobalSearch} aria-haspopup="dialog" aria-expanded={showMonthPicker}>
-                                <strong>{isGlobalSearch ? '전체 기간' : `${selectedMonth.split('-')[0]}년 ${Number(selectedMonth.split('-')[1])}월`}</strong>
+                            <button className="transaction-month-control" onClick={() => setShowMonthPicker(true)} disabled={isAllPeriodView} aria-haspopup="dialog" aria-expanded={showMonthPicker}>
+                                <strong>{isDateRangeActive ? '기간 조회' : isGlobalSearch ? '전체 기간' : `${selectedMonth.split('-')[0]}년 ${Number(selectedMonth.split('-')[1])}월`}</strong>
                             </button>
                             <div className="transaction-toolbar-actions">
                                 <div className={`transaction-connection ${isConnected ? 'connected' : 'disconnected'}`} title={isConnected ? 'Firebase 연결됨' : 'Firebase 연결 안 됨'}>
@@ -2309,6 +2315,12 @@
                         </div>
 
                         {showMobileSearch && <TransactionSearchInput value={searchTerm} onChange={setSearchTerm} />}
+                        <div className="transaction-date-range">
+                            <label><span>시작일</span><input type="date" value={dateRange.start} max={dateRange.end || undefined} onChange={event => setDateRange(current => ({ ...current, start: event.target.value }))} /></label>
+                            <span className="transaction-date-range-separator">~</span>
+                            <label><span>종료일</span><input type="date" value={dateRange.end} min={dateRange.start || undefined} onChange={event => setDateRange(current => ({ ...current, end: event.target.value }))} /></label>
+                            {isDateRangeActive && <button type="button" className="transaction-date-range-reset" onClick={() => setDateRange({ start: '', end: '' })} aria-label="거래 기간 초기화"><Icon name="x" size={16} /></button>}
+                        </div>
                     </section>
 
                     {showMonthPicker && (
@@ -2334,8 +2346,15 @@
                         </div>
                     )}
 
-                    {(searchTerm || authorFilter !== 'ALL') && (
+                    {(searchTerm || authorFilter !== 'ALL' || isDateRangeActive) && (
                         <div className="transaction-active-filters">
+                            {isDateRangeActive && (
+                                <div className="transaction-filter-chip">
+                                    <Icon name="calendar-days" size={14} />
+                                    <span>{dateRange.start || '처음'} ~ {dateRange.end || '오늘'}</span>
+                                    <button onClick={() => setDateRange({ start: '', end: '' })}><Icon name="x" size={16} /></button>
+                                </div>
+                            )}
                             {searchTerm && (
                                 <div className="transaction-filter-chip">
                                     <Icon name="filter" size={14} />
@@ -2370,7 +2389,7 @@
                             return (
                                 <section className="transaction-day-group" key={dayStr}>
                                     <header className="transaction-day-header">
-                                        <span>{isGlobalSearch && `${year}년 ${month}월 `}{day}일 {name}</span>
+                                        <span>{isAllPeriodView && `${year}년 ${month}월 `}{day}일 {name}</span>
                                         <div>
                                             {income > 0 && <span className="income">+{income.toLocaleString()}원</span>}
                                             {expense > 0 && <span className="expense">-{expense.toLocaleString()}원</span>}
@@ -2414,7 +2433,7 @@
                             <div className="transaction-empty-state">
                                 <span><Icon name="receipt" size={26} /></span>
                                 <strong>거래 내역이 없습니다</strong>
-                                <p>이 달에 등록된 거래가 아직 없어요.</p>
+                                <p>{isAllPeriodView ? '선택한 조건에 해당하는 거래가 없어요.' : '이 달에 등록된 거래가 아직 없어요.'}</p>
                             </div>
                         )}
                     </div>
@@ -2829,14 +2848,17 @@
                 <div className="asset-page stock-transaction-page fade-in">
                     <div className="stock-transaction-toolbar">
                         <button className="asset-back-button" onClick={onBack} aria-label="자산으로 돌아가기"><Icon name="chevron-left" size={21} /></button>
-                        <strong>주식 거래내역</strong>
+                        <strong>주식</strong>
                         <span className="stock-transaction-count">{transactions.length}건</span>
                     </div>
                     <section className="stock-holdings-summary">
                         {stockAssets.flatMap(asset => getStockHoldings(asset).filter(holding => Number(holding.quantity || 0) > 0).map(holding => (
                             <div className="stock-holdings-summary-row" key={`${asset.id}-${holding.id}`}>
                                 <span><strong>{holding.stockName || holding.symbol}</strong><small>{holding.stockName ? `${holding.symbol} · ${asset.name}` : asset.name}</small></span>
-                                <b>{Number(holding.quantity || 0).toLocaleString()}주</b>
+                                <span className="stock-holdings-summary-value">
+                                    <b>{Number(holding.quantity || 0).toLocaleString()}주</b>
+                                    <small>{hideAssetAmounts ? '금액숨김' : `${getStockHoldingValue(holding).toLocaleString()}원`}</small>
+                                </span>
                             </div>
                         )))}
                         {stockAssets.every(asset => getStockHoldings(asset).every(holding => Number(holding.quantity || 0) <= 0)) && <div className="stock-transaction-empty">매수 내역을 등록하면 보유 종목이 표시됩니다.</div>}

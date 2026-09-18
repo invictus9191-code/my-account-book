@@ -558,6 +558,14 @@ table {
   padding: 18px 0 148px;
 }
 
+.transaction-page-title {
+  margin: 0 0 12px;
+  color: #242a30;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+
 .transaction-calendar-card {
   overflow: hidden;
   margin-bottom: 18px;
@@ -591,6 +599,60 @@ table {
   display: flex;
   align-items: center;
   gap: 7px;
+}
+
+.transaction-date-range {
+  margin: 0 18px 18px;
+  padding: 9px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  border-radius: 17px;
+  background: #f4f6f8;
+}
+
+.transaction-date-range label {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.transaction-date-range label > span {
+  padding-left: 4px;
+  color: #88919a;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.transaction-date-range input {
+  width: 100%;
+  min-width: 0;
+  height: 39px;
+  padding: 0 10px;
+  border: 1px solid #dde2e7;
+  border-radius: 12px;
+  background: #fff;
+  color: #353b42;
+  font-size: 0.78rem;
+}
+
+.transaction-date-range-separator {
+  padding-bottom: 10px;
+  color: #a2a9b0;
+}
+
+.transaction-date-range-reset {
+  width: 39px;
+  height: 39px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 12px;
+  background: #e5e9ed;
+  color: #68717a;
 }
 
 .transaction-connection {
@@ -1977,6 +2039,12 @@ select {
     background: #f8fafc;
   }
 
+  .transaction-page-title {
+    margin: 0 2px 10px;
+    padding-top: 4px;
+    font-size: 1.2rem;
+  }
+
   .transaction-calendar-card {
     margin: 0 -12px 14px;
     border-width: 0 0 1px;
@@ -1995,6 +2063,17 @@ select {
 
   .transaction-inline-search {
     margin: 0 14px 13px;
+  }
+
+  .transaction-date-range {
+    margin: 0 14px 14px;
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .transaction-date-range input {
+    padding: 0 7px;
+    font-size: 0.72rem;
   }
 
   .transaction-month-control {
@@ -3315,6 +3394,17 @@ textarea:focus {
 .stock-transaction-card-main small {
   color: #858e98;
   font-size: 0.7rem;
+}
+
+.stock-holdings-summary-value {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 3px;
+  text-align: right;
+}
+
+.stock-holdings-summary-value small {
+  color: #6f7a84;
 }
 
 .stock-transaction-card {
