@@ -165,7 +165,8 @@
             shoppingItems: [],
             shoppingFavorites: [],
             assetTypes: [],
-            assetTypeLabels: {}
+            assetTypeLabels: {},
+            marketDataApiKey: ''
         };
 
         const getGroupPriority = (group, fallbackIndex = 0) => {
@@ -216,31 +217,130 @@
             }
         };
 
-        const fetchStockValuation = async (asset, apiKey) => {
-            const symbol = String(asset.stockSymbol || '').trim().toUpperCase();
-            const quantity = Number(asset.stockQuantity || 0);
+        const createStockHolding = (overrides = {}) => ({
+            id: overrides.id || `stock-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            symbol: overrides.symbol || '',
+            quantity: overrides.quantity ?? '',
+            currency: overrides.currency || '',
+            previousClose: overrides.previousClose ?? '',
+            exchangeRate: overrides.exchangeRate ?? 1,
+            priceDate: overrides.priceDate || '',
+            quoteUpdatedAt: overrides.quoteUpdatedAt || ''
+        });
+
+        const getStockHoldings = asset => {
+            if (Array.isArray(asset?.stockHoldings) && asset.stockHoldings.length > 0) {
+                return asset.stockHoldings.map((holding, index) => createStockHolding({
+                    ...holding,
+                    id: holding.id || `holding-${asset.id || 'asset'}-${index + 1}`
+                }));
+            }
+            if (asset?.stockSymbol) {
+                return [createStockHolding({
+                    id: `holding-${asset.id || 'legacy'}-1`,
+                    symbol: asset.stockSymbol,
+                    quantity: asset.stockQuantity,
+                    currency: asset.stockCurrency,
+                    previousClose: asset.stockPreviousClose,
+                    exchangeRate: asset.stockExchangeRate,
+                    priceDate: asset.stockPriceDate,
+                    quoteUpdatedAt: asset.stockQuoteUpdatedAt
+                })];
+            }
+            return [];
+        };
+
+        const getStockHoldingValue = holding => Math.round(
+            Number(holding.quantity || 0) * Number(holding.previousClose || 0) * Number(holding.exchangeRate || 1)
+        );
+
+        const getStockAssetValuationFields = holdings => {
+            const first = holdings[0] || {};
+            return {
+                stockHoldings: holdings,
+                initialBalance: holdings.reduce((sum, holding) => sum + getStockHoldingValue(holding), 0),
+                // 첫 종목 필드는 기존 데이터 및 이전 버전과의 호환을 위해 유지합니다.
+                stockSymbol: first.symbol || '',
+                stockQuantity: Number(first.quantity || 0),
+                stockCurrency: first.currency || '',
+                stockPreviousClose: Number(first.previousClose || 0),
+                stockExchangeRate: Number(first.exchangeRate || 1),
+                stockPriceDate: first.priceDate || '',
+                stockQuoteUpdatedAt: first.quoteUpdatedAt || ''
+            };
+        };
+
+        const fetchStockHoldingValuation = async (holding, apiKey, exchangeRateCache = null) => {
+            const symbol = String(holding.symbol || '').trim().toUpperCase();
+            const quantity = Number(holding.quantity || 0);
             if (!symbol) throw new Error('종목 코드를 입력해주세요.');
             if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('수량을 0보다 크게 입력해주세요.');
             const quote = await fetchTwelveDataJson('quote', { symbol }, apiKey);
             const previousClose = Number(quote.previous_close);
             if (!Number.isFinite(previousClose) || previousClose <= 0) throw new Error('전일 종가를 확인할 수 없습니다. 종목 코드를 확인해주세요.');
-            const currency = String(quote.currency || asset.stockCurrency || 'KRW').toUpperCase();
+            const currency = String(quote.currency || holding.currency || 'KRW').toUpperCase();
             let exchangeRate = 1;
             if (currency !== 'KRW') {
-                const exchange = await fetchTwelveDataJson('exchange_rate', { symbol: `${currency}/KRW` }, apiKey);
-                exchangeRate = Number(exchange.rate);
-                if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) throw new Error(`${currency}/KRW 환율을 확인할 수 없습니다.`);
+                if (exchangeRateCache?.has(currency)) {
+                    exchangeRate = exchangeRateCache.get(currency);
+                } else {
+                    const exchange = await fetchTwelveDataJson('exchange_rate', { symbol: `${currency}/KRW` }, apiKey);
+                    exchangeRate = Number(exchange.rate);
+                    if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) throw new Error(`${currency}/KRW 환율을 확인할 수 없습니다.`);
+                    if (exchangeRateCache) exchangeRateCache.set(currency, exchangeRate);
+                }
             }
             return {
-                stockSymbol: symbol,
-                stockQuantity: quantity,
-                stockCurrency: currency,
-                stockPreviousClose: previousClose,
-                stockExchangeRate: exchangeRate,
-                stockPriceDate: quote.datetime ? String(quote.datetime).substring(0, 10) : '',
-                stockQuoteUpdatedAt: new Date().toISOString(),
-                initialBalance: Math.round(quantity * previousClose * exchangeRate)
+                ...holding,
+                symbol,
+                quantity,
+                currency,
+                previousClose,
+                exchangeRate,
+                priceDate: quote.datetime ? String(quote.datetime).substring(0, 10) : '',
+                quoteUpdatedAt: new Date().toISOString()
             };
+        };
+
+        const refreshStockAssetQuotes = async (data, apiKey, force = false) => {
+            const stockAssets = data.assets.filter(asset => asset.type === 'Stock' && getStockHoldings(asset).some(holding => holding.symbol && Number(holding.quantity || 0) > 0));
+            if (stockAssets.length === 0) return { newData: data, stockAssetCount: 0, refreshedCount: 0, failures: [], changed: false, hasTargets: false };
+            const hasTargets = stockAssets.some(asset => getStockHoldings(asset).some(holding => {
+                const updatedAt = new Date(holding.quoteUpdatedAt || '').getTime();
+                return force || !Number.isFinite(updatedAt) || Date.now() - updatedAt >= STOCK_QUOTE_MAX_AGE_MS;
+            }));
+            if (!hasTargets) return { newData: data, stockAssetCount: stockAssets.length, refreshedCount: 0, failures: [], changed: false, hasTargets: false };
+
+            const updates = new Map();
+            const failures = [];
+            const exchangeRateCache = new Map();
+            let refreshedCount = 0;
+            for (const asset of stockAssets) {
+                const holdings = getStockHoldings(asset);
+                const refreshedHoldings = [];
+                let assetChanged = !Array.isArray(asset.stockHoldings);
+                for (const holding of holdings) {
+                    const updatedAt = new Date(holding.quoteUpdatedAt || '').getTime();
+                    const shouldRefresh = force || !Number.isFinite(updatedAt) || Date.now() - updatedAt >= STOCK_QUOTE_MAX_AGE_MS;
+                    if (!shouldRefresh) {
+                        refreshedHoldings.push(holding);
+                        continue;
+                    }
+                    try {
+                        refreshedHoldings.push(await fetchStockHoldingValuation(holding, apiKey, exchangeRateCache));
+                        refreshedCount += 1;
+                        assetChanged = true;
+                    } catch (error) {
+                        refreshedHoldings.push(holding);
+                        failures.push(`${asset.name} · ${holding.symbol}: ${error.message}`);
+                    }
+                }
+                if (assetChanged) updates.set(asset.id, { ...asset, ...getStockAssetValuationFields(refreshedHoldings) });
+            }
+            const newData = updates.size > 0
+                ? { ...data, assets: data.assets.map(asset => updates.get(asset.id) || asset) }
+                : data;
+            return { newData, stockAssetCount: stockAssets.length, refreshedCount, failures, changed: updates.size > 0, hasTargets: true };
         };
 
         const isIosDevice = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -345,8 +445,9 @@
             if (!asset) return 0;
             if (!isAssetActiveOn(asset, upToDate)) return 0;
             if (asset.type === 'RealEstate') return Number(asset.initialBalance || 0) - calculateAssetDebt(asset, transactions, upToDate);
-            if (asset.type === 'Stock' && Number(asset.stockQuantity || 0) > 0 && Number(asset.stockPreviousClose || 0) > 0) {
-                return Math.round(Number(asset.stockQuantity) * Number(asset.stockPreviousClose) * Number(asset.stockExchangeRate || 1));
+            if (asset.type === 'Stock') {
+                const holdings = getStockHoldings(asset);
+                if (holdings.length > 0) return holdings.reduce((sum, holding) => sum + getStockHoldingValue(holding), 0);
             }
             const history = transactions.filter(t => {
                 const match = t.assetId === assetId || t.toAssetId === assetId;
@@ -2220,39 +2321,28 @@
             const [stockRefreshState, setStockRefreshState] = useState({ loading: false, message: '' });
 
             const refreshStockPrices = async (force = false) => {
-                const stockAssets = data.assets.filter(asset => asset.type === 'Stock' && asset.stockSymbol && Number(asset.stockQuantity || 0) > 0);
-                if (stockAssets.length === 0) return;
-                const apiKey = localStorage.getItem(TWELVE_DATA_API_KEY) || '';
+                const apiKey = data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
                 if (!apiKey) {
                     setStockRefreshState({ loading: false, message: '설정에서 시장 데이터 API 키를 등록해주세요.' });
                     return;
                 }
-                const targets = stockAssets.filter(asset => {
-                    const updatedAt = new Date(asset.stockQuoteUpdatedAt || '').getTime();
-                    return force || !Number.isFinite(updatedAt) || Date.now() - updatedAt >= STOCK_QUOTE_MAX_AGE_MS;
-                });
-                if (targets.length === 0) {
+                setStockRefreshState({ loading: true, message: '전일 종가와 환율을 확인하고 있습니다.' });
+                const result = await refreshStockAssetQuotes(data, apiKey, force);
+                if (result.stockAssetCount === 0) {
+                    setStockRefreshState({ loading: false, message: '' });
+                    return;
+                }
+                if (!result.hasTargets) {
                     setStockRefreshState({ loading: false, message: '전일 종가가 최신 상태입니다.' });
                     return;
                 }
-                setStockRefreshState({ loading: true, message: '전일 종가와 환율을 확인하고 있습니다.' });
-                const updates = new Map();
-                const failures = [];
-                for (const asset of targets) {
-                    try {
-                        updates.set(asset.id, await fetchStockValuation(asset, apiKey));
-                    } catch (error) {
-                        failures.push(`${asset.name}: ${error.message}`);
-                    }
-                }
-                if (updates.size > 0) {
-                    const newData = { ...data, assets: data.assets.map(asset => updates.has(asset.id) ? { ...asset, ...updates.get(asset.id) } : asset) };
-                    setData(newData);
-                    syncToCloud(newData);
+                if (result.changed) {
+                    setData(result.newData);
+                    syncToCloud(result.newData);
                 }
                 setStockRefreshState({
                     loading: false,
-                    message: failures.length > 0 ? `${updates.size}개 갱신 · ${failures[0]}` : `${updates.size}개 종목의 평가금을 갱신했습니다.`
+                    message: result.failures.length > 0 ? `${result.refreshedCount}개 갱신 · ${result.failures[0]}` : `${result.refreshedCount}개 종목의 평가금을 갱신했습니다.`
                 });
             };
 
@@ -2421,7 +2511,6 @@
                         {data.assets.some(asset => asset.type === 'Stock') && (
                             <div className="asset-stock-sync">
                                 <span>{stockRefreshState.message || '주식은 전일 종가와 원화 환율 기준입니다.'}</span>
-                                <button type="button" onClick={() => refreshStockPrices(true)} disabled={stockRefreshState.loading}>{stockRefreshState.loading ? '조회 중' : '시세 갱신'}</button>
                             </div>
                         )}
                     </div>
@@ -2440,11 +2529,12 @@
                                     {g.assets.map(a => {
                                         const bal = calculateAssetBalance(a.id, data.assets, data.transactions);
                                         const debt = calculateAssetDebt(a, data.transactions);
+                                        const stockHoldings = a.type === 'Stock' ? getStockHoldings(a) : [];
                                         return (
                                             <div key={a.id} onClick={() => { setSearchTerm(a.name); setTab('transactions'); }} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 1rem', background: 'rgba(9, 105, 218, 0.1)', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s' }} className="list-item">
                                                 <span className="asset-list-copy">
                                                     <span>{a.name}<Icon name="chevron-right" size={14} style={{ color: '#58a6ff', opacity: 0.7 }} /></span>
-                                                    {a.type === 'Stock' && <small>{a.stockSymbol} · {Number(a.stockQuantity || 0).toLocaleString()}주 · 전일 {Number(a.stockPreviousClose || 0).toLocaleString()} {a.stockCurrency || ''}</small>}
+                                                    {a.type === 'Stock' && <small>{stockHoldings.length}개 종목 · {stockHoldings.slice(0, 3).map(holding => `${holding.symbol} ${Number(holding.quantity || 0).toLocaleString()}주`).join(' · ')}{stockHoldings.length > 3 ? ` 외 ${stockHoldings.length - 3}개` : ''}</small>}
                                                 </span>
                                                 <span className="asset-amount-stack"><b>{hideAssetAmounts ? '금액숨김' : `${bal.toLocaleString()}원`}</b>{a.type === 'RealEstate' && debt > 0 && <small>{hideAssetAmounts ? '금액숨김' : `부채 ${debt.toLocaleString()}원`}</small>}</span>
                                             </div>
@@ -2464,30 +2554,71 @@
                 if (editItem) {
                     return {
                         ...editItem,
+                        stockHoldings: editItem.type === 'Stock' ? (getStockHoldings(editItem).length > 0 ? getStockHoldings(editItem) : [createStockHolding()]) : editItem.stockHoldings,
                         currentDebt: calculateAssetDebt(editItem, data.transactions),
                         priority: editItem.priority !== undefined ? editItem.priority : ''
                     };
                 }
-                return { name: '', ownerId: data.owners[0]?.id || '', groupId: sortGroupsByPriority(data.groups)[0]?.id || '', type: 'Cash', initialBalance: 0, priority: '', startDate: formatLocalDate(new Date()) };
+                return { name: '', ownerId: data.owners[0]?.id || '', groupId: sortGroupsByPriority(data.groups)[0]?.id || '', type: 'Cash', initialBalance: 0, priority: '', startDate: formatLocalDate(new Date()), stockHoldings: [createStockHolding()] };
             });
             const [stockQuoteState, setStockQuoteState] = useState({ loading: false, message: '' });
 
-            const loadStockValuation = async () => {
-                const apiKey = localStorage.getItem(TWELVE_DATA_API_KEY) || '';
+            const updateStockHolding = (holdingId, changes) => {
+                setForm(current => ({
+                    ...current,
+                    stockHoldings: getStockHoldings(current).map(holding => holding.id === holdingId ? { ...holding, ...changes } : holding)
+                }));
+            };
+
+            const addStockHolding = () => {
+                setForm(current => ({ ...current, stockHoldings: [...getStockHoldings(current), createStockHolding()] }));
+            };
+
+            const removeStockHolding = holdingId => {
+                setForm(current => {
+                    const remaining = getStockHoldings(current).filter(holding => holding.id !== holdingId);
+                    return { ...current, stockHoldings: remaining.length > 0 ? remaining : [createStockHolding()] };
+                });
+            };
+
+            const loadStockValuation = async (force = true) => {
+                const apiKey = data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
                 if (!apiKey) {
                     setStockQuoteState({ loading: false, message: '설정에서 Twelve Data API 키를 먼저 등록해주세요.' });
                     return null;
                 }
-                setStockQuoteState({ loading: true, message: '전일 종가와 환율을 조회하고 있습니다.' });
-                try {
-                    const valuation = await fetchStockValuation(form, apiKey);
-                    setForm(current => ({ ...current, ...valuation }));
-                    setStockQuoteState({ loading: false, message: `${valuation.stockPriceDate || '최근 거래일'} 전일 종가 기준으로 계산했습니다.` });
-                    return valuation;
-                } catch (error) {
-                    setStockQuoteState({ loading: false, message: error.message });
+                const holdings = getStockHoldings(form);
+                if (holdings.length === 0 || holdings.some(holding => !String(holding.symbol || '').trim() || Number(holding.quantity || 0) <= 0)) {
+                    setStockQuoteState({ loading: false, message: '모든 종목의 코드와 수량을 입력해주세요.' });
                     return null;
                 }
+                setStockQuoteState({ loading: true, message: `${holdings.length}개 종목의 전일 종가와 환율을 조회하고 있습니다.` });
+                const evaluatedHoldings = [];
+                const failures = [];
+                const exchangeRateCache = new Map();
+                for (const holding of holdings) {
+                    const quoteUpdatedAt = new Date(holding.quoteUpdatedAt || '').getTime();
+                    const hasFreshQuote = Number(holding.previousClose || 0) > 0 && Number.isFinite(quoteUpdatedAt) && Date.now() - quoteUpdatedAt < STOCK_QUOTE_MAX_AGE_MS;
+                    if (!force && hasFreshQuote) {
+                        evaluatedHoldings.push({ ...holding, symbol: String(holding.symbol).trim().toUpperCase(), quantity: Number(holding.quantity) });
+                        continue;
+                    }
+                    try {
+                        evaluatedHoldings.push(await fetchStockHoldingValuation(holding, apiKey, exchangeRateCache));
+                    } catch (error) {
+                        evaluatedHoldings.push(holding);
+                        failures.push(`${holding.symbol}: ${error.message}`);
+                    }
+                }
+                const valuation = getStockAssetValuationFields(evaluatedHoldings);
+                setForm(current => ({ ...current, ...valuation }));
+                if (failures.length > 0) {
+                    setStockQuoteState({ loading: false, message: failures[0] });
+                    return null;
+                }
+                const priceDates = [...new Set(evaluatedHoldings.map(holding => holding.priceDate).filter(Boolean))];
+                setStockQuoteState({ loading: false, message: `${evaluatedHoldings.length}개 종목 · ${priceDates.length === 1 ? priceDates[0] : '최근 거래일'} 전일 종가 기준으로 계산했습니다.` });
+                return valuation;
             };
 
             const handleSubmit = async (e) => {
@@ -2496,22 +2627,18 @@
                 if (editItem?.type === 'RealEstate' && form.type !== 'RealEstate' && data.transactions.some(t => t.loanAssetId === editItem.id)) { alert('상환 거래가 연결된 자산은 유형을 변경할 수 없습니다.'); return; }
                 let preparedForm = { ...form };
                 if (form.type === 'Stock') {
-                    if (!String(form.stockSymbol || '').trim() || Number(form.stockQuantity || 0) <= 0) {
-                        alert('주식 종목 코드와 수량을 입력해주세요.');
+                    const holdings = getStockHoldings(form);
+                    if (holdings.length === 0 || holdings.some(holding => !String(holding.symbol || '').trim() || Number(holding.quantity || 0) <= 0)) {
+                        alert('모든 주식 종목의 코드와 수량을 입력해주세요.');
                         return;
                     }
-                    const quoteUpdatedAt = new Date(form.stockQuoteUpdatedAt || '').getTime();
-                    const hasFreshQuote = Number(form.stockPreviousClose || 0) > 0 && Number.isFinite(quoteUpdatedAt) && Date.now() - quoteUpdatedAt < STOCK_QUOTE_MAX_AGE_MS;
-                    const valuation = hasFreshQuote ? {
-                        stockSymbol: String(form.stockSymbol).trim().toUpperCase(),
-                        stockQuantity: Number(form.stockQuantity),
-                        stockCurrency: form.stockCurrency || 'KRW',
-                        stockPreviousClose: Number(form.stockPreviousClose),
-                        stockExchangeRate: Number(form.stockExchangeRate || 1),
-                        stockPriceDate: form.stockPriceDate || '',
-                        stockQuoteUpdatedAt: form.stockQuoteUpdatedAt,
-                        initialBalance: Math.round(Number(form.stockQuantity) * Number(form.stockPreviousClose) * Number(form.stockExchangeRate || 1))
-                    } : await loadStockValuation();
+                    const allFresh = holdings.every(holding => {
+                        const quoteUpdatedAt = new Date(holding.quoteUpdatedAt || '').getTime();
+                        return Number(holding.previousClose || 0) > 0 && Number.isFinite(quoteUpdatedAt) && Date.now() - quoteUpdatedAt < STOCK_QUOTE_MAX_AGE_MS;
+                    });
+                    const valuation = allFresh
+                        ? getStockAssetValuationFields(holdings.map(holding => ({ ...holding, symbol: String(holding.symbol).trim().toUpperCase(), quantity: Number(holding.quantity) })))
+                        : await loadStockValuation(false);
                     if (!valuation) return;
                     preparedForm = { ...preparedForm, ...valuation };
                 }
@@ -2543,7 +2670,14 @@
                             <button type="submit" form="asset-form" className="asset-modal-save" disabled={!form.name || !form.ownerId || stockQuoteState.loading} aria-label="저장"><Icon name="check" size={27} /></button>
                         </header>
                         <form id="asset-form" className="asset-modal-form" onSubmit={handleSubmit}>
-                            <div className="form-row asset-type-row"><label>자산 유형</label><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>{getAssetTypes(data).map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
+                            <div className="form-row asset-type-row"><label>자산 유형</label><select value={form.type} onChange={e => {
+                                const nextType = e.target.value;
+                                setForm(current => ({
+                                    ...current,
+                                    type: nextType,
+                                    stockHoldings: nextType === 'Stock' && getStockHoldings(current).length === 0 ? [createStockHolding()] : current.stockHoldings
+                                }));
+                            }}>{getAssetTypes(data).map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
                             <div className="form-row asset-name-row"><label className="sr-only">자산 이름</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="자산 이름" autoFocus required /></div>
                             <div className="asset-extra-fields">
                             <div className="form-row"><label>우선순위</label><input type="number" value={form.priority !== undefined ? form.priority : ''} onChange={e => setForm({ ...form, priority: e.target.value })} placeholder="예: 1 (낮은 숫자 우선)" /></div>
@@ -2552,15 +2686,34 @@
                             <div className="form-row"><label>시작일자</label><input type="date" value={form.startDate || ''} onChange={e => setForm({ ...form, startDate: e.target.value })} /></div>
                             {form.type === 'Stock' ? (
                                 <div className="asset-stock-fields">
-                                    <div className="form-row"><label>종목 코드</label><input value={form.stockSymbol || ''} onChange={e => setForm({ ...form, stockSymbol: e.target.value.toUpperCase(), stockPreviousClose: '', stockQuoteUpdatedAt: '' })} placeholder="예: AAPL, 005930:KRX" autoCapitalize="characters" /></div>
-                                    <small className="stock-symbol-help">Twelve Data에서 사용하는 종목 코드를 입력해주세요. 해외 종목은 거래소를 포함한 코드가 필요할 수 있습니다.</small>
-                                    <div className="form-row"><label>수량</label><input type="number" min="0" step="any" inputMode="decimal" value={form.stockQuantity ?? ''} onChange={e => setForm({ ...form, stockQuantity: e.target.value })} placeholder="보유 수량" /></div>
-                                    <button type="button" className="stock-quote-button" onClick={loadStockValuation} disabled={stockQuoteState.loading}>{stockQuoteState.loading ? '조회 중…' : '전일 종가로 평가금 계산'}</button>
-                                    {(form.stockPreviousClose || stockQuoteState.message) && (
+                                    <div className="asset-stock-heading">
+                                        <div><strong>보유 종목</strong><small>Twelve Data 종목 코드와 보유 수량을 입력하세요.</small></div>
+                                        <button type="button" onClick={addStockHolding}><Icon name="plus" size={16} /> 종목 추가</button>
+                                    </div>
+                                    <div className="asset-stock-holding-list">
+                                        {getStockHoldings(form).map((holding, index) => (
+                                            <div className="asset-stock-holding-card" key={holding.id}>
+                                                <div className="asset-stock-holding-header">
+                                                    <strong>종목 {index + 1}</strong>
+                                                    {getStockHoldings(form).length > 1 && <button type="button" onClick={() => removeStockHolding(holding.id)} aria-label={`${index + 1}번째 종목 삭제`}><Icon name="trash-2" size={16} /></button>}
+                                                </div>
+                                                <label><span>종목 코드</span><input value={holding.symbol || ''} onChange={e => updateStockHolding(holding.id, { symbol: e.target.value.toUpperCase(), previousClose: '', quoteUpdatedAt: '', priceDate: '' })} placeholder="예: AAPL, 005930:KRX" autoCapitalize="characters" /></label>
+                                                <label><span>수량</span><input type="number" min="0" step="any" inputMode="decimal" value={holding.quantity ?? ''} onChange={e => updateStockHolding(holding.id, { quantity: e.target.value })} placeholder="보유 수량" /></label>
+                                                {Number(holding.previousClose || 0) > 0 && (
+                                                    <div className="asset-stock-holding-value">
+                                                        <span>{holding.priceDate || '최근 거래일'} 전일 종가 {Number(holding.previousClose).toLocaleString()} {holding.currency || ''}</span>
+                                                        <strong>{getStockHoldingValue(holding).toLocaleString()}원</strong>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <small className="stock-symbol-help">해외 종목은 거래소를 포함한 코드가 필요할 수 있습니다. 종목 수에 따라 API 조회 시간이 늘어날 수 있습니다.</small>
+                                    <button type="button" className="stock-quote-button" onClick={() => loadStockValuation(true)} disabled={stockQuoteState.loading}>{stockQuoteState.loading ? '조회 중…' : '전체 종목 평가금 계산'}</button>
+                                    {(getStockHoldings(form).some(holding => Number(holding.previousClose || 0) > 0) || stockQuoteState.message) && (
                                         <div className="asset-stock-valuation">
-                                            <span>평가금</span>
-                                            <strong>{form.stockPreviousClose ? `${Math.round(Number(form.stockQuantity || 0) * Number(form.stockPreviousClose) * Number(form.stockExchangeRate || 1)).toLocaleString()}원` : '조회 필요'}</strong>
-                                            {form.stockPreviousClose && <small>전일 종가 {Number(form.stockPreviousClose).toLocaleString()} {form.stockCurrency || ''} × {Number(form.stockQuantity || 0).toLocaleString()}주{form.stockCurrency && form.stockCurrency !== 'KRW' ? ` × 환율 ${Number(form.stockExchangeRate || 0).toLocaleString()}` : ''}</small>}
+                                            <span>전체 평가금</span>
+                                            <strong>{getStockHoldings(form).some(holding => Number(holding.previousClose || 0) > 0) ? `${getStockHoldings(form).reduce((sum, holding) => sum + getStockHoldingValue(holding), 0).toLocaleString()}원` : '조회 필요'}</strong>
                                             {stockQuoteState.message && <small className={stockQuoteState.message.includes('계산했습니다') ? 'success' : 'error'}>{stockQuoteState.message}</small>}
                                         </div>
                                     )}
@@ -2933,7 +3086,8 @@
         function Settings({ data, setData, fbConfig, setFbConfig, syncToCloud, user, isConnected, setTab }) {
             const [fbVal, setFbVal] = useState(fbConfig ? JSON.stringify(fbConfig, null, 2) : '');
             const [newPw, setNewPw] = useState('');
-            const [marketApiKey, setMarketApiKey] = useState(() => localStorage.getItem(TWELVE_DATA_API_KEY) || '');
+            const [marketApiKey, setMarketApiKey] = useState(() => data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '');
+            const [marketRefreshState, setMarketRefreshState] = useState({ loading: false, message: '' });
             const [activeTab, setActiveTab] = useState('general'); // general, owners, groups, categories, assets, authors
 
             // State for management tabs
@@ -2956,6 +3110,10 @@
                 if (activeTab !== 'general') setActiveTab('general');
                 else setTab('home');
             });
+
+            useEffect(() => {
+                setMarketApiKey(data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '');
+            }, [data.marketDataApiKey]);
 
             const saveFb = async () => {
                 try {
@@ -2981,13 +3139,60 @@
                     alert('Twelve Data API 키를 입력해주세요.');
                     return;
                 }
-                localStorage.setItem(TWELVE_DATA_API_KEY, value);
+                if (!isConnected) {
+                    if (data.marketDataApiKey) {
+                        setMarketApiKey(data.marketDataApiKey);
+                        alert('공용 API 키를 변경하려면 Firebase에 로그인해주세요.');
+                        return;
+                    }
+                    localStorage.setItem(TWELVE_DATA_API_KEY, value);
+                    setMarketApiKey(value);
+                    alert('API 키를 임시 저장했습니다. Firebase 로그인 후 공용 설정으로 자동 이전됩니다.');
+                    return;
+                }
+                const newData = { ...data, marketDataApiKey: value };
+                setData(newData);
+                syncToCloud(newData);
+                localStorage.removeItem(TWELVE_DATA_API_KEY);
                 setMarketApiKey(value);
-                alert('시장 데이터 API 키가 이 브라우저에 저장되었습니다.');
+                const sharedId = localStorage.getItem(SHARED_ID_KEY);
+                alert(sharedId
+                    ? '시장 데이터 API 키가 공용 설정에 저장되었습니다. 같은 공유 ID 사용자는 별도 입력 없이 이용할 수 있습니다.'
+                    : '시장 데이터 API 키가 개인 클라우드 설정에 저장되었습니다. 다른 사용자와 함께 사용하려면 동일한 공유 ID를 설정해주세요.');
             };
             const clearMarketApiKey = () => {
+                if (data.marketDataApiKey && !isConnected) {
+                    alert('공용 API 키를 삭제하려면 Firebase에 로그인해주세요.');
+                    return;
+                }
+                const newData = { ...data, marketDataApiKey: '' };
+                setData(newData);
+                syncToCloud(newData);
                 localStorage.removeItem(TWELVE_DATA_API_KEY);
                 setMarketApiKey('');
+            };
+            const refreshMarketPrices = async () => {
+                const apiKey = marketApiKey.trim() || data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
+                if (!apiKey) {
+                    setMarketRefreshState({ loading: false, message: 'Twelve Data API 키를 먼저 입력해주세요.' });
+                    return;
+                }
+                setMarketRefreshState({ loading: true, message: '전체 종목의 전일 종가와 환율을 확인하고 있습니다.' });
+                const result = await refreshStockAssetQuotes(data, apiKey, true);
+                if (result.stockAssetCount === 0) {
+                    setMarketRefreshState({ loading: false, message: '시세를 갱신할 주식 종목이 없습니다.' });
+                    return;
+                }
+                if (result.changed) {
+                    setData(result.newData);
+                    syncToCloud(result.newData);
+                }
+                setMarketRefreshState({
+                    loading: false,
+                    message: result.failures.length > 0
+                        ? `${result.refreshedCount}개 갱신 · ${result.failures[0]}`
+                        : `${result.refreshedCount}개 종목의 시세를 갱신했습니다.`
+                });
             };
 
             const saveSharedId = () => {
@@ -3184,12 +3389,14 @@
                                         </div>
                                         <div className="settings-section">
                                             <h3>📈 주식 시장 데이터</h3>
-                                            <p style={{ color: '#8b949e', fontSize: '0.8rem', lineHeight: 1.5, marginBottom: '0.5rem' }}>Twelve Data API 키를 사용해 전일 종가와 원화 환율을 조회합니다. 키는 공유 데이터에 포함되지 않고 현재 브라우저에만 저장됩니다.</p>
+                                            <p style={{ color: '#8b949e', fontSize: '0.8rem', lineHeight: 1.5, marginBottom: '0.5rem' }}>Twelve Data API 키를 공용 데이터에 저장해 전일 종가와 원화 환율을 조회합니다. 자동 시세는 12시간마다 갱신되며, 같은 공유 ID 사용자는 이 키를 함께 사용합니다.</p>
                                             <div className="settings-inline-form settings-market-api-form">
                                                 <input type="password" value={marketApiKey} onChange={e => setMarketApiKey(e.target.value)} placeholder="Twelve Data API 키" autoComplete="off" />
+                                                <button type="button" onClick={refreshMarketPrices} disabled={marketRefreshState.loading}>{marketRefreshState.loading ? '조회 중…' : '시세 갱신'}</button>
                                                 <button className="primary" onClick={saveMarketApiKey}>저장</button>
                                                 {marketApiKey && <button onClick={clearMarketApiKey}>삭제</button>}
                                             </div>
+                                            {marketRefreshState.message && <p className="settings-market-refresh-status">{marketRefreshState.message}</p>}
                                             <a className="settings-market-api-link" href="https://twelvedata.com/" target="_blank" rel="noopener noreferrer">Twelve Data에서 API 키 발급받기</a>
                                         </div>
                                         <div className="settings-section">
@@ -3470,6 +3677,7 @@ service cloud.firestore {
                 if (!p.shoppingFavorites) p.shoppingFavorites = [];
                 if (!p.assetTypes) p.assetTypes = [];
                 if (!p.assetTypeLabels) p.assetTypeLabels = {};
+                if (!p.marketDataApiKey) p.marketDataApiKey = '';
                 if (p.assets) p.assets = p.assets.map(a => ({
                     ...a,
                     initialBalance: a.initialBalance !== undefined ? a.initialBalance : 0,
@@ -3596,10 +3804,25 @@ service cloud.firestore {
                             if (!d.exists) {
                                 // 클라우드에 데이터가 없으면 최초 1회 로컬 데이터를 업로드
                                 const currentLocalData = JSON.parse(localStorage.getItem(STORAGE_KEY) || JSON.stringify(initialData));
-                                docRef.set(currentLocalData).catch(err => console.error("Initial Sync Fail:", err));
-                                setData(currentLocalData);
+                                const legacyMarketApiKey = localStorage.getItem(TWELVE_DATA_API_KEY) || '';
+                                const initialCloudData = legacyMarketApiKey
+                                    ? { ...currentLocalData, marketDataApiKey: legacyMarketApiKey }
+                                    : currentLocalData;
+                                docRef.set(initialCloudData).then(() => {
+                                    if (legacyMarketApiKey) localStorage.removeItem(TWELVE_DATA_API_KEY);
+                                }).catch(err => console.error("Initial Sync Fail:", err));
+                                setData(initialCloudData);
                             } else {
-                                const cloudData = d.data();
+                                let cloudData = d.data();
+                                const legacyMarketApiKey = localStorage.getItem(TWELVE_DATA_API_KEY) || '';
+                                if (!cloudData.marketDataApiKey && legacyMarketApiKey) {
+                                    cloudData = { ...cloudData, marketDataApiKey: legacyMarketApiKey };
+                                    docRef.set({ marketDataApiKey: legacyMarketApiKey }, { merge: true }).then(() => {
+                                        localStorage.removeItem(TWELVE_DATA_API_KEY);
+                                    }).catch(err => console.error("Market API Key Migration Fail:", err));
+                                } else if (cloudData.marketDataApiKey && legacyMarketApiKey) {
+                                    localStorage.removeItem(TWELVE_DATA_API_KEY);
+                                }
                                 // 클라우드 데이터를 기준으로 상태 업데이트 (Source of Truth)
                                 setData(prev => {
                                     if (JSON.stringify(prev) !== JSON.stringify(cloudData)) {

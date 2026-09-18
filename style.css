@@ -2927,6 +2927,120 @@ textarea:focus {
   gap: 12px;
 }
 
+.asset-stock-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.asset-stock-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.asset-stock-heading strong {
+  color: #263849;
+  font-size: 0.9rem;
+}
+
+.asset-stock-heading small {
+  color: #7f8993;
+  font-size: 0.68rem;
+}
+
+.asset-stock-heading button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid #cce5f8;
+  border-radius: 13px;
+  background: #edf7ff;
+  color: #1679c4;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.asset-stock-holding-list {
+  display: grid;
+  gap: 10px;
+}
+
+.asset-stock-holding-card {
+  padding: 13px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, 0.58fr);
+  gap: 10px;
+  border: 1px solid #dce8f1;
+  border-radius: 18px;
+  background: #f8fbfd;
+}
+
+.asset-stock-holding-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.asset-stock-holding-header strong {
+  color: #40566b;
+  font-size: 0.78rem;
+}
+
+.asset-stock-holding-header button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #fff0f1;
+  color: #c94451;
+}
+
+.asset-stock-holding-card label {
+  display: grid;
+  gap: 5px;
+}
+
+.asset-stock-holding-card label span {
+  color: #748697;
+  font-size: 0.68rem;
+}
+
+.asset-stock-holding-card input {
+  width: 100%;
+  min-width: 0;
+  background: #fff;
+}
+
+.asset-stock-holding-value {
+  grid-column: 1 / -1;
+  padding-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid #e2ebf2;
+}
+
+.asset-stock-holding-value span {
+  color: #748697;
+  font-size: 0.68rem;
+}
+
+.asset-stock-holding-value strong {
+  flex: 0 0 auto;
+  color: #1679c4;
+  font-size: 0.82rem;
+}
+
 .stock-symbol-help {
   margin-top: -6px;
   color: #7f8993;
@@ -2971,6 +3085,20 @@ textarea:focus {
 
 .asset-stock-valuation small.error {
   color: #c94451;
+}
+
+@media (max-width: 480px) {
+  .asset-stock-heading {
+    align-items: flex-end;
+  }
+
+  .asset-stock-heading > div small {
+    max-width: 180px;
+  }
+
+  .asset-stock-holding-card {
+    grid-template-columns: minmax(0, 1fr) 110px;
+  }
 }
 
 .asset-back-button,
@@ -3573,6 +3701,13 @@ textarea:focus {
   color: #188fe7;
   font-size: 0.76rem;
   font-weight: 700;
+}
+
+.settings-market-refresh-status {
+  margin-top: 9px;
+  color: #657382;
+  font-size: 0.74rem;
+  line-height: 1.45;
 }
 
 .settings-page input,
