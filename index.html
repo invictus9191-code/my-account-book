@@ -2714,6 +2714,10 @@
                 if (dateRange.end && transaction.date > dateRange.end) return false;
                 return true;
             });
+            const stockHoldingCount = new Set(stockAssets.flatMap(asset => getStockHoldings(asset)
+                .filter(holding => Number(holding.quantity || 0) > 0)
+                .map(holding => getStockSymbolKey(holding.symbol))
+                .filter(Boolean))).size;
             const isDateRangeActive = Boolean(dateRange.start || dateRange.end);
             const defaultDateRange = getDefaultDateRange();
             const isDefaultDateRange = dateRange.start === defaultDateRange.start && dateRange.end === defaultDateRange.end;
@@ -2851,7 +2855,7 @@
                     <div className="stock-transaction-toolbar">
                         <button className="asset-back-button" onClick={onBack} aria-label="자산으로 돌아가기"><Icon name="chevron-left" size={21} /></button>
                         <strong>주식</strong>
-                        <span className="stock-transaction-count">{transactions.length}건</span>
+                        <span className="stock-transaction-count">{stockHoldingCount}종목</span>
                     </div>
                     <section className="stock-holdings-summary">
                         {stockAssets.flatMap(asset => getStockHoldings(asset).filter(holding => Number(holding.quantity || 0) > 0).map(holding => (
