@@ -595,6 +595,17 @@
         };
 
         const formatLocalDate = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        const getRecentThreeMonthRange = () => {
+            const end = new Date();
+            const start = new Date(end);
+            const targetMonth = start.getMonth() - 3;
+            const targetDay = start.getDate();
+            start.setDate(1);
+            start.setMonth(targetMonth);
+            const lastDay = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+            start.setDate(Math.min(targetDay, lastDay));
+            return { start: formatLocalDate(start), end: formatLocalDate(end) };
+        };
         const parseLocalDate = dateString => {
             const [year, month, day] = dateString.split('-').map(Number);
             return new Date(year, month - 1, day);
@@ -2168,17 +2179,22 @@
             );
         }
 
-        function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm, isConnected, authorFilter, setAuthorFilter, transactionMonth, setTransactionMonth, setTab, backTab, showMobileSearch, setShowMobileSearch }) {
+        function TransactionPage({ data, setData, setEdit, setShowModal, syncToCloud, searchTerm, setSearchTerm, isConnected, authorFilter, setAuthorFilter, transactionMonth, setTransactionMonth, transactionAssetId, setTransactionAssetId, setTab, backTab, showMobileSearch, setShowMobileSearch }) {
+            const filteredAsset = transactionAssetId ? data.assets.find(asset => asset.id === transactionAssetId) : null;
+            const isAssetFilteredView = Boolean(filteredAsset);
             const [selectedMonth, setSelectedMonth] = useState(() => {
                 if (transactionMonth) return transactionMonth;
                 const now = new Date();
                 return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             });
             const [showMonthPicker, setShowMonthPicker] = useState(false);
+            const [showAssetDateRangePicker, setShowAssetDateRangePicker] = useState(false);
+            const [assetDateRange, setAssetDateRange] = useState(() => isAssetFilteredView ? getRecentThreeMonthRange() : { start: '', end: '' });
             const selectedMonthRef = React.useRef(null);
 
             useMobileEdgeSwipeBack(() => {
-                if (showMonthPicker) setShowMonthPicker(false);
+                if (showAssetDateRangePicker) setShowAssetDateRangePicker(false);
+                else if (showMonthPicker) setShowMonthPicker(false);
                 else setTab(backTab);
             });
 
@@ -2224,9 +2240,21 @@
             const assetById = useMemo(() => new Map(data.assets.map(asset => [asset.id, asset])), [data.assets]);
             const savingsCategoryIds = useMemo(() => new Set(data.categories.filter(category => category.name.includes('저축')).map(category => category.id)), [data.categories]);
             const isGlobalSearch = searchTerm.trim().length > 0;
+            const defaultAssetDateRange = getRecentThreeMonthRange();
+            const isDefaultAssetDateRange = assetDateRange.start === defaultAssetDateRange.start && assetDateRange.end === defaultAssetDateRange.end;
+            const handleSearchChange = value => {
+                if (isAssetFilteredView && value !== filteredAsset.name) setTransactionAssetId('');
+                setSearchTerm(value);
+            };
             const filteredTransactions = useMemo(() => data.transactions.filter(t => {
-                if (!isGlobalSearch && t.date.substring(0, 7) !== selectedMonth) return false;
+                if (isAssetFilteredView) {
+                    if (assetDateRange.start && t.date < assetDateRange.start) return false;
+                    if (assetDateRange.end && t.date > assetDateRange.end) return false;
+                    if (t.assetId !== filteredAsset.id && t.toAssetId !== filteredAsset.id) return false;
+                }
+                if (!isGlobalSearch && !isAssetFilteredView && t.date.substring(0, 7) !== selectedMonth) return false;
                 if (authorFilter !== 'ALL' && t.authorEmail !== authorFilter) return false;
+                if (isAssetFilteredView) return true;
                 if (!isGlobalSearch) return true;
                 const term = searchTerm.trim().toLowerCase();
                 const memoMatch = t.memo?.toLowerCase().includes(term);
@@ -2235,7 +2263,7 @@
                 const toAssetMatch = t.type === 'Transfer' && assetById.get(t.toAssetId)?.name?.toLowerCase().includes(term);
                 const recurringMatch = Boolean(t.recurringId) && '반복 자동 생성 정기'.includes(term);
                 return memoMatch || categoryMatch || assetMatch || toAssetMatch || recurringMatch;
-            }), [data.transactions, isGlobalSearch, selectedMonth, authorFilter, searchTerm, categoryById, assetById]);
+            }), [data.transactions, isAssetFilteredView, filteredAsset?.id, assetDateRange, isGlobalSearch, selectedMonth, authorFilter, searchTerm, categoryById, assetById]);
 
             const groupedByDay = filteredTransactions.reduce((acc, t) => {
                 const day = t.date; // YYYY-MM-DD
@@ -2294,8 +2322,8 @@
                     <section className="transaction-calendar-card">
                         <div className="transaction-toolbar">
                             <button className="transaction-round-button" onClick={() => setTab(backTab)} aria-label="이전 페이지로 돌아가기"><Icon name="chevron-left" size={20} /></button>
-                            <button className="transaction-month-control" onClick={() => setShowMonthPicker(true)} disabled={isGlobalSearch} aria-haspopup="dialog" aria-expanded={showMonthPicker}>
-                                <strong>{isGlobalSearch ? '전체 기간' : `${selectedMonth.split('-')[0]}년 ${Number(selectedMonth.split('-')[1])}월`}</strong>
+                            <button className="transaction-month-control" onClick={() => isAssetFilteredView ? setShowAssetDateRangePicker(current => !current) : setShowMonthPicker(true)} disabled={isGlobalSearch && !isAssetFilteredView} aria-haspopup={isAssetFilteredView ? undefined : 'dialog'} aria-expanded={isAssetFilteredView ? showAssetDateRangePicker : showMonthPicker}>
+                                <strong>{isAssetFilteredView ? (isDefaultAssetDateRange ? '최근 3개월' : '기간 조회') : isGlobalSearch ? '전체 기간' : `${selectedMonth.split('-')[0]}년 ${Number(selectedMonth.split('-')[1])}월`}</strong>
                             </button>
                             <div className="transaction-toolbar-actions">
                                 <div className={`transaction-connection ${isConnected ? 'connected' : 'disconnected'}`} title={isConnected ? 'Firebase 연결됨' : 'Firebase 연결 안 됨'}>
@@ -2308,7 +2336,13 @@
                             </div>
                         </div>
 
-                        {showMobileSearch && <TransactionSearchInput value={searchTerm} onChange={setSearchTerm} />}
+                        {showMobileSearch && <TransactionSearchInput value={searchTerm} onChange={handleSearchChange} />}
+                        {isAssetFilteredView && showAssetDateRangePicker && <div className="stock-transaction-date-range transaction-asset-date-range">
+                            <label><span>시작일</span><input type="date" value={assetDateRange.start} max={assetDateRange.end || undefined} onChange={event => setAssetDateRange(current => ({ ...current, start: event.target.value }))} /></label>
+                            <span className="stock-transaction-date-separator">~</span>
+                            <label><span>종료일</span><input type="date" value={assetDateRange.end} min={assetDateRange.start || undefined} onChange={event => setAssetDateRange(current => ({ ...current, end: event.target.value }))} /></label>
+                            {!isDefaultAssetDateRange && <button type="button" onClick={() => setAssetDateRange(getRecentThreeMonthRange())} aria-label="최근 3개월로 초기화"><Icon name="rotate-ccw" size={16} /></button>}
+                        </div>}
                     </section>
 
                     {showMonthPicker && (
@@ -2340,7 +2374,7 @@
                                 <div className="transaction-filter-chip">
                                     <Icon name="filter" size={14} />
                                     <span>{searchTerm}</span>
-                                    <button onClick={() => setSearchTerm('')}>
+                                    <button onClick={() => { setSearchTerm(''); setTransactionAssetId(''); }}>
                                         <Icon name="x" size={16} />
                                     </button>
                                 </div>
@@ -2442,7 +2476,7 @@
             );
         }
 
-        function AssetManagementPage({ data, setData, syncToCloud, setEdit, setShowModal, setTab, setSearchTerm, setEditAsset, setShowAssetModal, hideAssetAmounts }) {
+        function AssetManagementPage({ data, setData, syncToCloud, setEdit, setShowModal, setTab, setSearchTerm, setTransactionAssetId, setEditAsset, setShowAssetModal, hideAssetAmounts }) {
             const [selectedAsset, setSelectedAsset] = useState(null);
             const [assetViewMode, setAssetViewMode] = useState('asset');
             const [stockRefreshState, setStockRefreshState] = useState({ loading: false, message: '' });
@@ -2673,7 +2707,7 @@
                                         const bal = calculateAssetBalance(a.id, data.assets, data.transactions, undefined, data.stockTransactions);
                                         const debt = calculateAssetDebt(a, data.transactions);
                                         return (
-                                            <div key={a.id} onClick={() => { setSearchTerm(a.name); setTab('transactions'); }} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 1rem', background: 'rgba(9, 105, 218, 0.1)', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s' }} className="list-item">
+                                            <div key={a.id} onClick={() => { setSearchTerm(a.name); setTransactionAssetId(a.id); setTab('transactions'); }} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 1rem', background: 'rgba(9, 105, 218, 0.1)', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s' }} className="list-item">
                                                 <span className="asset-list-copy">
                                                     <span>{a.name}<Icon name="chevron-right" size={14} style={{ color: '#58a6ff', opacity: 0.7 }} /></span>
                                                 </span>
@@ -2692,20 +2726,9 @@
 
         function StockTransactionPage({ data, setData, syncToCloud, onBack, hideAssetAmounts }) {
             const stockAssets = data.assets.filter(asset => asset.type === 'Stock');
-            const getDefaultDateRange = () => {
-                const end = new Date();
-                const start = new Date(end);
-                const targetMonth = start.getMonth() - 3;
-                const targetDay = start.getDate();
-                start.setDate(1);
-                start.setMonth(targetMonth);
-                const lastDay = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
-                start.setDate(Math.min(targetDay, lastDay));
-                return { start: formatLocalDate(start), end: formatLocalDate(end) };
-            };
             const [showForm, setShowForm] = useState(false);
             const [showDateRangePicker, setShowDateRangePicker] = useState(false);
-            const [dateRange, setDateRange] = useState(getDefaultDateRange);
+            const [dateRange, setDateRange] = useState(getRecentThreeMonthRange);
             const [form, setForm] = useState({ assetId: stockAssets[0]?.id || '', type: 'Buy', date: formatLocalDate(new Date()), symbol: '', quantity: '', unitPrice: '', memo: '' });
             const [state, setState] = useState({ loading: false, message: '' });
             const allTransactions = (data.stockTransactions || []).slice().sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
@@ -2722,7 +2745,7 @@
                 .filter(holding => Number(holding.quantity || 0) > 0)
                 .reduce((sum, holding) => sum + getStockHoldingValue(holding), 0), 0);
             const isDateRangeActive = Boolean(dateRange.start || dateRange.end);
-            const defaultDateRange = getDefaultDateRange();
+            const defaultDateRange = getRecentThreeMonthRange();
             const isDefaultDateRange = dateRange.start === defaultDateRange.start && dateRange.end === defaultDateRange.end;
 
             const resetForm = () => {
@@ -2891,7 +2914,7 @@
                         <label><span>시작일</span><input type="date" value={dateRange.start} max={dateRange.end || undefined} onChange={event => setDateRange(current => ({ ...current, start: event.target.value }))} /></label>
                         <span className="stock-transaction-date-separator">~</span>
                         <label><span>종료일</span><input type="date" value={dateRange.end} min={dateRange.start || undefined} onChange={event => setDateRange(current => ({ ...current, end: event.target.value }))} /></label>
-                        {!isDefaultDateRange && <button type="button" onClick={() => setDateRange(getDefaultDateRange())} aria-label="최근 3개월로 초기화"><Icon name="rotate-ccw" size={16} /></button>}
+                        {!isDefaultDateRange && <button type="button" onClick={() => setDateRange(getRecentThreeMonthRange())} aria-label="최근 3개월로 초기화"><Icon name="rotate-ccw" size={16} /></button>}
                     </div>}
                     <section className="stock-transaction-list">
                         {transactions.map(transaction => {
@@ -3167,6 +3190,8 @@
         }
 
         function TransactionModal({ data, setData, onClose, editItem, syncToCloud, isConnected, user }) {
+            const submittingRef = React.useRef(false);
+            const [isSubmitting, setIsSubmitting] = useState(false);
             const [form, setForm] = useState(() => {
                 const groups = data.groups || [];
                 const firstGroup = groups.length > 0 ? groups[0].id : '';
@@ -3214,6 +3239,7 @@
             }, [form.type]);
             const handleSubmit = (e) => {
                 if (e) e.preventDefault();
+                if (submittingRef.current) return;
                 if (isLoanPayment) {
                     form.isLoanPayment = true;
                     const debtAsset = data.assets.find(a => a.id === form.loanAssetId && a.type === 'RealEstate');
@@ -3231,11 +3257,13 @@
                 }
                 if (form.type === 'Transfer' && form.assetId === form.toAssetId) { alert('동일 자산 간 이체는 불가합니다.'); return; }
                 if (!isConnected) { alert('Firebase 서버와 연결되지 않아 저장할 수 없습니다.'); return; }
+                submittingRef.current = true;
+                setIsSubmitting(true);
                 const authorEmail = editItem?.authorEmail || user?.email || '';
                 const newData = { ...data, transactions: editItem ? data.transactions.map(t => t.id === editItem.id ? { ...form, id: editItem.id, authorEmail } : t) : [...data.transactions, { ...form, id: Date.now().toString(), authorEmail }] };
+                onClose();
                 setData(newData);
                 syncToCloud(newData);
-                onClose();
             };
             const handleDelete = () => {
                 if (confirm('이 거래 내역을 삭제하시겠습니까?')) {
@@ -3283,7 +3311,7 @@
                         <header className="transaction-modal-header">
                             <button type="button" onClick={onClose} aria-label="닫기"><Icon name="x" size={27} /></button>
                             <h2 id="transaction-modal-title">거래 {editItem ? '수정' : '추가'}</h2>
-                            <button type="submit" form="transaction-entry-form" className="transaction-modal-save" disabled={!canSave} aria-label="저장"><Icon name="check" size={27} /></button>
+                            <button type="submit" form="transaction-entry-form" className="transaction-modal-save" disabled={!canSave || isSubmitting} aria-label="저장"><Icon name="check" size={27} /></button>
                         </header>
                         {!isConnected && (
                             <div className="sync-warning transaction-modal-warning">
@@ -4132,6 +4160,7 @@ service cloud.firestore {
             const [sidebarOpen, setSidebarOpen] = useState(false);
             const [searchTerm, setSearchTerm] = useState('');
             const [transactionMonth, setTransactionMonth] = useState(null); // 대시보드 카테고리 상세보기 시 월 필터
+            const [transactionAssetId, setTransactionAssetId] = useState('');
             const [showMobileSearch, setShowMobileSearch] = useState(false);
             const [recurringCheckDate, setRecurringCheckDate] = useState(() => formatLocalDate(new Date()));
 
@@ -4345,6 +4374,13 @@ service cloud.firestore {
             }, [tab]);
 
             useEffect(() => {
+                if (tab !== 'transactions' && tab !== 'assets' && transactionAssetId) {
+                    setTransactionAssetId('');
+                    setSearchTerm('');
+                }
+            }, [tab, transactionAssetId]);
+
+            useEffect(() => {
                 const isHome = tab === 'home';
                 document.documentElement.classList.toggle('home-active', isHome);
                 document.body.classList.toggle('home-active', isHome);
@@ -4359,6 +4395,10 @@ service cloud.firestore {
                     const pw = prompt('설정 페이지에 진입하려면 비밀번호를 입력하세요.');
                     const storedPw = localStorage.getItem(PASSWORD_KEY) || DEFAULT_PASSWORD;
                     if (pw !== storedPw) { alert('비밀번호가 올바르지 않습니다.'); return; }
+                }
+                if (t === 'transactions' && transactionAssetId) {
+                    setTransactionAssetId('');
+                    setSearchTerm('');
                 }
                 setTab(t);
                 setSidebarOpen(false);
@@ -4419,8 +4459,8 @@ service cloud.firestore {
                         {tab === 'plan' && <PlanPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} />}
                         {tab === 'recurring' && <RecurringPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} user={user} isConnected={isConnected} />}
                         {tab === 'shopping' && <ShoppingPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} isConnected={isConnected} />}
-                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} setTab={setTab} backTab={transactionBackTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}
-                        {tab === 'assets' && <AssetManagementPage data={data} setData={setData} syncToCloud={syncToCloud} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} hideAssetAmounts={hideAssetAmounts} />}
+                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} transactionAssetId={transactionAssetId} setTransactionAssetId={setTransactionAssetId} setTab={setTab} backTab={transactionBackTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}
+                        {tab === 'assets' && <AssetManagementPage data={data} setData={setData} syncToCloud={syncToCloud} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionAssetId={setTransactionAssetId} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} hideAssetAmounts={hideAssetAmounts} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} setTab={setTab} />}
                     </div></div>
                     {showModal && <TransactionModal data={data} setData={setData} onClose={() => { setShowModal(false); setEdit(null); }} editItem={edit} syncToCloud={syncToCloud} isConnected={isConnected} user={user} />}

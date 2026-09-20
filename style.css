@@ -3389,6 +3389,10 @@ textarea:focus {
   background: #e8ebf0;
 }
 
+.transaction-asset-date-range {
+  margin: 0 18px 18px;
+}
+
 .stock-transaction-date-range label {
   min-width: 0;
   display: grid;
