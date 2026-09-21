@@ -2315,6 +2315,7 @@
             const [showMonthPicker, setShowMonthPicker] = useState(false);
             const [showAssetDateRangePicker, setShowAssetDateRangePicker] = useState(false);
             const [assetDateRange, setAssetDateRange] = useState(() => isAssetFilteredView ? getRecentThreeMonthRange() : { start: '', end: '' });
+            const [isMonthScopedSearch, setIsMonthScopedSearch] = useState(Boolean(transactionMonth));
             const selectedMonthRef = React.useRef(null);
 
             useMobileEdgeSwipeBack(() => {
@@ -2327,6 +2328,7 @@
             useEffect(() => {
                 if (transactionMonth) {
                     setSelectedMonth(transactionMonth);
+                    setIsMonthScopedSearch(true);
                     setTransactionMonth(null); // 한번 적용 후 초기화
                 }
             }, [transactionMonth]);
@@ -2369,6 +2371,7 @@
             const isDefaultAssetDateRange = assetDateRange.start === defaultAssetDateRange.start && assetDateRange.end === defaultAssetDateRange.end;
             const handleSearchChange = value => {
                 if (isAssetFilteredView && value !== filteredAsset.name) setTransactionAssetId('');
+                setIsMonthScopedSearch(false);
                 setSearchTerm(value);
             };
             const filteredTransactions = useMemo(() => data.transactions.filter(t => {
@@ -2377,7 +2380,7 @@
                     if (assetDateRange.end && t.date > assetDateRange.end) return false;
                     if (t.assetId !== filteredAsset.id && t.toAssetId !== filteredAsset.id) return false;
                 }
-                if (!isGlobalSearch && !isAssetFilteredView && t.date.substring(0, 7) !== selectedMonth) return false;
+                if (!isAssetFilteredView && (!isGlobalSearch || isMonthScopedSearch) && t.date.substring(0, 7) !== selectedMonth) return false;
                 if (authorFilter !== 'ALL' && t.authorEmail !== authorFilter) return false;
                 if (isAssetFilteredView) return true;
                 if (!isGlobalSearch) return true;
@@ -2388,7 +2391,7 @@
                 const toAssetMatch = t.type === 'Transfer' && assetById.get(t.toAssetId)?.name?.toLowerCase().includes(term);
                 const recurringMatch = Boolean(t.recurringId) && '반복 자동 생성 정기'.includes(term);
                 return memoMatch || categoryMatch || assetMatch || toAssetMatch || recurringMatch;
-            }), [data.transactions, isAssetFilteredView, filteredAsset?.id, assetDateRange, isGlobalSearch, selectedMonth, authorFilter, searchTerm, categoryById, assetById]);
+            }), [data.transactions, isAssetFilteredView, filteredAsset?.id, assetDateRange, isGlobalSearch, isMonthScopedSearch, selectedMonth, authorFilter, searchTerm, categoryById, assetById]);
 
             const groupedByDay = filteredTransactions.reduce((acc, t) => {
                 const day = t.date; // YYYY-MM-DD
@@ -2447,8 +2450,8 @@
                     <section className="transaction-calendar-card">
                         <div className="transaction-toolbar">
                             <button className="transaction-round-button" onClick={() => setTab(backTab)} aria-label="이전 페이지로 돌아가기"><Icon name="chevron-left" size={20} /></button>
-                            <button className="transaction-month-control" onClick={() => isAssetFilteredView ? setShowAssetDateRangePicker(current => !current) : setShowMonthPicker(true)} disabled={isGlobalSearch && !isAssetFilteredView} aria-haspopup={isAssetFilteredView ? undefined : 'dialog'} aria-expanded={isAssetFilteredView ? showAssetDateRangePicker : showMonthPicker}>
-                                <strong>{isAssetFilteredView ? (isDefaultAssetDateRange ? '최근 3개월' : '기간 조회') : isGlobalSearch ? '전체 기간' : `${selectedMonth.split('-')[0]}년 ${Number(selectedMonth.split('-')[1])}월`}</strong>
+                            <button className="transaction-month-control" onClick={() => isAssetFilteredView ? setShowAssetDateRangePicker(current => !current) : setShowMonthPicker(true)} disabled={isGlobalSearch && !isMonthScopedSearch && !isAssetFilteredView} aria-haspopup={isAssetFilteredView ? undefined : 'dialog'} aria-expanded={isAssetFilteredView ? showAssetDateRangePicker : showMonthPicker}>
+                                <strong>{isAssetFilteredView ? (isDefaultAssetDateRange ? '최근 3개월' : '기간 조회') : isGlobalSearch && !isMonthScopedSearch ? '전체 기간' : `${selectedMonth.split('-')[0]}년 ${Number(selectedMonth.split('-')[1])}월`}</strong>
                             </button>
                             <div className="transaction-toolbar-actions">
                                 <div className={`transaction-connection ${isConnected ? 'connected' : 'disconnected'}`} title={isConnected ? 'Firebase 연결됨' : 'Firebase 연결 안 됨'}>
@@ -2529,7 +2532,7 @@
                             return (
                                 <section className="transaction-day-group" key={dayStr}>
                                     <header className="transaction-day-header">
-                                        <span>{isGlobalSearch && `${year}년 ${month}월 `}{day}일 {name}</span>
+                                        <span>{isGlobalSearch && !isMonthScopedSearch && `${year}년 ${month}월 `}{day}일 {name}</span>
                                         <div>
                                             {income > 0 && <span className="income">+{income.toLocaleString()}원</span>}
                                             {expense > 0 && <span className="expense">-{expense.toLocaleString()}원</span>}
@@ -3487,7 +3490,7 @@
                 const formElement = transactionFormRef.current;
                 if (!formElement || !input?.isConnected) return;
 
-                const fieldElement = input.closest('.transaction-amount-input, .transaction-memo-card') || input;
+                const fieldElement = input.closest('.transaction-amount-card, .transaction-memo-card') || input;
                 const formRect = formElement.getBoundingClientRect();
                 const fieldRect = fieldElement.getBoundingClientRect();
                 const keyboardGap = 16;
