@@ -2853,6 +2853,7 @@
             const stockAssets = data.assets.filter(asset => asset.type === 'Stock');
             const submittingRef = React.useRef(false);
             const [showForm, setShowForm] = useState(false);
+            const [editingTransaction, setEditingTransaction] = useState(null);
             const [showDateRangePicker, setShowDateRangePicker] = useState(false);
             const [dateRange, setDateRange] = useState(getRecentThreeMonthRange);
             const [form, setForm] = useState({ assetId: stockAssets[0]?.id || '', type: 'Buy', date: formatLocalDate(new Date()), symbol: '', quantity: '', unitPrice: '', memo: '' });
@@ -2874,15 +2875,36 @@
             const isDateRangeActive = Boolean(dateRange.start || dateRange.end);
             const defaultDateRange = getRecentThreeMonthRange();
             const isDefaultDateRange = dateRange.start === defaultDateRange.start && dateRange.end === defaultDateRange.end;
+            const ownedStockOptions = stockAssets.flatMap(asset => getStockHoldings(asset)
+                .filter(holding => Number(holding.quantity || 0) > 0)
+                .map(holding => ({
+                    id: `${asset.id}::${holding.id || getStockSymbolKey(holding.symbol)}`,
+                    assetId: asset.id,
+                    assetName: asset.name,
+                    symbol: holding.symbol,
+                    stockName: holding.stockName || holding.symbol,
+                    quantity: Number(holding.quantity || 0)
+                })));
 
             const resetForm = () => {
+                setEditingTransaction(null);
                 setForm({ assetId: stockAssets[0]?.id || '', type: 'Buy', date: formatLocalDate(new Date()), symbol: '', quantity: '', unitPrice: '', memo: '' });
                 setState({ loading: false, message: '' });
             };
 
-            const openForm = () => {
+            const openForm = (transaction = null) => {
                 submittingRef.current = false;
-                resetForm();
+                setEditingTransaction(transaction);
+                setForm(transaction ? {
+                    assetId: transaction.assetId || stockAssets[0]?.id || '',
+                    type: transaction.type || 'Buy',
+                    date: transaction.date || formatLocalDate(new Date()),
+                    symbol: transaction.symbol || '',
+                    quantity: transaction.quantity || '',
+                    unitPrice: transaction.unitPrice || '',
+                    memo: transaction.memo || ''
+                } : { assetId: stockAssets[0]?.id || '', type: 'Buy', date: formatLocalDate(new Date()), symbol: '', quantity: '', unitPrice: '', memo: '' });
+                setState({ loading: false, message: '' });
                 setShowForm(true);
             };
 
@@ -2896,11 +2918,23 @@
             const handleSubmit = async event => {
                 event.preventDefault();
                 if (submittingRef.current) return;
-                const targetAsset = data.assets.find(asset => asset.id === form.assetId && asset.type === 'Stock');
                 const symbol = String(form.symbol || '').trim().toUpperCase();
                 const symbolKey = getStockSymbolKey(symbol);
                 const quantity = Number(form.quantity || 0);
                 const unitPrice = Number(form.unitPrice || 0);
+                const sourceTransactions = data.stockTransactions || [];
+                const remainingTransactions = editingTransaction
+                    ? sourceTransactions.filter(transaction => transaction.id !== editingTransaction.id)
+                    : sourceTransactions;
+                const recalculatedAssets = data.assets.map(asset => {
+                    if (asset.type !== 'Stock') return asset;
+                    const recalculatedHoldings = getStockHoldings(asset).map(holding => ({
+                        ...holding,
+                        quantity: getStockHoldingQuantityAtDate(asset, holding, remainingTransactions)
+                    }));
+                    return { ...asset, ...getStockAssetValuationFields(recalculatedHoldings) };
+                });
+                const targetAsset = recalculatedAssets.find(asset => asset.id === form.assetId && asset.type === 'Stock');
                 if (!targetAsset || !form.date || !symbolKey || !Number.isFinite(quantity) || quantity <= 0) {
                     setState({ loading: false, message: '자산, 거래일, 종목 코드와 수량을 확인해주세요.' });
                     return;
@@ -2910,7 +2944,8 @@
                 const holdingIndex = holdings.findIndex(holding => getStockSymbolKey(holding.symbol) === symbolKey);
                 const existingHolding = holdingIndex >= 0 ? holdings[holdingIndex] : null;
                 const currentQuantity = Number(existingHolding?.quantity || 0);
-                if (form.type === 'Sell' && (!existingHolding || currentQuantity < quantity)) {
+                const resultingQuantity = currentQuantity + (form.type === 'Sell' ? -quantity : quantity);
+                if ((!existingHolding && form.type === 'Sell') || resultingQuantity < 0) {
                     setState({ loading: false, message: `매도 가능 수량은 ${currentQuantity.toLocaleString()}주입니다.` });
                     return;
                 }
@@ -2961,12 +2996,12 @@
                         } catch (_) {}
                     }
 
-                    nextHolding.quantity = currentQuantity + (form.type === 'Sell' ? -quantity : quantity);
+                    nextHolding.quantity = resultingQuantity;
                     const nextHoldings = [...holdings];
                     if (holdingIndex >= 0) nextHoldings[holdingIndex] = nextHolding;
                     else nextHoldings.push(nextHolding);
                     const transaction = {
-                        id: `stock-tx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                        id: editingTransaction?.id || `stock-tx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
                         assetId: targetAsset.id,
                         type: form.type,
                         date: form.date,
@@ -2975,7 +3010,8 @@
                         quantity,
                         unitPrice: Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice : 0,
                         memo: form.memo.trim(),
-                        createdAt: new Date().toISOString()
+                        createdAt: editingTransaction?.createdAt || new Date().toISOString(),
+                        ...(editingTransaction ? { updatedAt: new Date().toISOString() } : {})
                     };
                     const updatedAsset = {
                         ...targetAsset,
@@ -2984,8 +3020,10 @@
                     };
                     const newData = {
                         ...data,
-                        stockTransactions: [...(data.stockTransactions || []), transaction],
-                        assets: data.assets.map(asset => asset.id === targetAsset.id ? updatedAsset : asset)
+                        stockTransactions: editingTransaction
+                            ? sourceTransactions.map(item => item.id === editingTransaction.id ? transaction : item)
+                            : [...sourceTransactions, transaction],
+                        assets: recalculatedAssets.map(asset => asset.id === targetAsset.id ? updatedAsset : asset)
                     };
                     setShowForm(false);
                     setData(newData);
@@ -3077,6 +3115,7 @@
                                 <div className="stock-transaction-card-top">
                                     <span className={`stock-transaction-type ${transaction.type.toLowerCase()}`}>{transaction.type === 'Sell' ? '매도' : '매수'}</span>
                                     <time>{transaction.date}</time>
+                                    <button type="button" onClick={() => openForm(transaction)} aria-label="거래 수정"><Icon name="pencil" size={16} /></button>
                                     <button type="button" onClick={() => deleteTransaction(transaction)} aria-label="거래 삭제"><Icon name="trash-2" size={17} /></button>
                                 </div>
                                 <div className="stock-transaction-card-main">
@@ -3092,7 +3131,7 @@
                         <div className="asset-modal-panel stock-holding-modal-panel">
                             <header className="asset-modal-header">
                                 <button type="button" onClick={closeForm} disabled={state.loading} aria-label="닫기"><Icon name="x" size={27} /></button>
-                                <h2>주식 거래 추가</h2>
+                                <h2>주식 거래 {editingTransaction ? '수정' : '추가'}</h2>
                                 <button type="submit" form="stock-transaction-form" className="asset-modal-save" disabled={state.loading} aria-label="저장"><Icon name="check" size={27} /></button>
                             </header>
                             <form id="stock-transaction-form" className="asset-modal-form stock-holding-add-form" onSubmit={handleSubmit}>
@@ -3100,6 +3139,10 @@
                                     <button type="button" className={form.type === 'Buy' ? 'active buy' : ''} onClick={() => setForm({ ...form, type: 'Buy' })}>매수</button>
                                     <button type="button" className={form.type === 'Sell' ? 'active sell' : ''} onClick={() => setForm({ ...form, type: 'Sell' })}>매도</button>
                                 </div>
+                                {ownedStockOptions.length > 0 && <div className="form-row stock-owned-symbol-select"><label>보유 종목에서 선택</label><select value="" onChange={event => {
+                                    const selected = ownedStockOptions.find(option => option.id === event.target.value);
+                                    if (selected) setForm(current => ({ ...current, assetId: selected.assetId, symbol: selected.symbol }));
+                                }}><option value="">직접 입력 또는 종목 선택</option>{ownedStockOptions.map(option => <option key={option.id} value={option.id}>{option.stockName} · {option.assetName} · {option.quantity.toLocaleString()}주</option>)}</select></div>}
                                 <div className="form-row"><label>주식 자산</label><select value={form.assetId} onChange={e => setForm({ ...form, assetId: e.target.value })} required><option value="">선택</option>{stockAssets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></div>
                                 <div className="form-row"><label>거래일</label><input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required /></div>
                                 <div className="form-row"><label>종목 코드</label><input value={form.symbol} onChange={e => setForm({ ...form, symbol: e.target.value.toUpperCase() })} placeholder="예: 329200:KRX, AAPL" autoCapitalize="characters" required /></div>

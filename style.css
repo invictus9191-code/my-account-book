@@ -3602,6 +3602,16 @@ textarea:focus {
 .stock-transaction-type-selector button.active.buy { color: #1679c4; }
 .stock-transaction-type-selector button.active.sell { color: #d04a56; }
 
+.asset-modal-form .stock-owned-symbol-select {
+  border: 1px solid #d8e8f7;
+  background: #f1f8ff;
+}
+
+.asset-modal-form .stock-owned-symbol-select select {
+  color: #1679c4;
+  font-weight: 700;
+}
+
 .asset-modal-overlay {
   position: fixed;
   inset: 0;
