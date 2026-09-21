@@ -2893,16 +2893,17 @@
             };
 
             const openForm = (transaction = null) => {
+                const transactionToEdit = transaction?.id ? transaction : null;
                 submittingRef.current = false;
-                setEditingTransaction(transaction);
-                setForm(transaction ? {
-                    assetId: transaction.assetId || stockAssets[0]?.id || '',
-                    type: transaction.type || 'Buy',
-                    date: transaction.date || formatLocalDate(new Date()),
-                    symbol: transaction.symbol || '',
-                    quantity: transaction.quantity || '',
-                    unitPrice: transaction.unitPrice || '',
-                    memo: transaction.memo || ''
+                setEditingTransaction(transactionToEdit);
+                setForm(transactionToEdit ? {
+                    assetId: transactionToEdit.assetId || stockAssets[0]?.id || '',
+                    type: transactionToEdit.type || 'Buy',
+                    date: transactionToEdit.date || formatLocalDate(new Date()),
+                    symbol: transactionToEdit.symbol || '',
+                    quantity: transactionToEdit.quantity || '',
+                    unitPrice: transactionToEdit.unitPrice || '',
+                    memo: transactionToEdit.memo || ''
                 } : { assetId: stockAssets[0]?.id || '', type: 'Buy', date: formatLocalDate(new Date()), symbol: '', quantity: '', unitPrice: '', memo: '' });
                 setState({ loading: false, message: '' });
                 setShowForm(true);
@@ -3126,7 +3127,7 @@
                         })}
                         {transactions.length === 0 && <div className="stock-transaction-empty"><Icon name="trending-up" size={28} /><strong>주식 거래내역이 없습니다</strong><span>{isDateRangeActive ? '선택한 기간에 해당하는 거래가 없습니다.' : '매수·매도를 기록하면 보유 수량이 자동으로 계산됩니다.'}</span></div>}
                     </section>
-                    <button className="transaction-add-button stock-transaction-add-button" onClick={openForm} aria-label="주식 거래 추가"><Icon name="plus" size={27} /></button>
+                    <button className="transaction-add-button stock-transaction-add-button" onClick={() => openForm()} aria-label="주식 거래 추가"><Icon name="plus" size={27} /></button>
                     {showForm && <div className="asset-modal-overlay">
                         <div className="asset-modal-panel stock-holding-modal-panel">
                             <header className="asset-modal-header">
