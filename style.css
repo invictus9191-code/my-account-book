@@ -3436,6 +3436,27 @@ textarea:focus {
   color: #68717a;
 }
 
+.stock-hidden-transactions {
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 12px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #d8e8f7;
+  border-radius: 15px;
+  background: #f1f8ff;
+  color: #687581;
+  font-size: 0.76rem;
+}
+
+.stock-hidden-transactions strong {
+  margin-left: auto;
+  color: #1679c4;
+  font-size: 0.76rem;
+}
+
 .stock-holdings-summary-row {
   min-height: 46px;
   padding: 8px 10px;

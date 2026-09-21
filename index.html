@@ -138,6 +138,131 @@
         const NOTIFICATION_ENABLED_KEY = 'INV_NOTIFICATION_ENABLED';
         const NOTIFICATION_TOKEN_KEY = 'INV_NOTIFICATION_TOKEN';
         const NOTIFICATION_DEVICE_ID_KEY = 'INV_NOTIFICATION_DEVICE_ID';
+        const DATA_SYNC_QUEUE_KEY = 'INV_DATA_SYNC_QUEUE_V2';
+        const DATA_SYNC_DEVICE_KEY = 'INV_DATA_SYNC_DEVICE_V2';
+        const DATA_SYNC_META_KEYS = new Set(['_syncVersions', '_syncTombstones', '_syncFieldVersions']);
+
+        const getDataSyncDeviceId = () => {
+            let deviceId = localStorage.getItem(DATA_SYNC_DEVICE_KEY);
+            if (!deviceId) {
+                deviceId = `device-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+                localStorage.setItem(DATA_SYNC_DEVICE_KEY, deviceId);
+            }
+            return deviceId;
+        };
+
+        const readDataSyncQueue = () => {
+            try {
+                const queue = JSON.parse(localStorage.getItem(DATA_SYNC_QUEUE_KEY) || '[]');
+                return Array.isArray(queue) ? queue : [];
+            } catch (_) {
+                return [];
+            }
+        };
+
+        const writeDataSyncQueue = queue => {
+            try {
+                localStorage.setItem(DATA_SYNC_QUEUE_KEY, JSON.stringify(queue));
+            } catch (error) {
+                console.warn('Data sync queue persistence failed:', error);
+            }
+        };
+
+        const getDataSyncItemId = (collection, item) => {
+            if (!item || typeof item !== 'object') return '';
+            return String(item.id || (collection === 'authorAbbreviations' ? item.email : '') || '');
+        };
+
+        const isSameDataValue = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+
+        const buildDataSyncPatch = (baseData, nextData) => {
+            const patchId = `${Date.now()}-${getDataSyncDeviceId()}-${Math.random().toString(36).slice(2, 8)}`;
+            const patch = { id: patchId, createdAt: Date.now(), arrays: {}, fields: {}, deletedFields: [] };
+            const keys = new Set([...Object.keys(baseData || {}), ...Object.keys(nextData || {})]);
+            keys.forEach(key => {
+                if (DATA_SYNC_META_KEYS.has(key)) return;
+                const before = baseData?.[key];
+                const after = nextData?.[key];
+                if (Array.isArray(before) || Array.isArray(after)) {
+                    const beforeItems = Array.isArray(before) ? before : [];
+                    const afterItems = Array.isArray(after) ? after : [];
+                    const beforeMap = new Map(beforeItems.map(item => [getDataSyncItemId(key, item), item]).filter(([id]) => id));
+                    const afterMap = new Map(afterItems.map(item => [getDataSyncItemId(key, item), item]).filter(([id]) => id));
+                    const upserts = [];
+                    afterMap.forEach((item, id) => {
+                        if (!beforeMap.has(id) || !isSameDataValue(beforeMap.get(id), item)) upserts.push(item);
+                    });
+                    const deletes = [...beforeMap.keys()].filter(id => !afterMap.has(id));
+                    const order = afterItems.map(item => getDataSyncItemId(key, item)).filter(Boolean);
+                    if (upserts.length || deletes.length || !isSameDataValue(
+                        beforeItems.map(item => getDataSyncItemId(key, item)).filter(Boolean),
+                        order
+                    )) patch.arrays[key] = { upserts, deletes, order };
+                    return;
+                }
+                if (!Object.prototype.hasOwnProperty.call(nextData || {}, key)) {
+                    if (Object.prototype.hasOwnProperty.call(baseData || {}, key)) patch.deletedFields.push(key);
+                } else if (!isSameDataValue(before, after)) {
+                    patch.fields[key] = after;
+                }
+            });
+            return patch;
+        };
+
+        const isEmptyDataSyncPatch = patch => Object.keys(patch.arrays).length === 0 && Object.keys(patch.fields).length === 0 && patch.deletedFields.length === 0;
+
+        const applyDataSyncPatch = (currentData, patch) => {
+            const result = { ...(currentData || {}) };
+            const versions = { ...(result._syncVersions || {}) };
+            const tombstones = { ...(result._syncTombstones || {}) };
+            const fieldVersions = { ...(result._syncFieldVersions || {}) };
+            patch.deletedFields.forEach(key => {
+                if (Number(fieldVersions[key]?.at || 0) > patch.createdAt) return;
+                delete result[key];
+                fieldVersions[key] = { at: patch.createdAt, patchId: patch.id };
+            });
+            Object.entries(patch.fields).forEach(([key, value]) => {
+                if (Number(fieldVersions[key]?.at || 0) > patch.createdAt) return;
+                result[key] = value;
+                fieldVersions[key] = { at: patch.createdAt, patchId: patch.id };
+            });
+            Object.entries(patch.arrays).forEach(([collection, change]) => {
+                const collectionVersions = { ...(versions[collection] || {}) };
+                const collectionTombstones = { ...(tombstones[collection] || {}) };
+                const currentItems = Array.isArray(result[collection]) ? result[collection] : [];
+                const itemMap = new Map(currentItems.map(item => [getDataSyncItemId(collection, item), item]).filter(([id]) => id));
+                change.deletes.forEach(id => {
+                    if (Number(collectionVersions[id]?.at || 0) > patch.createdAt) return;
+                    itemMap.delete(id);
+                    collectionVersions[id] = { at: patch.createdAt, patchId: patch.id };
+                    collectionTombstones[id] = patch.createdAt;
+                });
+                change.upserts.forEach(item => {
+                    const id = getDataSyncItemId(collection, item);
+                    if (!id || Number(collectionVersions[id]?.at || 0) > patch.createdAt) return;
+                    itemMap.set(id, item);
+                    collectionVersions[id] = { at: patch.createdAt, patchId: patch.id };
+                    delete collectionTombstones[id];
+                });
+                const orderedItems = [];
+                const used = new Set();
+                change.order.forEach(id => {
+                    if (!itemMap.has(id)) return;
+                    orderedItems.push(itemMap.get(id));
+                    used.add(id);
+                });
+                itemMap.forEach((item, id) => {
+                    if (!used.has(id)) orderedItems.push(item);
+                });
+                result[collection] = orderedItems;
+                versions[collection] = collectionVersions;
+                tombstones[collection] = collectionTombstones;
+            });
+            result._syncVersions = versions;
+            result._syncTombstones = tombstones;
+            result._syncFieldVersions = fieldVersions;
+            return result;
+        };
         const TWELVE_DATA_API_KEY = 'INV_TWELVE_DATA_API_KEY';
         const KOREA_MARKET_API_KEY = 'INV_KOREA_MARKET_API_KEY';
         const KOREA_STOCK_API_KEY = 'INV_KOREA_STOCK_API_KEY';
@@ -2501,7 +2626,7 @@
                 }
                 if (result.changed) {
                     setData(result.newData);
-                    syncToCloud(result.newData);
+                    syncToCloud(result.newData, data);
                 }
                 setStockRefreshState({
                     loading: false,
@@ -2738,6 +2863,7 @@
                 if (dateRange.end && transaction.date > dateRange.end) return false;
                 return true;
             });
+            const hiddenTransactionCount = Math.max(0, allTransactions.length - transactions.length);
             const stockHoldingCount = new Set(stockAssets.flatMap(asset => getStockHoldings(asset)
                 .filter(holding => Number(holding.quantity || 0) > 0)
                 .map(holding => getStockSymbolKey(holding.symbol))
@@ -2863,7 +2989,7 @@
                     };
                     setShowForm(false);
                     setData(newData);
-                    syncToCloud(newData);
+                    syncToCloud(newData, data);
                     resetForm();
                 } catch (error) {
                     submittingRef.current = false;
@@ -2936,6 +3062,11 @@
                         <label><span>종료일</span><input type="date" value={dateRange.end} min={dateRange.start || undefined} onChange={event => setDateRange(current => ({ ...current, end: event.target.value }))} /></label>
                         {!isDefaultDateRange && <button type="button" onClick={() => setDateRange(getRecentThreeMonthRange())} aria-label="최근 3개월로 초기화"><Icon name="rotate-ccw" size={16} /></button>}
                     </div>}
+                    {hiddenTransactionCount > 0 && <button type="button" className="stock-hidden-transactions" onClick={() => { setDateRange({ start: '', end: '' }); setShowDateRangePicker(false); }}>
+                        <Icon name="history" size={16} />
+                        <span>기간 밖의 거래 {hiddenTransactionCount}건</span>
+                        <strong>전체 보기</strong>
+                    </button>}
                     <section className="stock-transaction-list">
                         {transactions.map(transaction => {
                             const asset = data.assets.find(item => item.id === transaction.assetId);
@@ -3082,7 +3213,7 @@
                 const savedAsset = { ...preparedForm, initialBalance: Number(preparedForm.initialBalance || 0), priority: formattedPriority };
                 const newData = { ...data, assets: editItem ? data.assets.map(a => a.id === editItem.id ? savedAsset : a) : [...data.assets, { ...savedAsset, id: Date.now().toString() }] };
                 setData(newData);
-                syncToCloud(newData);
+                syncToCloud(newData, data);
                 onClose();
             };
 
@@ -3651,7 +3782,7 @@
                 }
                 if (result.changed) {
                     setData(result.newData);
-                    syncToCloud(result.newData);
+                    syncToCloud(result.newData, data);
                 }
                 setMarketRefreshState({
                     loading: false,
@@ -4183,6 +4314,9 @@ service cloud.firestore {
             const [transactionAssetId, setTransactionAssetId] = useState('');
             const [showMobileSearch, setShowMobileSearch] = useState(false);
             const [recurringCheckDate, setRecurringCheckDate] = useState(() => formatLocalDate(new Date()));
+            const dataRef = React.useRef(data);
+            const syncChainRef = React.useRef(Promise.resolve());
+            dataRef.current = data;
 
             const isConnected = useMemo(() => {
                 return !!user && !!fbConfig && window.firebase && firebase.apps.length > 0;
@@ -4199,15 +4333,70 @@ service cloud.firestore {
                 navigator.serviceWorker.register(workerUrl.href, { scope: './' }).catch(error => console.warn('Service worker registration failed:', error));
             }, [fbConfig]);
 
-            const syncToCloud = (newData) => {
-                if (user && window.firebase && firebase.apps.length) {
-                    const sharedId = localStorage.getItem(SHARED_ID_KEY);
-                    const docRef = sharedId 
-                        ? firebase.firestore().collection('shared_data').doc(sharedId) 
-                        : firebase.firestore().collection('users').doc(user.uid);
-                    docRef.set(newData).catch(err => console.error("Firebase Sync Error:", err));
+            const getCurrentSyncTarget = () => {
+                const sharedId = localStorage.getItem(SHARED_ID_KEY);
+                if (sharedId) return { kind: 'shared', id: sharedId };
+                if (user) return { kind: 'user', id: user.uid };
+                return { kind: 'local', id: getDataSyncDeviceId() };
+            };
+
+            const getSyncDocument = target => target.kind === 'shared'
+                ? firebase.firestore().collection('shared_data').doc(target.id)
+                : firebase.firestore().collection('users').doc(target.id);
+
+            const flushDataSyncQueue = async () => {
+                if (!user || !window.firebase || !firebase.apps.length) return;
+                const currentTarget = getCurrentSyncTarget();
+                const queue = readDataSyncQueue();
+                for (const queuedPatch of queue) {
+                    const target = queuedPatch.target?.kind === 'local' ? currentTarget : queuedPatch.target;
+                    if (!target || target.kind !== currentTarget.kind || target.id !== currentTarget.id) continue;
+                    const docRef = getSyncDocument(target);
+                    await firebase.firestore().runTransaction(async transaction => {
+                        const snapshot = await transaction.get(docRef);
+                        const cloudData = snapshot.exists ? snapshot.data() : initialData;
+                        transaction.set(docRef, applyDataSyncPatch(cloudData, queuedPatch));
+                    });
+                    writeDataSyncQueue(readDataSyncQueue().filter(item => item.id !== queuedPatch.id));
                 }
             };
+
+            const queueDataSync = () => {
+                syncChainRef.current = syncChainRef.current
+                    .then(flushDataSyncQueue)
+                    .catch(error => console.error('Firebase patch sync error:', error));
+                return syncChainRef.current;
+            };
+
+            const syncToCloud = (newData, baseData = dataRef.current) => {
+                const patch = buildDataSyncPatch(baseData, newData);
+                if (isEmptyDataSyncPatch(patch)) return Promise.resolve();
+                patch.target = getCurrentSyncTarget();
+                writeDataSyncQueue([...readDataSyncQueue(), patch]);
+                const safeLocalData = applyDataSyncPatch(dataRef.current, patch);
+                dataRef.current = safeLocalData;
+                setData(safeLocalData);
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(safeLocalData));
+                } catch (error) {
+                    console.warn('Local data persistence failed:', error);
+                }
+                return queueDataSync();
+            };
+
+            useEffect(() => {
+                if (!isConnected) return;
+                const retrySync = () => {
+                    if (readDataSyncQueue().length > 0) queueDataSync();
+                };
+                retrySync();
+                window.addEventListener('online', retrySync);
+                const retryTimer = setInterval(retrySync, 30000);
+                return () => {
+                    window.removeEventListener('online', retrySync);
+                    clearInterval(retryTimer);
+                };
+            }, [isConnected, user?.uid, fbConfig]);
 
             useEffect(() => {
                 const timer = setInterval(() => {
@@ -4299,9 +4488,14 @@ service cloud.firestore {
                                     if (localKoreaStockApiKey) localStorage.removeItem(KOREA_STOCK_API_KEY);
                                     if (localKoreaEtfApiKey) localStorage.removeItem(KOREA_ETF_API_KEY);
                                 }).catch(err => console.error("Initial Sync Fail:", err));
+                                dataRef.current = initialCloudData;
                                 setData(initialCloudData);
                             } else {
                                 let cloudData = d.data();
+                                const snapshotTarget = sharedId ? { kind: 'shared', id: sharedId } : { kind: 'user', id: u.uid };
+                                cloudData = readDataSyncQueue()
+                                    .filter(patch => patch.target?.kind === 'local' || (patch.target?.kind === snapshotTarget.kind && patch.target?.id === snapshotTarget.id))
+                                    .reduce((mergedData, patch) => applyDataSyncPatch(mergedData, patch), cloudData);
                                 const legacyMarketApiKey = localStorage.getItem(TWELVE_DATA_API_KEY) || '';
                                 const legacyKoreaMarketApiKey = localStorage.getItem(KOREA_MARKET_API_KEY) || '';
                                 const localKoreaStockApiKey = localStorage.getItem(KOREA_STOCK_API_KEY) || '';
@@ -4327,6 +4521,7 @@ service cloud.firestore {
                                 // 클라우드 데이터를 기준으로 상태 업데이트 (Source of Truth)
                                 setData(prev => {
                                     if (JSON.stringify(prev) !== JSON.stringify(cloudData)) {
+                                        dataRef.current = cloudData;
                                         return cloudData;
                                     }
                                     return prev;
