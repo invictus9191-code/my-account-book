@@ -2726,6 +2726,7 @@
 
         function StockTransactionPage({ data, setData, syncToCloud, onBack, hideAssetAmounts }) {
             const stockAssets = data.assets.filter(asset => asset.type === 'Stock');
+            const submittingRef = React.useRef(false);
             const [showForm, setShowForm] = useState(false);
             const [showDateRangePicker, setShowDateRangePicker] = useState(false);
             const [dateRange, setDateRange] = useState(getRecentThreeMonthRange);
@@ -2753,10 +2754,22 @@
                 setState({ loading: false, message: '' });
             };
 
-            const closeForm = () => { setShowForm(false); resetForm(); };
+            const openForm = () => {
+                submittingRef.current = false;
+                resetForm();
+                setShowForm(true);
+            };
+
+            const closeForm = () => {
+                if (state.loading) return;
+                submittingRef.current = false;
+                setShowForm(false);
+                resetForm();
+            };
 
             const handleSubmit = async event => {
                 event.preventDefault();
+                if (submittingRef.current) return;
                 const targetAsset = data.assets.find(asset => asset.id === form.assetId && asset.type === 'Stock');
                 const symbol = String(form.symbol || '').trim().toUpperCase();
                 const symbolKey = getStockSymbolKey(symbol);
@@ -2776,79 +2789,86 @@
                     return;
                 }
 
+                submittingRef.current = true;
                 setState({ loading: true, message: form.type === 'Buy' && !existingHolding ? '종목 시세를 확인하고 있습니다.' : '거래를 저장하고 있습니다.' });
-                let nextHolding = existingHolding ? { ...existingHolding } : createStockHolding({ symbol, quantity: 0 });
-                if (nextHolding.ledgerBaseQuantity === undefined) nextHolding.ledgerBaseQuantity = currentQuantity;
+                try {
+                    let nextHolding = existingHolding ? { ...existingHolding } : createStockHolding({ symbol, quantity: 0 });
+                    if (nextHolding.ledgerBaseQuantity === undefined) nextHolding.ledgerBaseQuantity = currentQuantity;
 
-                if (form.type === 'Buy' && !existingHolding) {
-                    const apiKey = data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
-                    const koreaApiKeys = getKoreaMarketApiKeys(data);
-                    try {
-                        nextHolding = await fetchStockHoldingValuation(createStockHolding({ symbol, quantity: 0.000001 }), apiKey, new Map(), koreaApiKeys);
-                        nextHolding.quantity = 0;
-                        nextHolding.ledgerBaseQuantity = 0;
-                    } catch (_) {
-                        nextHolding = createStockHolding({
-                            symbol: getKoreanStockCode(symbol) ? `${getKoreanStockCode(symbol)}:KRX` : symbol,
-                            quantity: 0,
-                            previousClose: unitPrice > 0 ? unitPrice : '',
-                            currency: getKoreanStockCode(symbol) ? 'KRW' : '',
-                            exchangeRate: 1,
-                            ledgerBaseQuantity: 0
-                        });
+                    if (form.type === 'Buy' && !existingHolding) {
+                        const apiKey = data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
+                        const koreaApiKeys = getKoreaMarketApiKeys(data);
+                        try {
+                            nextHolding = await fetchStockHoldingValuation(createStockHolding({ symbol, quantity: 0.000001 }), apiKey, new Map(), koreaApiKeys);
+                            nextHolding.quantity = 0;
+                            nextHolding.ledgerBaseQuantity = 0;
+                        } catch (_) {
+                            nextHolding = createStockHolding({
+                                symbol: getKoreanStockCode(symbol) ? `${getKoreanStockCode(symbol)}:KRX` : symbol,
+                                quantity: 0,
+                                previousClose: unitPrice > 0 ? unitPrice : '',
+                                currency: getKoreanStockCode(symbol) ? 'KRW' : '',
+                                exchangeRate: 1,
+                                ledgerBaseQuantity: 0
+                            });
+                        }
                     }
-                }
 
-                if (existingHolding && !nextHolding.stockName && getKoreanStockCode(symbol)) {
-                    try {
-                        const quoteHolding = await fetchStockHoldingValuation(
-                            createStockHolding({ symbol, quantity: 0.000001 }),
-                            data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '',
-                            new Map(),
-                            getKoreaMarketApiKeys(data)
-                        );
-                        nextHolding = {
-                            ...nextHolding,
-                            stockName: quoteHolding.stockName || '',
-                            previousClose: quoteHolding.previousClose,
-                            currency: quoteHolding.currency,
-                            exchangeRate: quoteHolding.exchangeRate,
-                            priceDate: quoteHolding.priceDate,
-                            quoteUpdatedAt: quoteHolding.quoteUpdatedAt,
-                            priceProvider: quoteHolding.priceProvider
-                        };
-                    } catch (_) {}
-                }
+                    if (existingHolding && !nextHolding.stockName && getKoreanStockCode(symbol)) {
+                        try {
+                            const quoteHolding = await fetchStockHoldingValuation(
+                                createStockHolding({ symbol, quantity: 0.000001 }),
+                                data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '',
+                                new Map(),
+                                getKoreaMarketApiKeys(data)
+                            );
+                            nextHolding = {
+                                ...nextHolding,
+                                stockName: quoteHolding.stockName || '',
+                                previousClose: quoteHolding.previousClose,
+                                currency: quoteHolding.currency,
+                                exchangeRate: quoteHolding.exchangeRate,
+                                priceDate: quoteHolding.priceDate,
+                                quoteUpdatedAt: quoteHolding.quoteUpdatedAt,
+                                priceProvider: quoteHolding.priceProvider
+                            };
+                        } catch (_) {}
+                    }
 
-                nextHolding.quantity = currentQuantity + (form.type === 'Sell' ? -quantity : quantity);
-                const nextHoldings = [...holdings];
-                if (holdingIndex >= 0) nextHoldings[holdingIndex] = nextHolding;
-                else nextHoldings.push(nextHolding);
-                const transaction = {
-                    id: `stock-tx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                    assetId: targetAsset.id,
-                    type: form.type,
-                    date: form.date,
-                    symbol: nextHolding.symbol || symbol,
-                    stockName: nextHolding.stockName || '',
-                    quantity,
-                    unitPrice: Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice : 0,
-                    memo: form.memo.trim(),
-                    createdAt: new Date().toISOString()
-                };
-                const updatedAsset = {
-                    ...targetAsset,
-                    startDate: !targetAsset.startDate || form.date < targetAsset.startDate ? form.date : targetAsset.startDate,
-                    ...getStockAssetValuationFields(nextHoldings)
-                };
-                const newData = {
-                    ...data,
-                    stockTransactions: [...(data.stockTransactions || []), transaction],
-                    assets: data.assets.map(asset => asset.id === targetAsset.id ? updatedAsset : asset)
-                };
-                setData(newData);
-                syncToCloud(newData);
-                closeForm();
+                    nextHolding.quantity = currentQuantity + (form.type === 'Sell' ? -quantity : quantity);
+                    const nextHoldings = [...holdings];
+                    if (holdingIndex >= 0) nextHoldings[holdingIndex] = nextHolding;
+                    else nextHoldings.push(nextHolding);
+                    const transaction = {
+                        id: `stock-tx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                        assetId: targetAsset.id,
+                        type: form.type,
+                        date: form.date,
+                        symbol: nextHolding.symbol || symbol,
+                        stockName: nextHolding.stockName || '',
+                        quantity,
+                        unitPrice: Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice : 0,
+                        memo: form.memo.trim(),
+                        createdAt: new Date().toISOString()
+                    };
+                    const updatedAsset = {
+                        ...targetAsset,
+                        startDate: !targetAsset.startDate || form.date < targetAsset.startDate ? form.date : targetAsset.startDate,
+                        ...getStockAssetValuationFields(nextHoldings)
+                    };
+                    const newData = {
+                        ...data,
+                        stockTransactions: [...(data.stockTransactions || []), transaction],
+                        assets: data.assets.map(asset => asset.id === targetAsset.id ? updatedAsset : asset)
+                    };
+                    setShowForm(false);
+                    setData(newData);
+                    syncToCloud(newData);
+                    resetForm();
+                } catch (error) {
+                    submittingRef.current = false;
+                    setState({ loading: false, message: error?.message || '주식 거래를 저장하지 못했습니다.' });
+                }
             };
 
             const deleteTransaction = transaction => {
@@ -2936,11 +2956,11 @@
                         })}
                         {transactions.length === 0 && <div className="stock-transaction-empty"><Icon name="trending-up" size={28} /><strong>주식 거래내역이 없습니다</strong><span>{isDateRangeActive ? '선택한 기간에 해당하는 거래가 없습니다.' : '매수·매도를 기록하면 보유 수량이 자동으로 계산됩니다.'}</span></div>}
                     </section>
-                    <button className="transaction-add-button stock-transaction-add-button" onClick={() => setShowForm(true)} aria-label="주식 거래 추가"><Icon name="plus" size={27} /></button>
+                    <button className="transaction-add-button stock-transaction-add-button" onClick={openForm} aria-label="주식 거래 추가"><Icon name="plus" size={27} /></button>
                     {showForm && <div className="asset-modal-overlay">
                         <div className="asset-modal-panel stock-holding-modal-panel">
                             <header className="asset-modal-header">
-                                <button type="button" onClick={closeForm} aria-label="닫기"><Icon name="x" size={27} /></button>
+                                <button type="button" onClick={closeForm} disabled={state.loading} aria-label="닫기"><Icon name="x" size={27} /></button>
                                 <h2>주식 거래 추가</h2>
                                 <button type="submit" form="stock-transaction-form" className="asset-modal-save" disabled={state.loading} aria-label="저장"><Icon name="check" size={27} /></button>
                             </header>
