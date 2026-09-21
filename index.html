@@ -3479,14 +3479,46 @@
             const clearAmount = () => setForm({ ...form, amount: '' });
 
             const [viewportStyle, setViewportStyle] = useState({});
+            const transactionFormRef = React.useRef(null);
+            const focusedTransactionInputRef = React.useRef(null);
+            const focusScrollTimerRef = React.useRef(null);
+
+            const positionTransactionInputAboveKeyboard = input => {
+                const formElement = transactionFormRef.current;
+                if (!formElement || !input?.isConnected) return;
+
+                const fieldElement = input.closest('.transaction-amount-input, .transaction-memo-card') || input;
+                const formRect = formElement.getBoundingClientRect();
+                const fieldRect = fieldElement.getBoundingClientRect();
+                const keyboardGap = 16;
+                const scrollDistance = fieldRect.bottom - (formRect.bottom - keyboardGap);
+
+                if (Math.abs(scrollDistance) > 2) {
+                    formElement.scrollBy({ top: scrollDistance, behavior: 'smooth' });
+                }
+            };
+
+            const scheduleFocusedInputPosition = (input, delay = 0) => {
+                window.clearTimeout(focusScrollTimerRef.current);
+                focusScrollTimerRef.current = window.setTimeout(() => {
+                    requestAnimationFrame(() => positionTransactionInputAboveKeyboard(input));
+                }, delay);
+            };
+
             useEffect(() => {
                 const viewport = window.visualViewport;
                 if (!viewport) return;
-                const updateViewport = () => setViewportStyle({ top: `${viewport.offsetTop}px`, bottom: 'auto', height: `${viewport.height}px` });
+                const updateViewport = () => {
+                    setViewportStyle({ top: `${viewport.offsetTop}px`, bottom: 'auto', height: `${viewport.height}px` });
+                    if (focusedTransactionInputRef.current) {
+                        scheduleFocusedInputPosition(focusedTransactionInputRef.current, 40);
+                    }
+                };
                 updateViewport();
                 viewport.addEventListener('resize', updateViewport);
                 viewport.addEventListener('scroll', updateViewport);
                 return () => {
+                    window.clearTimeout(focusScrollTimerRef.current);
                     viewport.removeEventListener('resize', updateViewport);
                     viewport.removeEventListener('scroll', updateViewport);
                 };
@@ -3494,7 +3526,15 @@
 
             const focusIntoView = event => {
                 const input = event.currentTarget;
-                requestAnimationFrame(() => input.scrollIntoView({ block: 'center' }));
+                focusedTransactionInputRef.current = input;
+                requestAnimationFrame(() => positionTransactionInputAboveKeyboard(input));
+                scheduleFocusedInputPosition(input, 320);
+            };
+
+            const clearFocusedInput = event => {
+                if (focusedTransactionInputRef.current === event.currentTarget) {
+                    focusedTransactionInputRef.current = null;
+                }
             };
 
             const paymentTotal = isLoanPayment ? Number(form.loanPrincipal || 0) + Number(form.loanInterest || 0) : Number(form.amount || 0);
@@ -3514,7 +3554,7 @@
                                 <span>Firebase에 연동되지 않아 작성이 제한됩니다.</span>
                             </div>
                         )}
-                        <form id="transaction-entry-form" className="transaction-modal-form" onSubmit={handleSubmit}>
+                        <form ref={transactionFormRef} id="transaction-entry-form" className="transaction-modal-form" onSubmit={handleSubmit}>
                             <div className="transaction-type-card">
                                 <span>거래 유형</span>
                                 <div className="type-button-group transaction-type-buttons">
@@ -3534,7 +3574,7 @@
                             <div className="transaction-amount-card" hidden={!!isLoanPayment}>
                                 <div className="transaction-amount-input">
                                     <label htmlFor="transaction-amount">금액</label>
-                                    <div><input id="transaction-amount" type="text" inputMode="numeric" value={form.amount ? Number(form.amount).toLocaleString() : ''} onChange={handleAmountChange} onFocus={focusIntoView} placeholder="0" required={!isLoanPayment} disabled={!isConnected || !!isLoanPayment} /><b>원</b></div>
+                                    <div><input id="transaction-amount" type="text" inputMode="numeric" value={form.amount ? Number(form.amount).toLocaleString() : ''} onChange={handleAmountChange} onFocus={focusIntoView} onBlur={clearFocusedInput} placeholder="0" required={!isLoanPayment} disabled={!isConnected || !!isLoanPayment} /><b>원</b></div>
                                 </div>
                                 <div className="quick-amount-buttons transaction-quick-amounts">
                                         <button type="button" onClick={() => handleQuickAmount(1000000)} disabled={!isConnected}>백만</button>
@@ -3554,7 +3594,7 @@
                                     <label className="transaction-form-card"><span>입금 자산</span><select value={form.toAssetId} onChange={e => setForm({ ...form, toAssetId: e.target.value })} disabled={!isConnected}>{filteredToAssets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
                                 </React.Fragment>
                             )}
-                            <label className="transaction-form-card transaction-memo-card"><span>메모</span><input value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} onFocus={focusIntoView} placeholder="메모를 입력하세요" disabled={!isConnected} /></label>
+                            <label className="transaction-form-card transaction-memo-card"><span>메모</span><input value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} onFocus={focusIntoView} onBlur={clearFocusedInput} placeholder="메모를 입력하세요" disabled={!isConnected} /></label>
                             {editItem && <div className="transaction-modal-footer"><button type="button" className="danger" onClick={handleDelete} disabled={!isConnected}>거래 삭제</button></div>}
                         </form>
                     </section>
