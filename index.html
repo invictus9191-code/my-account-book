@@ -2859,7 +2859,7 @@
             const [editingTransaction, setEditingTransaction] = useState(null);
             const [showDateRangePicker, setShowDateRangePicker] = useState(false);
             const [dateRange, setDateRange] = useState(getRecentThreeMonthRange);
-            const [form, setForm] = useState({ assetId: stockAssets[0]?.id || '', type: 'Buy', date: formatLocalDate(new Date()), symbol: '', quantity: '', unitPrice: '', memo: '' });
+            const [form, setForm] = useState({ assetId: stockAssets[0]?.id || '', type: 'Buy', date: formatLocalDate(new Date()), symbol: '', quantity: '', unitPrice: '', unitPriceCurrency: 'KRW', memo: '' });
             const [state, setState] = useState({ loading: false, message: '' });
             const allTransactions = (data.stockTransactions || []).slice().sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
             const transactions = allTransactions.filter(transaction => {
@@ -2886,12 +2886,13 @@
                     assetName: asset.name,
                     symbol: holding.symbol,
                     stockName: holding.stockName || holding.symbol,
-                    quantity: Number(holding.quantity || 0)
+                    quantity: Number(holding.quantity || 0),
+                    unitPriceCurrency: String(holding.currency || '').toUpperCase() === 'USD' ? 'USD' : 'KRW'
                 })));
 
             const resetForm = () => {
                 setEditingTransaction(null);
-                setForm({ assetId: stockAssets[0]?.id || '', type: 'Buy', date: formatLocalDate(new Date()), symbol: '', quantity: '', unitPrice: '', memo: '' });
+                setForm({ assetId: stockAssets[0]?.id || '', type: 'Buy', date: formatLocalDate(new Date()), symbol: '', quantity: '', unitPrice: '', unitPriceCurrency: 'KRW', memo: '' });
                 setState({ loading: false, message: '' });
             };
 
@@ -2906,8 +2907,9 @@
                     symbol: transactionToEdit.symbol || '',
                     quantity: transactionToEdit.quantity || '',
                     unitPrice: transactionToEdit.unitPrice || '',
+                    unitPriceCurrency: transactionToEdit.unitPriceCurrency === 'USD' ? 'USD' : 'KRW',
                     memo: transactionToEdit.memo || ''
-                } : { assetId: stockAssets[0]?.id || '', type: 'Buy', date: formatLocalDate(new Date()), symbol: '', quantity: '', unitPrice: '', memo: '' });
+                } : { assetId: stockAssets[0]?.id || '', type: 'Buy', date: formatLocalDate(new Date()), symbol: '', quantity: '', unitPrice: '', unitPriceCurrency: 'KRW', memo: '' });
                 setState({ loading: false, message: '' });
                 setShowForm(true);
             };
@@ -3013,6 +3015,7 @@
                         stockName: nextHolding.stockName || '',
                         quantity,
                         unitPrice: Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice : 0,
+                        unitPriceCurrency: form.unitPriceCurrency === 'USD' ? 'USD' : 'KRW',
                         memo: form.memo.trim(),
                         createdAt: editingTransaction?.createdAt || new Date().toISOString(),
                         ...(editingTransaction ? { updatedAt: new Date().toISOString() } : {})
@@ -3115,6 +3118,7 @@
                             const holding = asset ? getStockHoldings(asset).find(item => getStockSymbolKey(item.symbol) === getStockSymbolKey(transaction.symbol)) : null;
                             const stockName = transaction.stockName || holding?.stockName || '';
                             const total = Number(transaction.quantity || 0) * Number(transaction.unitPrice || 0);
+                            const unitPriceCurrencyLabel = transaction.unitPriceCurrency === 'USD' ? '달러' : '원';
                             return <article className="stock-transaction-card" key={transaction.id}>
                                 <div className="stock-transaction-card-top">
                                     <span className={`stock-transaction-type ${transaction.type.toLowerCase()}`}>{transaction.type === 'Sell' ? '매도' : '매수'}</span>
@@ -3124,7 +3128,7 @@
                                 </div>
                                 <div className="stock-transaction-card-main">
                                     <span><strong>{stockName || transaction.symbol}</strong><small>{stockName ? `${transaction.symbol} · ` : ''}{asset?.name || '삭제된 자산'}{transaction.memo ? ` · ${transaction.memo}` : ''}</small></span>
-                                    <span><b>{Number(transaction.quantity || 0).toLocaleString()}주</b>{transaction.unitPrice > 0 && <small>{hideAssetAmounts ? '금액숨김' : `${Number(transaction.unitPrice).toLocaleString()}원 · ${total.toLocaleString()}원`}</small>}</span>
+                                    <span><b>{Number(transaction.quantity || 0).toLocaleString()}주</b>{transaction.unitPrice > 0 && <small>{hideAssetAmounts ? '금액숨김' : `${Number(transaction.unitPrice).toLocaleString()}${unitPriceCurrencyLabel} · ${total.toLocaleString()}${unitPriceCurrencyLabel}`}</small>}</span>
                                 </div>
                             </article>;
                         })}
@@ -3145,13 +3149,13 @@
                                 </div>
                                 {ownedStockOptions.length > 0 && <div className="form-row stock-owned-symbol-select"><label>보유 종목에서 선택</label><select value="" onChange={event => {
                                     const selected = ownedStockOptions.find(option => option.id === event.target.value);
-                                    if (selected) setForm(current => ({ ...current, assetId: selected.assetId, symbol: selected.symbol }));
+                                    if (selected) setForm(current => ({ ...current, assetId: selected.assetId, symbol: selected.symbol, unitPriceCurrency: selected.unitPriceCurrency }));
                                 }}><option value="">직접 입력 또는 종목 선택</option>{ownedStockOptions.map(option => <option key={option.id} value={option.id}>{option.stockName} · {option.assetName} · {option.quantity.toLocaleString()}주</option>)}</select></div>}
                                 <div className="form-row"><label>주식 자산</label><select value={form.assetId} onChange={e => setForm({ ...form, assetId: e.target.value })} required><option value="">선택</option>{stockAssets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></div>
                                 <div className="form-row"><label>거래일</label><input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required /></div>
                                 <div className="form-row"><label>종목 코드</label><input value={form.symbol} onChange={e => setForm({ ...form, symbol: e.target.value.toUpperCase() })} placeholder="예: 329200:KRX, AAPL" autoCapitalize="characters" required /></div>
                                 <div className="form-row"><label>수량</label><input type="number" min="0" step="any" inputMode="decimal" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="0" required /></div>
-                                <div className="form-row"><label>주당 단가</label><input type="number" min="0" step="any" inputMode="decimal" value={form.unitPrice} onChange={e => setForm({ ...form, unitPrice: e.target.value })} placeholder="선택 입력" /></div>
+                                <div className="form-row stock-unit-price-row"><label>주당 단가</label><div className="stock-unit-price-control"><input type="number" min="0" step="any" inputMode="decimal" value={form.unitPrice} onChange={e => setForm({ ...form, unitPrice: e.target.value })} placeholder="선택 입력" /><select value={form.unitPriceCurrency} onChange={e => setForm({ ...form, unitPriceCurrency: e.target.value })} aria-label="주당 단가 통화"><option value="KRW">원</option><option value="USD">달러</option></select></div></div>
                                 <div className="form-row"><label>메모</label><input value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })} placeholder="선택 입력" /></div>
                                 {state.message && <div className={`stock-holding-add-message ${state.loading ? 'loading' : 'error'}`}>{state.loading && <Icon name="loader-circle" size={15} />}{state.message}</div>}
                             </form>
@@ -4389,7 +4393,8 @@ service cloud.firestore {
             const [showModal, setShowModal] = useState(false);
             const [edit, setEdit] = useState(null);
             
-            const [authorFilter, setAuthorFilter] = useState('ALL');
+            const [transactionAuthorFilter, setTransactionAuthorFilter] = useState('ALL');
+            const [dashboardAuthorFilter, setDashboardAuthorFilter] = useState('ALL');
 
             // For Dashboard Asset editing
             const [showAssetModal, setShowAssetModal] = useState(false);
@@ -4757,11 +4762,11 @@ service cloud.firestore {
                     </div>
                     <div className={`main-content ${tab === 'home' ? 'home-content' : ''} ${tab === 'dashboard' ? 'dashboard-content' : ''}`}><div className="container">
                         {tab === 'home' && <HomePage data={data} setTab={setTab} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} onNavigate={menuClick} hideAssetAmounts={hideAssetAmounts} setHideAssetAmounts={setHideAssetAmounts} />}
-                        {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionMonth={setTransactionMonth} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} />}
+                        {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionMonth={setTransactionMonth} authorFilter={dashboardAuthorFilter} setAuthorFilter={setDashboardAuthorFilter} />}
                         {tab === 'plan' && <PlanPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} />}
                         {tab === 'recurring' && <RecurringPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} user={user} isConnected={isConnected} />}
                         {tab === 'shopping' && <ShoppingPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} isConnected={isConnected} />}
-                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={authorFilter} setAuthorFilter={setAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} transactionAssetId={transactionAssetId} setTransactionAssetId={setTransactionAssetId} setTab={setTab} backTab={transactionBackTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}
+                        {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={transactionAuthorFilter} setAuthorFilter={setTransactionAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} transactionAssetId={transactionAssetId} setTransactionAssetId={setTransactionAssetId} setTab={setTab} backTab={transactionBackTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setData={setData} syncToCloud={syncToCloud} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionAssetId={setTransactionAssetId} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} hideAssetAmounts={hideAssetAmounts} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} setTab={setTab} />}
                     </div></div>
