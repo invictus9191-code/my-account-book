@@ -1031,16 +1031,16 @@
                     chartRef.current = new window.ApexCharts(ref.current, options);
                     chartRef.current.render();
                 }
-
-                return () => {
-                    if (chartRef.current) {
-                        chartRef.current.destroy();
-                        chartRef.current = null;
-                    }
-                };
             }, [series, labels, colors, height, horizontal, targetValue, targetLabel]);
 
-            return React.createElement('div', { ref: ref, id: chartId });
+            React.useEffect(() => () => {
+                if (chartRef.current) {
+                    chartRef.current.destroy();
+                    chartRef.current = null;
+                }
+            }, []);
+
+            return React.createElement('div', { ref: ref, id: chartId, style: { minHeight: `${height || 280}px` } });
         }
 
         function Dashboard({ data, setEdit, setShowModal, setEditAsset, setShowAssetModal, setTab, setSearchTerm, setTransactionMonth, authorFilter, setAuthorFilter }) {
@@ -1049,7 +1049,15 @@
                 const cats = data.categories ? data.categories.filter(c => c.type === 'Expense') : [];
                 return cats.length > 0 ? cats[0].id : '';
             });
-            const cardAssets = useMemo(() => data.assets.filter(asset => asset.type === 'Card'), [data.assets]);
+            const cardAssets = useMemo(() => data.assets
+                .map((asset, index) => ({ asset, index }))
+                .filter(({ asset }) => asset.type === 'Card')
+                .sort((left, right) => {
+                    const leftPriority = left.asset.priority === '' || left.asset.priority === undefined || left.asset.priority === null ? 9999 : Number(left.asset.priority);
+                    const rightPriority = right.asset.priority === '' || right.asset.priority === undefined || right.asset.priority === null ? 9999 : Number(right.asset.priority);
+                    return leftPriority - rightPriority || left.index - right.index;
+                })
+                .map(({ asset }) => asset), [data.assets]);
             const [selectedCardId, setSelectedCardId] = useState(() => cardAssets[0]?.id || '');
 
             useEffect(() => {
