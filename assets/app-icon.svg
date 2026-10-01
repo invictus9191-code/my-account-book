@@ -1,8 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="116" fill="#188fe7"/>
-  <rect x="91" y="137" width="330" height="238" rx="58" fill="#ffffff"/>
-  <path d="M114 192h284" fill="none" stroke="#188fe7" stroke-width="30" stroke-linecap="round"/>
-  <rect x="276" y="225" width="145" height="102" rx="32" fill="#dff1ff"/>
-  <circle cx="322" cy="276" r="17" fill="#188fe7"/>
-  <path d="M154 116h207" fill="none" stroke="#ffffff" stroke-width="25" stroke-linecap="round" opacity=".78"/>
+  <defs>
+    <linearGradient id="background" x1="62" y1="42" x2="450" y2="470" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#57B5FF"/>
+      <stop offset="1" stop-color="#1678E8"/>
+    </linearGradient>
+    <filter id="shadow" x="62" y="57" width="388" height="414" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#075DB8" flood-opacity=".28"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" fill="url(#background)"/>
+  <circle cx="425" cy="80" r="112" fill="#fff" opacity=".08"/>
+  <circle cx="62" cy="456" r="138" fill="#075DB8" opacity=".08"/>
+  <g filter="url(#shadow)">
+    <rect x="96" y="82" width="320" height="348" rx="62" fill="#fff"/>
+  </g>
+  <rect x="96" y="82" width="320" height="98" rx="62" fill="#E9F5FF"/>
+  <path d="M96 144c0 20 16 36 36 36h248c20 0 36-16 36-36v20c0 20-16 36-36 36H132c-20 0-36-16-36-36z" fill="#D8EEFF"/>
+  <rect x="150" y="58" width="28" height="72" rx="14" fill="#fff"/>
+  <rect x="242" y="58" width="28" height="72" rx="14" fill="#fff"/>
+  <rect x="334" y="58" width="28" height="72" rx="14" fill="#fff"/>
+  <circle cx="180" cy="253" r="54" fill="#E6F3FF"/>
+  <path d="M151 230l11 46 18-34 18 34 11-46M151 245h58M154 258h52" fill="none" stroke="#188FE7" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M261 226h92M261 258h70" fill="none" stroke="#A8B8C8" stroke-width="14" stroke-linecap="round"/>
+  <path d="M151 371v-42M205 371v-70M259 371v-48M313 371v-94M367 371v-62" fill="none" stroke="#188FE7" stroke-width="24" stroke-linecap="round"/>
+  <path d="M139 394h240" fill="none" stroke="#D9E2EA" stroke-width="10" stroke-linecap="round"/>
 </svg>
