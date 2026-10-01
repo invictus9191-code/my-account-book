@@ -1008,8 +1008,8 @@
                         theme: 'light',
                         y: { formatter: (v) => Number.isFinite(v) ? Math.floor(v).toLocaleString() + '원' : '0원' }
                     },
-                    annotations: numericTarget > 0 ? {
-                        yaxis: [{
+                    annotations: {
+                        yaxis: numericTarget > 0 ? [{
                             y: numericTarget,
                             borderColor: '#f59e0b',
                             strokeDashArray: 5,
@@ -1018,13 +1018,14 @@
                                 text: `${targetLabel} ${numericTarget.toLocaleString()}원`,
                                 style: { color: '#fff', background: '#f59e0b', fontSize: '10px', fontWeight: 700 }
                             }
-                        }]
-                    } : {},
+                        }] : []
+                    },
                     plotOptions: { bar: horizontal ? { horizontal: true, borderRadius: 3, barHeight: '62%' } : { borderRadius: 3, columnWidth: '60%' } },
                     legend: { show: series.length > 1, position: 'top', labels: { colors: '#57606a' } }
                 };
 
                 if (chartRef.current) {
+                    chartRef.current.clearAnnotations();
                     chartRef.current.updateOptions(options, true, true);
                     chartRef.current.updateSeries(series);
                 } else {
