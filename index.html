@@ -961,12 +961,15 @@
         };
 
         // ApexCharts를 useRef + useEffect로 직접 렌더링하는 컴포넌트
-        function ChartBar({ chartId, series, colors, labels, height, horizontal = false }) {
+        function ChartBar({ chartId, series, colors, labels, height, horizontal = false, targetValue = 0, targetLabel = '실적' }) {
             const ref = React.useRef(null);
             const chartRef = React.useRef(null);
 
             React.useEffect(() => {
                 if (!ref.current || !window.ApexCharts) return;
+                const numericTarget = Number(targetValue || 0);
+                const seriesMaximum = Math.max(0, ...series.flatMap(item => (item.data || []).map(value => Number(value || 0))));
+                const targetAxisMaximum = numericTarget > 0 ? Math.ceil(Math.max(seriesMaximum, numericTarget) * 1.12) : undefined;
 
                 const options = {
                     chart: {
@@ -995,6 +998,7 @@
                             formatter: (v) => Number.isFinite(v) ? Math.floor(v).toLocaleString() : '0',
                             style: { colors: '#57606a' }
                         },
+                        ...(targetAxisMaximum ? { max: targetAxisMaximum } : {}),
                         forceNiceScale: true,
                         decimalsInFloat: 0
                     },
@@ -1004,6 +1008,18 @@
                         theme: 'light',
                         y: { formatter: (v) => Number.isFinite(v) ? Math.floor(v).toLocaleString() + '원' : '0원' }
                     },
+                    annotations: numericTarget > 0 ? {
+                        yaxis: [{
+                            y: numericTarget,
+                            borderColor: '#f59e0b',
+                            strokeDashArray: 5,
+                            label: {
+                                borderColor: '#f59e0b',
+                                text: `${targetLabel} ${numericTarget.toLocaleString()}원`,
+                                style: { color: '#fff', background: '#f59e0b', fontSize: '10px', fontWeight: 700 }
+                            }
+                        }]
+                    } : {},
                     plotOptions: { bar: horizontal ? { horizontal: true, borderRadius: 3, barHeight: '62%' } : { borderRadius: 3, columnWidth: '60%' } },
                     legend: { show: series.length > 1, position: 'top', labels: { colors: '#57606a' } }
                 };
@@ -1022,7 +1038,7 @@
                         chartRef.current = null;
                     }
                 };
-            }, [series, labels, colors, height, horizontal]);
+            }, [series, labels, colors, height, horizontal, targetValue, targetLabel]);
 
             return React.createElement('div', { ref: ref, id: chartId });
         }
@@ -1033,6 +1049,8 @@
                 const cats = data.categories ? data.categories.filter(c => c.type === 'Expense') : [];
                 return cats.length > 0 ? cats[0].id : '';
             });
+            const cardAssets = useMemo(() => data.assets.filter(asset => asset.type === 'Card'), [data.assets]);
+            const [selectedCardId, setSelectedCardId] = useState(() => cardAssets[0]?.id || '');
 
             useEffect(() => {
                 const cats = data.categories.filter(c => c.type === categoryType);
@@ -1040,6 +1058,12 @@
                     setSelectedCategory(cats[0].id);
                 }
             }, [categoryType, data.categories, selectedCategory]);
+
+            useEffect(() => {
+                if (!cardAssets.some(asset => asset.id === selectedCardId)) {
+                    setSelectedCardId(cardAssets[0]?.id || '');
+                }
+            }, [cardAssets, selectedCardId]);
 
             const [selectedMonth, setSelectedMonth] = useState(() => {
                 const now = new Date();
@@ -1159,6 +1183,27 @@
                 });
                 return { labels: labels.map(m => `${m.substring(5)}월`), categoryData };
             }, [selectedMonth, selectedCategory, data.transactions]);
+
+            const cardPerformanceData = useMemo(() => {
+                const selectedCard = cardAssets.find(asset => asset.id === selectedCardId) || null;
+                const [year, month] = selectedMonth.split('-').map(Number);
+                const months = Array.from({ length: 12 }, (_, index) => {
+                    const date = new Date(year, month - 1 - (11 - index), 1);
+                    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                });
+                const spending = months.map(targetMonth => data.transactions
+                    .filter(transaction => transaction.type === 'Expense'
+                        && transaction.assetId === selectedCardId
+                        && transaction.date.startsWith(targetMonth)
+                        && (authorFilter === 'ALL' || transaction.authorEmail === authorFilter))
+                    .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0));
+                return {
+                    selectedCard,
+                    labels: months.map(targetMonth => `${targetMonth.substring(5)}월`),
+                    spending,
+                    target: Number(selectedCard?.cardPerformanceTarget || 0)
+                };
+            }, [selectedMonth, selectedCardId, cardAssets, data.transactions, authorFilter]);
 
             const fullAssetFlowData = useMemo(() => {
                 const today = formatLocalDate(new Date());
@@ -1572,6 +1617,36 @@
                             )}
                         </section>
                     </div>
+
+                    <section className="dashboard-chart-card dashboard-card-performance-chart">
+                        <div className="dashboard-chart-heading">
+                            <div className="dashboard-card-performance-title">
+                                <span><Icon name="credit-card" size={18} /></span>
+                                <div><h3>카드 월별 실적</h3><small>월별 지출과 설정한 실적 기준을 비교합니다.</small></div>
+                            </div>
+                            {cardAssets.length > 0 && <select value={selectedCardId} onChange={event => setSelectedCardId(event.target.value)} aria-label="카드 자산 선택">
+                                {cardAssets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}
+                            </select>}
+                        </div>
+                        {cardPerformanceData.selectedCard ? (
+                            <>
+                                <div className="dashboard-card-performance-summary">
+                                    <span>선택 월 사용액 <strong>{cardPerformanceData.spending[cardPerformanceData.spending.length - 1].toLocaleString()}원</strong></span>
+                                    <span>실적 기준 <strong>{cardPerformanceData.target > 0 ? `${cardPerformanceData.target.toLocaleString()}원` : '미설정'}</strong></span>
+                                </div>
+                                <ChartBar
+                                    chartId="chart-card-performance"
+                                    series={[{ name: '카드 지출', data: cardPerformanceData.spending }]}
+                                    colors={['#2d83ea']}
+                                    labels={cardPerformanceData.labels}
+                                    height={280}
+                                    targetValue={cardPerformanceData.target}
+                                    targetLabel="실적"
+                                />
+                                {cardPerformanceData.target <= 0 && <p className="dashboard-flow-note">자산 설정에서 이 카드의 실적 금액을 입력하면 그래프에 기준선이 표시됩니다.</p>}
+                            </>
+                        ) : <div className="dashboard-category-empty"><Icon name="credit-card" size={25} /><span>카드 유형 자산을 추가하면 월별 실적을 확인할 수 있습니다.</span></div>}
+                    </section>
 
                     {/* 4. 카테고리별 연간흐름 */}
                     <section className="dashboard-chart-card dashboard-category-chart">
@@ -3175,7 +3250,7 @@
                         priority: editItem.priority !== undefined ? editItem.priority : ''
                     };
                 }
-                return { name: '', ownerId: data.owners[0]?.id || '', groupId: sortGroupsByPriority(data.groups)[0]?.id || '', type: 'Cash', initialBalance: 0, priority: '', startDate: formatLocalDate(new Date()), stockHoldings: [createStockHolding()] };
+                return { name: '', ownerId: data.owners[0]?.id || '', groupId: sortGroupsByPriority(data.groups)[0]?.id || '', type: 'Cash', initialBalance: 0, cardPerformanceTarget: 0, priority: '', startDate: formatLocalDate(new Date()), stockHoldings: [createStockHolding()] };
             });
             const [stockQuoteState, setStockQuoteState] = useState({ loading: false, message: '' });
 
@@ -3261,7 +3336,12 @@
                 }
                 const formattedPriority = form.priority !== '' ? Number(form.priority) : 9999;
                 preparedForm.initialDebt = form.type === 'RealEstate' ? Number(form.currentDebt || 0) + data.transactions.reduce((sum, t) => sum + (t.type === 'Expense' && t.loanAssetId === editItem?.id ? Number(t.loanPrincipal || 0) : 0), 0) : 0;
-                const savedAsset = { ...preparedForm, initialBalance: Number(preparedForm.initialBalance || 0), priority: formattedPriority };
+                const savedAsset = {
+                    ...preparedForm,
+                    initialBalance: Number(preparedForm.initialBalance || 0),
+                    cardPerformanceTarget: form.type === 'Card' ? Number(form.cardPerformanceTarget || 0) : 0,
+                    priority: formattedPriority
+                };
                 const newData = { ...data, assets: editItem ? data.assets.map(a => a.id === editItem.id ? savedAsset : a) : [...data.assets, { ...savedAsset, id: Date.now().toString() }] };
                 setData(newData);
                 syncToCloud(newData, data);
@@ -3380,6 +3460,9 @@
                                         <small>초기금액 − 현재 부채</small>
                                     </div>
                                 </>
+                            )}
+                            {form.type === 'Card' && (
+                                <div className="form-row"><label>실적</label><input type="text" inputMode="numeric" value={form.cardPerformanceTarget ? Number(form.cardPerformanceTarget).toLocaleString() : ''} onChange={e => setForm({ ...form, cardPerformanceTarget: e.target.value.replace(/[^0-9]/g, '') })} placeholder="월 실적 기준 금액" aria-label="카드 월 실적 기준 금액" /></div>
                             )}
                             </div>
                             <div className="asset-modal-footer">
@@ -4380,6 +4463,7 @@ service cloud.firestore {
                 if (p.assets) p.assets = p.assets.map(a => ({
                     ...a,
                     initialBalance: a.initialBalance !== undefined ? a.initialBalance : 0,
+                    cardPerformanceTarget: a.cardPerformanceTarget !== undefined ? a.cardPerformanceTarget : 0,
                     groupId: a.groupId || '',
                     startDate: a.startDate || ''
                 }));

@@ -1254,6 +1254,71 @@ table {
   margin-top: 0;
 }
 
+.dashboard-card-performance-chart {
+  margin: 0 0 18px;
+  padding-bottom: 14px;
+}
+
+.dashboard-card-performance-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dashboard-card-performance-title > span {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #edf5ff;
+  color: #3884d7;
+}
+
+.dashboard-card-performance-title > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.dashboard-card-performance-title small {
+  overflow: hidden;
+  color: #8b929b;
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-card-performance-chart .dashboard-chart-heading > select {
+  width: auto;
+  max-width: 170px;
+  height: 36px;
+  padding: 4px 28px 4px 10px;
+  border: 0;
+  border-radius: 12px;
+  background-color: #f0f3f6;
+  color: #5c6874;
+  font-size: 0.76rem;
+  box-shadow: none;
+}
+
+.dashboard-card-performance-summary {
+  margin: 2px 4px 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  color: #7d8690;
+  font-size: 0.72rem;
+}
+
+.dashboard-card-performance-summary strong {
+  margin-left: 4px;
+  color: #3b424a;
+}
+
 .dashboard-chart-selects {
   display: flex;
   gap: 6px;
@@ -5913,6 +5978,20 @@ textarea:focus {
   .dashboard-category-chart .dashboard-chart-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .dashboard-card-performance-chart .dashboard-chart-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-card-performance-chart .dashboard-chart-heading > select {
+    width: 100%;
+    max-width: none;
+  }
+
+  .dashboard-card-performance-summary {
+    justify-content: space-between;
   }
 
   .dashboard-chart-selects {
