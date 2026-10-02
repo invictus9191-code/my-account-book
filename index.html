@@ -321,6 +321,17 @@
             .sort((a, b) => a.priority - b.priority || a.index - b.index)
             .map(({ group }) => group);
 
+        const sortAssetsByPriority = (assets = []) => assets
+            .map((asset, index) => {
+                const rawPriority = asset?.priority;
+                const priority = rawPriority !== undefined && rawPriority !== null && rawPriority !== '' && Number.isFinite(Number(rawPriority))
+                    ? Number(rawPriority)
+                    : Number.POSITIVE_INFINITY;
+                return { asset, index, priority };
+            })
+            .sort((a, b) => a.priority - b.priority || a.index - b.index)
+            .map(({ asset }) => asset);
+
         const BASE_ASSET_TYPES = [
             { value: 'Cash', label: '현금' },
             { value: 'Bank', label: '은행' },
@@ -2740,12 +2751,12 @@
 
             const groupGrouped = sortGroupsByPriority(data.groups)
                 .map(g => {
-                    const assets = data.assets.filter(a => a.groupId === g.id);
+                    const assets = sortAssetsByPriority(data.assets.filter(a => a.groupId === g.id));
                     const total = assets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions, undefined, data.stockTransactions), 0);
                     return { ...g, total, assets };
                 }).filter(g => g.assets.length > 0);
 
-            const uncategorizedAssets = data.assets.filter(a => !a.groupId);
+            const uncategorizedAssets = sortAssetsByPriority(data.assets.filter(a => !a.groupId));
             const uncategorizedTotal = uncategorizedAssets.reduce((sum, a) => sum + calculateAssetBalance(a.id, data.assets, data.transactions, undefined, data.stockTransactions), 0);
 
             if (uncategorizedAssets.length > 0) {
@@ -2755,15 +2766,14 @@
             const assetTypes = getAssetTypes(data);
             const typeGrouped = assetTypes.map(type => {
                 const assets = data.assets
-                    .filter(asset => asset.type === type.value)
-                    .slice()
-                    .sort((a, b) => Number(a.priority ?? 9999) - Number(b.priority ?? 9999));
-                const total = assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions, undefined, data.stockTransactions), 0);
-                return { id: `type-${type.value}`, name: type.label, total, assets };
+                    .filter(asset => asset.type === type.value);
+                const sortedAssets = sortAssetsByPriority(assets);
+                const total = sortedAssets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions, undefined, data.stockTransactions), 0);
+                return { id: `type-${type.value}`, name: type.label, total, assets: sortedAssets };
             }).filter(group => group.assets.length > 0);
 
             const knownAssetTypes = new Set(assetTypes.map(type => type.value));
-            const otherAssets = data.assets.filter(asset => !knownAssetTypes.has(asset.type));
+            const otherAssets = sortAssetsByPriority(data.assets.filter(asset => !knownAssetTypes.has(asset.type)));
             if (otherAssets.length > 0) {
                 typeGrouped.push({
                     id: 'type-other',
