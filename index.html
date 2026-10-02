@@ -130,9 +130,7 @@
         const { useState, useEffect, useMemo } = React;
 
         const STORAGE_KEY = 'INV_HOUSEHOLD_DATA';
-        const FIREBASE_CONFIG_KEY = 'INV_FIREBASE_CONFIG';
         const PASSWORD_KEY = 'INV_APP_PASSWORD';
-        const SHARED_ID_KEY = 'INV_SHARED_ID';
         const ASSET_AMOUNT_HIDDEN_KEY = 'INV_ASSET_AMOUNT_HIDDEN';
         const NOTIFICATION_VAPID_KEY = 'INV_NOTIFICATION_VAPID_KEY';
         const NOTIFICATION_ENABLED_KEY = 'INV_NOTIFICATION_ENABLED';
@@ -149,6 +147,7 @@
             messagingSenderId: '450043854797',
             appId: '1:450043854797:web:0e4674da8ebc1f9470ce84'
         });
+        const DEFAULT_SHARED_ID = 'Ham';
 
         const getDataSyncDeviceId = () => {
             let deviceId = localStorage.getItem(DATA_SYNC_DEVICE_KEY);
@@ -438,10 +437,10 @@
         };
 
         const getKoreaMarketApiKeys = (data = {}, overrides = {}) => {
-            const legacyKey = overrides.legacyKey ?? (data.koreaMarketApiKey || localStorage.getItem(KOREA_MARKET_API_KEY) || '');
+            const legacyKey = overrides.legacyKey ?? (data.koreaMarketApiKey || '');
             return {
-                stock: Object.prototype.hasOwnProperty.call(overrides, 'stock') ? overrides.stock : (data.koreaStockApiKey || localStorage.getItem(KOREA_STOCK_API_KEY) || legacyKey),
-                etf: Object.prototype.hasOwnProperty.call(overrides, 'etf') ? overrides.etf : (data.koreaEtfApiKey || localStorage.getItem(KOREA_ETF_API_KEY) || legacyKey)
+                stock: Object.prototype.hasOwnProperty.call(overrides, 'stock') ? overrides.stock : (data.koreaStockApiKey || legacyKey),
+                etf: Object.prototype.hasOwnProperty.call(overrides, 'etf') ? overrides.etf : (data.koreaEtfApiKey || legacyKey)
             };
         };
 
@@ -2703,7 +2702,7 @@
             const [showStockTransactions, setShowStockTransactions] = useState(false);
 
             const refreshStockPrices = async (force = false) => {
-                const apiKey = data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
+                const apiKey = data.marketDataApiKey || '';
                 const koreaApiKeys = getKoreaMarketApiKeys(data);
                 if (!apiKey && !koreaApiKeys.stock && !koreaApiKeys.etf) {
                     setStockRefreshState({ loading: false, message: '설정에서 시장 데이터 API 키를 등록해주세요.' });
@@ -3055,7 +3054,7 @@
                     if (nextHolding.ledgerBaseQuantity === undefined) nextHolding.ledgerBaseQuantity = currentQuantity;
 
                     if (form.type === 'Buy' && !existingHolding) {
-                        const apiKey = data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
+                        const apiKey = data.marketDataApiKey || '';
                         const koreaApiKeys = getKoreaMarketApiKeys(data);
                         try {
                             nextHolding = await fetchStockHoldingValuation(createStockHolding({ symbol, quantity: 0.000001 }), apiKey, new Map(), koreaApiKeys);
@@ -3077,7 +3076,7 @@
                         try {
                             const quoteHolding = await fetchStockHoldingValuation(
                                 createStockHolding({ symbol, quantity: 0.000001 }),
-                                data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '',
+                                data.marketDataApiKey || '',
                                 new Map(),
                                 getKoreaMarketApiKeys(data)
                             );
@@ -3290,7 +3289,7 @@
             };
 
             const loadStockValuation = async (force = true) => {
-                const apiKey = data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
+                const apiKey = data.marketDataApiKey || '';
                 const koreaApiKeys = getKoreaMarketApiKeys(data);
                 if (!apiKey && !koreaApiKeys.stock && !koreaApiKeys.etf) {
                     setStockQuoteState({ loading: false, message: '설정에서 시장 데이터 API 키를 먼저 등록해주세요.' });
@@ -3845,10 +3844,9 @@
             );
         }
 
-        function Settings({ data, setData, fbConfig, setFbConfig, syncToCloud, user, isConnected, cloudDataStatus, initializeCloudData, setTab }) {
-            const [fbVal, setFbVal] = useState(fbConfig ? JSON.stringify(fbConfig, null, 2) : '');
+        function Settings({ data, setData, fbConfig, syncToCloud, user, isConnected, cloudDataStatus, initializeCloudData, setTab }) {
             const [newPw, setNewPw] = useState('');
-            const [marketApiKey, setMarketApiKey] = useState(() => data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '');
+            const [marketApiKey, setMarketApiKey] = useState(() => data.marketDataApiKey || '');
             const initialKoreaApiKeys = getKoreaMarketApiKeys(data);
             const [koreaStockApiKey, setKoreaStockApiKey] = useState(() => initialKoreaApiKeys.stock);
             const [koreaEtfApiKey, setKoreaEtfApiKey] = useState(() => initialKoreaApiKeys.etf);
@@ -3869,7 +3867,6 @@
             const [editingAbbr, setEditingAbbr] = useState(null); // 수정 중인 약칭 email
             const [editingAsset, setEditingAsset] = useState(null);
             const [showAssetModal, setShowAssetModal] = useState(false);
-            const [tempSharedId, setTempSharedId] = useState(localStorage.getItem(SHARED_ID_KEY) || '');
 
             useMobileEdgeSwipeBack(() => {
                 if (activeTab !== 'general') setActiveTab('general');
@@ -3877,29 +3874,12 @@
             });
 
             useEffect(() => {
-                setMarketApiKey(data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '');
+                setMarketApiKey(data.marketDataApiKey || '');
                 const koreaKeys = getKoreaMarketApiKeys(data);
                 setKoreaStockApiKey(koreaKeys.stock);
                 setKoreaEtfApiKey(koreaKeys.etf);
             }, [data.marketDataApiKey, data.koreaMarketApiKey, data.koreaStockApiKey, data.koreaEtfApiKey]);
 
-            const saveFb = async () => {
-                try {
-                    const c = JSON.parse(fbVal);
-                    if (!c.apiKey || !c.projectId) {
-                        alert('올바른 Firebase 웹 설정 형식이 아닙니다.\n"apiKey"와 "projectId"가 포함된 JSON을 입력해주세요.\n(주의: 서비스 계정 키 파일이 아닙니다)');
-                        return;
-                    }
-                    if (localStorage.getItem(NOTIFICATION_ENABLED_KEY) === 'true') await unregisterNotificationDevice(user);
-                    localStorage.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(c));
-                    setFbConfig(c);
-                    alert('Firebase 설정이 저장되었습니다. 앱을 다시 시작합니다.');
-                    location.reload();
-                } catch (e) {
-                    alert('유효한 JSON 형식이 아닙니다.');
-                }
-            };
-            const resetFb = async () => { if (confirm('Firebase 설정을 앱 기본값으로 되돌리시겠습니까?')) { await unregisterNotificationDevice(user); localStorage.removeItem(FIREBASE_CONFIG_KEY); setFbConfig(DEFAULT_FIREBASE_CONFIG); alert('Firebase 설정을 앱 기본값으로 되돌렸습니다.'); location.reload(); } };
             const changePw = () => { if (newPw.length < 4) { alert('비밀번호는 4자리 이상이어야 합니다.'); return; } localStorage.setItem(PASSWORD_KEY, newPw); setNewPw(''); alert('비밀번호가 변경되었습니다.'); };
             const saveMarketApiKey = () => {
                 const value = marketApiKey.trim();
@@ -3910,21 +3890,11 @@
                     return;
                 }
                 if (!isConnected) {
-                    if (data.marketDataApiKey || data.koreaMarketApiKey || data.koreaStockApiKey || data.koreaEtfApiKey) {
-                        setMarketApiKey(data.marketDataApiKey);
-                        const koreaKeys = getKoreaMarketApiKeys(data);
-                        setKoreaStockApiKey(koreaKeys.stock);
-                        setKoreaEtfApiKey(koreaKeys.etf);
-                        alert('공용 API 키를 변경하려면 Firebase에 로그인해주세요.');
-                        return;
-                    }
-                    if (value) localStorage.setItem(TWELVE_DATA_API_KEY, value);
-                    if (koreaStockValue) localStorage.setItem(KOREA_STOCK_API_KEY, koreaStockValue);
-                    if (koreaEtfValue) localStorage.setItem(KOREA_ETF_API_KEY, koreaEtfValue);
-                    setMarketApiKey(value);
-                    setKoreaStockApiKey(koreaStockValue);
-                    setKoreaEtfApiKey(koreaEtfValue);
-                    alert('API 키를 임시 저장했습니다. Firebase 로그인 후 공용 설정으로 자동 이전됩니다.');
+                    setMarketApiKey(data.marketDataApiKey || '');
+                    const koreaKeys = getKoreaMarketApiKeys(data);
+                    setKoreaStockApiKey(koreaKeys.stock);
+                    setKoreaEtfApiKey(koreaKeys.etf);
+                    alert('공용 API 키를 변경하려면 Firebase에 로그인해주세요.');
                     return;
                 }
                 const newData = { ...data, marketDataApiKey: value, koreaMarketApiKey: '', koreaStockApiKey: koreaStockValue, koreaEtfApiKey: koreaEtfValue };
@@ -3937,10 +3907,7 @@
                 setMarketApiKey(value);
                 setKoreaStockApiKey(koreaStockValue);
                 setKoreaEtfApiKey(koreaEtfValue);
-                const sharedId = localStorage.getItem(SHARED_ID_KEY);
-                alert(sharedId
-                    ? '시장 데이터 API 키가 공용 설정에 저장되었습니다. 같은 공유 ID 사용자는 별도 입력 없이 이용할 수 있습니다.'
-                    : '시장 데이터 API 키가 개인 클라우드 설정에 저장되었습니다. 다른 사용자와 함께 사용하려면 동일한 공유 ID를 설정해주세요.');
+                alert(`시장 데이터 API 키가 고정 공유 데이터(${DEFAULT_SHARED_ID})에 저장되었습니다.`);
             };
             const clearMarketApiKey = () => {
                 if ((data.marketDataApiKey || data.koreaMarketApiKey || data.koreaStockApiKey || data.koreaEtfApiKey) && !isConnected) {
@@ -3959,7 +3926,7 @@
                 setKoreaEtfApiKey('');
             };
             const refreshMarketPrices = async () => {
-                const apiKey = marketApiKey.trim() || data.marketDataApiKey || localStorage.getItem(TWELVE_DATA_API_KEY) || '';
+                const apiKey = marketApiKey.trim() || data.marketDataApiKey || '';
                 const koreaApiKeys = getKoreaMarketApiKeys(data, { stock: koreaStockApiKey.trim(), etf: koreaEtfApiKey.trim() });
                 if (!apiKey && !koreaApiKeys.stock && !koreaApiKeys.etf) {
                     setMarketRefreshState({ loading: false, message: '시장 데이터 API 키를 먼저 입력해주세요.' });
@@ -3981,36 +3948,6 @@
                         ? `${result.refreshedCount}개 갱신 · ${result.failures[0]}`
                         : `${result.refreshedCount}개 종목의 시세를 갱신했습니다.`
                 });
-            };
-
-            const saveSharedId = async () => {
-                const nextSharedId = tempSharedId.trim();
-                try {
-                    if (user && window.firebase && firebase.apps.length) {
-                        const userDocRef = firebase.firestore().collection('users').doc(user.uid);
-                        if (nextSharedId) {
-                            await userDocRef.set({ _preferredSharedId: nextSharedId }, { merge: true });
-                        } else {
-                            const userSnapshot = await userDocRef.get();
-                            if (userSnapshot.exists) await userDocRef.update({ _preferredSharedId: firebase.firestore.FieldValue.delete() });
-                        }
-                    }
-                    if (nextSharedId) {
-                        localStorage.setItem(SHARED_ID_KEY, nextSharedId);
-                        alert('공유 ID가 Firebase 계정 설정에 저장되었습니다. 앱을 다시 시작합니다.');
-                    } else {
-                        localStorage.removeItem(SHARED_ID_KEY);
-                        alert('공유 ID가 제거되었습니다. 개인 모드로 전환합니다.');
-                    }
-                    location.reload();
-                } catch (error) {
-                    alert(`공유 ID를 저장하지 못했습니다: ${error.message}`);
-                }
-            };
-            const generateSharedId = () => {
-                const newId = Math.random().toString(36).substring(2, 10).toUpperCase();
-                setTempSharedId(newId);
-                alert(`신규 공유 ID가 생성되었습니다: ${newId}\n'저장' 버튼을 눌러야 적용됩니다.`);
             };
 
             const handleExportData = () => { const now = new Date(); const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000); const todayKST = kst.toISOString().split('T')[0]; const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `household_backup_${todayKST}.json`; a.click(); };
@@ -4209,15 +4146,12 @@
                                         </div>
                                         <div className="settings-section">
                                             <h3>🔗 데이터 공유 설정 (공유 ID)</h3>
-                                            <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '0.5rem' }}>동일한 공유 ID를 입력한 계정끼리 데이터가 실시간으로 연동됩니다.</p>
-                                            <div className="settings-inline-form settings-share-form">
-                                                <input value={tempSharedId} onChange={e => setTempSharedId(e.target.value)} placeholder="공유 ID 입력" />
-                                                <button className="primary" onClick={saveSharedId}>저장</button>
-                                                <button onClick={generateSharedId} style={{ background: '#30363d', color: 'white' }}>생성</button>
-                                            </div>
-                                            {tempSharedId === (localStorage.getItem(SHARED_ID_KEY) || '') && tempSharedId && (
-                                                <p style={{ color: '#238636', fontSize: '0.8rem' }}>현재 공유 모드 활성화 중</p>
-                                            )}
+                                            <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '0.5rem' }}>모든 로그인 계정은 아래의 고정 공유 데이터에 연결됩니다.</p>
+                                            <label className="settings-market-key-field">
+                                                <span>고정 공유 ID</span>
+                                                <input value={DEFAULT_SHARED_ID} readOnly aria-label="고정 공유 ID" />
+                                            </label>
+                                            <small style={{ color: '#8b949e', display: 'block', marginTop: '7px' }}>조회만 가능하며 앱에서 변경할 수 없습니다.</small>
                                         </div>
                                         <div className="settings-section">
                                             <h3>💾 데이터 백업 및 복구</h3>
@@ -4230,10 +4164,15 @@
                                     </div>
                                     <div className="settings-section">
                                         <h3>☁️ 서버 연동 (Firebase)</h3>
-                                        <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '0.5rem' }}>Firebase 프로젝트 "웹 앱" 구성 JSON을 입력하세요.</p>
-                                        <div style={{ background: 'rgba(255, 165, 0, 0.1)', padding: '8px', borderRadius: '6px', marginBottom: '1rem', border: '1px solid rgba(255, 165, 0, 0.3)' }}>
-                                            <p style={{ color: '#ffa500', fontSize: '0.78rem' }}>⚠️ <b>주의</b>: <code>private_key</code>가 들어있는 <b>서비스 계정 JSON</b>이 아닌, <code>apiKey</code>가 포함된 <b>웹 앱 설정</b> 객체를 입력해야 합니다.</p>
-                                        </div>
+                                        <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '0.75rem' }}>Firebase 웹 설정은 앱 기본값으로 고정되어 자동 적용됩니다.</p>
+                                        <textarea
+                                            value={JSON.stringify(DEFAULT_FIREBASE_CONFIG, null, 2)}
+                                            readOnly
+                                            rows="8"
+                                            aria-label="고정 Firebase 웹 설정"
+                                            style={{ width: '100%', marginBottom: '0.5rem', background: '#0d1117', color: '#8b949e', padding: '10px', fontSize: '13px', fontFamily: 'monospace' }}
+                                        />
+                                        <small style={{ color: '#8b949e', display: 'block', marginBottom: '1rem' }}>조회만 가능하며 앱에서 변경할 수 없습니다.</small>
                                         {fbConfig && !user && (
                                             <div style={{ background: 'rgba(56, 139, 253, 0.15)', padding: '12px', borderRadius: '6px', marginBottom: '1rem', border: '1px solid #388bfd' }}>
                                                 <p style={{ color: '#58a6ff', fontSize: '0.85rem', fontWeight: 'bold' }}>💡 설정 저장 완료! 이제 로그인을 해주세요.</p>
@@ -4252,7 +4191,7 @@
                                         )}
                                         {user && cloudDataStatus === 'missing' && (
                                             <div style={{ background: 'rgba(218, 54, 51, 0.12)', padding: '10px', borderRadius: '6px', marginBottom: '1rem', border: '1px solid #da3633' }}>
-                                                <p style={{ color: '#ff7b72', fontSize: '0.85rem', lineHeight: 1.5 }}>선택한 Firebase 문서가 없습니다. 공유 ID와 로그인 계정을 확인해주세요. 로컬 빈 데이터는 자동으로 업로드되지 않았습니다.</p>
+                                                <p style={{ color: '#ff7b72', fontSize: '0.85rem', lineHeight: 1.5 }}>고정 Firebase 문서(shared_data/{DEFAULT_SHARED_ID})가 없습니다. 로컬 빈 데이터는 자동으로 업로드되지 않았습니다.</p>
                                                 <button type="button" onClick={initializeCloudData} style={{ marginTop: '8px', background: '#da3633', color: 'white' }}>새 빈 Firebase 데이터 생성</button>
                                             </div>
                                         )}
@@ -4261,12 +4200,6 @@
                                                 <p style={{ color: '#ff7b72', fontSize: '0.85rem' }}>Firebase 데이터를 읽지 못했습니다. 네트워크와 Firestore 권한을 확인해주세요.</p>
                                             </div>
                                         )}
-                                        <textarea value={fbVal} onChange={e => setFbVal(e.target.value)} rows="8" placeholder='{"apiKey": "...", "authDomain": "...", ...}' style={{ width: '100%', marginBottom: '1rem', background: '#0d1117', color: '#8b949e', padding: '10px', fontSize: '13px', fontFamily: 'monospace' }} />
-                                        <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem' }}>
-                                            <button className="primary" onClick={saveFb}>저장</button>
-                                            <button onClick={resetFb} style={{ background: '#30363d', color: 'white' }}>기본값으로 초기화</button>
-                                        </div>
-
                                         <div style={{ borderTop: '1px solid #30363d', paddingTop: '1rem' }}>
                                             <h4>🛠️ Firestore 보안 규칙 가이드</h4>
                                             <p style={{ color: '#8b949e', fontSize: '0.8rem', marginTop: '0.5rem' }}>연동이 안 된다면 Firebase 콘솔의 Rules 탭에서 아래와 같이 설정했는지 확인하세요:</p>
@@ -4489,13 +4422,7 @@ service cloud.firestore {
             // 복구 가능성을 위해 삭제하지 않지만 앱 상태로 불러오거나 Firebase에 올리지 않습니다.
             const [data, setData] = useState(initialData);
             const [user, setUser] = useState(null);
-            const [fbConfig, setFbConfig] = useState(() => {
-                try {
-                    return JSON.parse(localStorage.getItem(FIREBASE_CONFIG_KEY) || 'null') || DEFAULT_FIREBASE_CONFIG;
-                } catch (_) {
-                    return DEFAULT_FIREBASE_CONFIG;
-                }
-            });
+            const fbConfig = DEFAULT_FIREBASE_CONFIG;
             const [cloudDataStatus, setCloudDataStatus] = useState('signed-out');
             const [tab, setTab] = useState('home');
             const [hideAssetAmounts, setHideAssetAmounts] = useState(() => localStorage.getItem(ASSET_AMOUNT_HIDDEN_KEY) === 'true');
@@ -4539,15 +4466,10 @@ service cloud.firestore {
             }, [fbConfig]);
 
             const getCurrentSyncTarget = () => {
-                const sharedId = localStorage.getItem(SHARED_ID_KEY);
-                if (sharedId) return { kind: 'shared', id: sharedId };
-                if (user) return { kind: 'user', id: user.uid };
-                return null;
+                return user ? { kind: 'shared', id: DEFAULT_SHARED_ID } : null;
             };
 
-            const getSyncDocument = target => target.kind === 'shared'
-                ? firebase.firestore().collection('shared_data').doc(target.id)
-                : firebase.firestore().collection('users').doc(target.id);
+            const getSyncDocument = () => firebase.firestore().collection('shared_data').doc(DEFAULT_SHARED_ID);
 
             const flushDataSyncQueue = async () => {
                 if (!user || !window.firebase || !firebase.apps.length || !cloudReadyRef.current) return;
@@ -4612,7 +4534,7 @@ service cloud.firestore {
                 const target = getCurrentSyncTarget();
                 if (!target) return;
                 const targetLabel = target.kind === 'shared' ? `공유 ID ${target.id}` : '현재 로그인 계정';
-                if (!confirm(`${targetLabel}에 새 빈 가계부 데이터를 생성하시겠습니까?\n기존 데이터를 복구하려는 경우에는 취소하고 공유 ID를 다시 확인해주세요.`)) return;
+                if (!confirm(`${targetLabel}에 새 빈 가계부 데이터를 생성하시겠습니까?\n기존 데이터를 복구하려는 경우에는 취소해주세요.`)) return;
                 try {
                     const docRef = getSyncDocument(target);
                     const created = await firebase.firestore().runTransaction(async transaction => {
@@ -4712,9 +4634,7 @@ service cloud.firestore {
                 let cancelled = false;
                 let unsubSnapshot = null;
                 let missingAlertShown = false;
-                let authRevision = 0;
-                const unsubscribeAuth = firebase.auth().onAuthStateChanged(async u => {
-                    const revision = ++authRevision;
+                const unsubscribeAuth = firebase.auth().onAuthStateChanged(u => {
                     setUser(u);
                     if (unsubSnapshot) { unsubSnapshot(); unsubSnapshot = null; }
                     cloudReadyRef.current = false;
@@ -4730,21 +4650,8 @@ service cloud.firestore {
 
                     // 이전 버전에서 만들어진 로컬/미전송 패치는 재연결 시 Firebase로 올리지 않습니다.
                     writeDataSyncQueue([]);
-                    let sharedId = localStorage.getItem(SHARED_ID_KEY);
-                    if (!sharedId) {
-                        try {
-                            const userPreferenceSnapshot = await firebase.firestore().collection('users').doc(u.uid).get();
-                            const preferredSharedId = String(userPreferenceSnapshot.data()?._preferredSharedId || '').trim();
-                            if (preferredSharedId) {
-                                sharedId = preferredSharedId;
-                                localStorage.setItem(SHARED_ID_KEY, preferredSharedId);
-                            }
-                        } catch (error) {
-                            console.warn('공유 ID 자동 복구 실패:', error);
-                        }
-                    }
-                    if (cancelled || revision !== authRevision) return;
-                    const target = sharedId ? { kind: 'shared', id: sharedId } : { kind: 'user', id: u.uid };
+                    if (cancelled) return;
+                    const target = { kind: 'shared', id: DEFAULT_SHARED_ID };
                     const docRef = getSyncDocument(target);
                     activeCloudTargetRef.current = target;
                     setCloudDataStatus('loading');
@@ -4764,7 +4671,7 @@ service cloud.firestore {
                             setCloudDataStatus('missing');
                             if (!missingAlertShown) {
                                 missingAlertShown = true;
-                                alert('선택한 Firebase 데이터 문서가 없습니다. 공유 ID와 로그인 계정을 확인해주세요. 로컬 데이터는 자동 업로드되지 않았습니다.');
+                                alert(`고정 Firebase 문서 shared_data/${DEFAULT_SHARED_ID}가 없습니다. 로컬 데이터는 자동 업로드되지 않았습니다.`);
                             }
                             return;
                         }
@@ -4926,7 +4833,7 @@ service cloud.firestore {
                         {tab === 'shopping' && <ShoppingPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} isConnected={isConnected} />}
                         {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={transactionAuthorFilter} setAuthorFilter={setTransactionAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} transactionAssetId={transactionAssetId} setTransactionAssetId={setTransactionAssetId} setTab={setTab} backTab={transactionBackTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setData={setData} syncToCloud={syncToCloud} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionAssetId={setTransactionAssetId} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} hideAssetAmounts={hideAssetAmounts} />}
-                        {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} setFbConfig={setFbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} cloudDataStatus={cloudDataStatus} initializeCloudData={initializeCloudData} setTab={setTab} />}
+                        {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} cloudDataStatus={cloudDataStatus} initializeCloudData={initializeCloudData} setTab={setTab} />}
                     </div></div>
                     {showModal && <TransactionModal data={data} setData={setData} onClose={() => { setShowModal(false); setEdit(null); }} editItem={edit} syncToCloud={syncToCloud} isConnected={isConnected} user={user} />}
                     {showAssetModal && <AssetModal data={data} setData={setData} onClose={() => { setShowAssetModal(false); setEditAsset(null); }} editItem={editAsset} syncToCloud={syncToCloud} />}
