@@ -276,6 +276,13 @@
         const KOREA_ETF_API_KEY = 'INV_KOREA_ETF_API_KEY';
         const STOCK_QUOTE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
         const DEFAULT_PASSWORD = '9999';
+        const DEFAULT_RECIPE_CATEGORIES = Object.freeze([
+            { id: 'recipe-korean', name: '한식' },
+            { id: 'recipe-western', name: '양식' },
+            { id: 'recipe-asian', name: '아시아 요리' },
+            { id: 'recipe-dessert', name: '간식·디저트' }
+        ]);
+        const getRecipeCategories = data => Array.isArray(data?.recipeCategories) ? data.recipeCategories : DEFAULT_RECIPE_CATEGORIES;
 
         const initialData = {
             owners: [{ id: 'o1', name: '홍길동' }],
@@ -300,6 +307,8 @@
             recurringTransactions: [],
             shoppingItems: [],
             shoppingFavorites: [],
+            recipeCategories: [...DEFAULT_RECIPE_CATEGORIES],
+            recipes: [],
             assetTypes: [],
             assetTypeLabels: {},
             marketDataApiKey: '',
@@ -1728,7 +1737,7 @@
             const homeMenuItems = [
                 { label: '예산 관리', icon: 'target', color: '#ff4051', tab: 'plan' },
                 { label: '반복', icon: 'repeat', color: '#6b7ff2', tab: 'recurring' },
-                { label: '장바구니', icon: 'shopping-basket', color: '#25a875', tab: 'shopping', count: (data.shoppingItems || []).length },
+                { label: '레시피', icon: 'utensils', color: '#ee7a3a', tab: 'recipes', count: (data.recipes || []).length },
                 { label: '설정', icon: 'settings', color: '#6f7782', tab: 'settings' }
             ];
 
@@ -1794,119 +1803,130 @@
             );
         }
 
-        function ShoppingPage({ data, setData, syncToCloud, setTab, isConnected }) {
-            const [itemName, setItemName] = useState('');
-            const [favoriteOnAdd, setFavoriteOnAdd] = useState(false);
-            const inputRef = React.useRef(null);
-            useMobileEdgeSwipeBack(() => setTab('home'));
-            const items = data.shoppingItems || [];
-            const favorites = data.shoppingFavorites || [];
-            const normalizeName = name => name.trim().replace(/\s+/g, ' ');
-            const isSameName = (left, right) => normalizeName(left).toLocaleLowerCase() === normalizeName(right).toLocaleLowerCase();
-
-            const commit = (nextItems, nextFavorites = favorites) => {
-                const newData = { ...data, shoppingItems: nextItems, shoppingFavorites: nextFavorites };
+        function RecipeEditor({ data, categories, defaultCategoryId, editRecipe, setData, syncToCloud, onClose }) {
+            const [form, setForm] = useState(() => ({
+                categoryId: editRecipe?.categoryId || defaultCategoryId || categories[0]?.id || '',
+                name: editRecipe?.name || '',
+                ingredients: editRecipe?.ingredients || '',
+                instructions: editRecipe?.instructions || '',
+                memo: editRecipe?.memo || ''
+            }));
+            const save = event => {
+                event.preventDefault();
+                const name = form.name.trim();
+                if (!name || !form.categoryId) {
+                    alert('분류와 요리 이름을 입력해주세요.');
+                    return;
+                }
+                const now = Date.now();
+                const recipe = {
+                    ...editRecipe,
+                    ...form,
+                    name,
+                    ingredients: form.ingredients.trim(),
+                    instructions: form.instructions.trim(),
+                    memo: form.memo.trim(),
+                    id: editRecipe?.id || `recipe-${now}`,
+                    createdAt: editRecipe?.createdAt || now,
+                    updatedAt: now
+                };
+                const recipes = data.recipes || [];
+                const newData = { ...data, recipes: editRecipe ? recipes.map(item => item.id === recipe.id ? recipe : item) : [...recipes, recipe] };
                 setData(newData);
                 syncToCloud(newData);
+                onClose(recipe);
             };
+            return (
+                <div className="recipe-modal-overlay" role="dialog" aria-modal="true" aria-label={editRecipe ? '레시피 수정' : '새 레시피 등록'}>
+                    <form className="recipe-modal" onSubmit={save}>
+                        <header><strong>{editRecipe ? '레시피 수정' : '새 레시피 등록'}</strong><button type="button" onClick={() => onClose()} aria-label="닫기"><Icon name="x" size={21} /></button></header>
+                        <label>분류<select value={form.categoryId} onChange={event => setForm({ ...form, categoryId: event.target.value })}>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+                        <label>요리 이름<input autoFocus value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} placeholder="예: 소고기 미역국" /></label>
+                        <label>재료<textarea value={form.ingredients} onChange={event => setForm({ ...form, ingredients: event.target.value })} placeholder="재료와 분량을 기록하세요" rows="4" /></label>
+                        <label>만드는 법<textarea value={form.instructions} onChange={event => setForm({ ...form, instructions: event.target.value })} placeholder="순서와 팁을 기록하세요" rows="7" /></label>
+                        <label>메모<textarea value={form.memo} onChange={event => setForm({ ...form, memo: event.target.value })} placeholder="보관법, 다음에 바꿀 점 등을 기록하세요" rows="3" /></label>
+                        <footer><button type="button" onClick={() => onClose()}>취소</button><button type="submit"><Icon name="save" size={17} />저장</button></footer>
+                    </form>
+                </div>
+            );
+        }
 
+        function RecipePage({ data, setData, syncToCloud, setTab, isConnected }) {
+            const categories = getRecipeCategories(data);
+            const recipes = data.recipes || [];
+            const [view, setView] = useState('categories');
+            const [selectedCategoryId, setSelectedCategoryId] = useState('');
+            const [selectedRecipeId, setSelectedRecipeId] = useState('');
+            const [editorRecipe, setEditorRecipe] = useState(null);
+            const [showEditor, setShowEditor] = useState(false);
+            const selectedCategory = categories.find(category => category.id === selectedCategoryId);
+            const selectedRecipe = recipes.find(recipe => recipe.id === selectedRecipeId);
+            const categoryRecipes = recipes.filter(recipe => recipe.categoryId === selectedCategoryId);
             const requireConnection = () => {
                 if (isConnected) return true;
                 alert('Firebase 연동이 필요합니다.');
                 return false;
             };
-
-            const addItem = event => {
-                event.preventDefault();
+            const closeEditor = recipe => {
+                setShowEditor(false);
+                setEditorRecipe(null);
+                if (recipe) {
+                    setSelectedCategoryId(recipe.categoryId);
+                    setSelectedRecipeId(recipe.id);
+                    setView('detail');
+                }
+            };
+            const openCreate = () => {
                 if (!requireConnection()) return;
-                const name = normalizeName(itemName);
-                if (!name) return;
-                const alreadyListed = items.some(item => isSameName(item.name, name));
-                const nextItems = alreadyListed ? items : [...items, { id: Date.now().toString(), name, createdAt: Date.now() }];
-                const alreadyFavorite = favorites.some(item => isSameName(item.name, name));
-                const nextFavorites = favoriteOnAdd && !alreadyFavorite ? [...favorites, { id: `favorite-${Date.now()}`, name }] : favorites;
-                commit(nextItems, nextFavorites);
-                setItemName('');
-                inputRef.current?.blur();
+                if (!categories.length) {
+                    alert('설정에서 레시피 분류를 먼저 추가해주세요.');
+                    return;
+                }
+                setEditorRecipe(null);
+                setShowEditor(true);
             };
-
-            const addFavoriteToList = favorite => {
-                if (!requireConnection() || items.some(item => isSameName(item.name, favorite.name))) return;
-                commit([...items, { id: Date.now().toString(), name: favorite.name, createdAt: Date.now() }]);
+            const openEdit = () => {
+                if (!requireConnection() || !selectedRecipe) return;
+                setEditorRecipe(selectedRecipe);
+                setShowEditor(true);
             };
-
-            const toggleFavorite = item => {
-                if (!requireConnection()) return;
-                const existing = favorites.find(favorite => isSameName(favorite.name, item.name));
-                const nextFavorites = existing
-                    ? favorites.filter(favorite => favorite.id !== existing.id)
-                    : [...favorites, { id: `favorite-${Date.now()}`, name: item.name }];
-                commit(items, nextFavorites);
+            const deleteRecipe = () => {
+                if (!requireConnection() || !selectedRecipe || !confirm(`'${selectedRecipe.name}' 레시피를 삭제하시겠습니까?`)) return;
+                const newData = { ...data, recipes: recipes.filter(recipe => recipe.id !== selectedRecipe.id) };
+                setData(newData);
+                syncToCloud(newData);
+                setSelectedRecipeId('');
+                setView('list');
             };
-
-            const removeFavorite = favoriteId => {
-                if (!requireConnection()) return;
-                commit(items, favorites.filter(favorite => favorite.id !== favoriteId));
-            };
-
-            const completeItem = itemId => {
-                if (!requireConnection()) return;
-                commit(items.filter(item => item.id !== itemId));
-            };
+            useMobileEdgeSwipeBack(() => {
+                if (showEditor) closeEditor();
+                else if (view === 'detail') setView('list');
+                else if (view === 'list') setView('categories');
+                else setTab('home');
+            });
 
             return (
-                <div className="shopping-page fade-in">
-                    <div className="shopping-toolbar">
-                        <button className="transaction-round-button" onClick={() => setTab('home')} aria-label="홈으로 돌아가기"><Icon name="chevron-left" size={20} /></button>
-                        <strong>장바구니</strong>
-                        <span className="shopping-count">{items.length}</span>
-                    </div>
-
-                    <form className="shopping-add-card" onSubmit={addItem}>
-                        <div>
-                            <span className="shopping-add-icon"><Icon name="shopping-basket" size={21} /></span>
-                            <input ref={inputRef} value={itemName} onChange={event => setItemName(event.target.value)} placeholder="살 품목을 입력하세요" aria-label="장보기 품목" disabled={!isConnected} />
-                            <button type="button" className={favoriteOnAdd ? 'active' : ''} onClick={() => setFavoriteOnAdd(value => !value)} aria-label="추가하면서 즐겨찾기"><Icon name="star" size={20} /></button>
-                        </div>
-                        <button type="submit" className="shopping-add-button" disabled={!isConnected || !normalizeName(itemName)}><Icon name="plus" size={20} />목록에 추가</button>
-                    </form>
-
-                    <section className="shopping-favorites-card">
-                        <header><span><Icon name="star" size={17} />즐겨찾기</span><small>눌러서 빠르게 추가</small></header>
-                        {favorites.length > 0 ? (
-                            <div className="shopping-favorites-list">
-                                {favorites.map(favorite => {
-                                    const isListed = items.some(item => isSameName(item.name, favorite.name));
-                                    return (
-                                        <span key={favorite.id} className={isListed ? 'listed' : ''}>
-                                            <button onClick={() => addFavoriteToList(favorite)} disabled={isListed} aria-label={`${favorite.name} 목록에 추가`}><Icon name={isListed ? 'check' : 'plus'} size={14} />{favorite.name}</button>
-                                            <button onClick={() => removeFavorite(favorite.id)} aria-label={`${favorite.name} 즐겨찾기 삭제`}><Icon name="x" size={13} /></button>
-                                        </span>
-                                    );
-                                })}
-                            </div>
-                        ) : <p className="shopping-favorites-empty">품목의 별을 누르면 여기에 저장됩니다.</p>}
-                    </section>
-
-                    <section className="shopping-list-section">
-                        <header><div><strong>살 품목</strong><small>{items.length > 0 ? `${items.length}개 남음` : '목록이 비어 있어요'}</small></div></header>
-                        {items.length > 0 ? (
-                            <div className="shopping-list-card">
-                                {items.map(item => {
-                                    const isFavorite = favorites.some(favorite => isSameName(favorite.name, item.name));
-                                    return (
-                                        <div key={item.id} className="shopping-item-row">
-                                            <button className={`shopping-item-star ${isFavorite ? 'active' : ''}`} onClick={() => toggleFavorite(item)} aria-label={`${item.name} 즐겨찾기 ${isFavorite ? '해제' : '추가'}`}><Icon name="star" size={20} /></button>
-                                            <strong>{item.name}</strong>
-                                            <button className="shopping-item-complete" onClick={() => completeItem(item.id)} aria-label={`${item.name} 구매 완료 및 삭제`}><Icon name="check" size={22} /></button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        ) : (
-                            <div className="shopping-empty-state"><span><Icon name="shopping-basket" size={28} /></span><strong>장볼 준비가 끝났어요</strong><p>위 입력창이나 즐겨찾기에서 품목을 추가해 보세요.</p></div>
-                        )}
-                    </section>
+                <div className="recipe-page fade-in">
+                    {view === 'categories' && <>
+                        <div className="recipe-toolbar"><button className="transaction-round-button" onClick={() => setTab('home')} aria-label="홈으로 돌아가기"><Icon name="chevron-left" size={20} /></button><strong>레시피</strong><button className="recipe-create-button" onClick={openCreate} aria-label="새 레시피 등록"><Icon name="plus" size={21} /></button></div>
+                        <p className="recipe-intro">분류를 선택하면 저장해 둔 요리 레시피를 볼 수 있어요.</p>
+                        <section className="recipe-category-grid">
+                            {categories.map(category => { const count = recipes.filter(recipe => recipe.categoryId === category.id).length; return <button key={category.id} onClick={() => { setSelectedCategoryId(category.id); setView('list'); }}><span><Icon name="folder-open" size={21} /></span><div><strong>{category.name}</strong><small>{count ? `${count}개의 레시피` : '등록된 레시피 없음'}</small></div><Icon name="chevron-right" size={19} /></button>; })}
+                        </section>
+                        {!categories.length && <div className="recipe-empty"><Icon name="folders" size={31} /><strong>레시피 분류가 없습니다</strong><p>설정에서 분류를 추가한 뒤 레시피를 등록해보세요.</p></div>}
+                    </>}
+                    {view === 'list' && <>
+                        <div className="recipe-toolbar"><button className="transaction-round-button" onClick={() => setView('categories')} aria-label="분류 목록으로 돌아가기"><Icon name="chevron-left" size={20} /></button><strong>{selectedCategory?.name || '레시피'}</strong><button className="recipe-create-button" onClick={openCreate} aria-label="새 레시피 등록"><Icon name="plus" size={21} /></button></div>
+                        <section className="recipe-list-card">
+                            {categoryRecipes.map(recipe => <button key={recipe.id} className="recipe-list-row" onClick={() => { setSelectedRecipeId(recipe.id); setView('detail'); }}><span><Icon name="utensils" size={20} /></span><div><strong>{recipe.name}</strong><small>{recipe.ingredients ? recipe.ingredients.split('\n')[0] : '기록한 레시피 보기'}</small></div><Icon name="chevron-right" size={19} /></button>)}
+                            {!categoryRecipes.length && <div className="recipe-empty"><Icon name="book-open" size={31} /><strong>아직 등록한 레시피가 없어요</strong><p>오른쪽 위 + 버튼으로 첫 레시피를 기록해보세요.</p></div>}
+                        </section>
+                    </>}
+                    {view === 'detail' && selectedRecipe && <>
+                        <div className="recipe-toolbar recipe-detail-toolbar"><button className="transaction-round-button" onClick={() => setView('list')} aria-label="레시피 목록으로 돌아가기"><Icon name="chevron-left" size={20} /></button><strong>레시피</strong><div><button className="recipe-icon-button" onClick={openEdit} aria-label="레시피 수정"><Icon name="pencil" size={18} /></button><button className="recipe-icon-button danger" onClick={deleteRecipe} aria-label="레시피 삭제"><Icon name="trash-2" size={18} /></button></div></div>
+                        <article className="recipe-detail-card"><span className="recipe-category-badge">{categories.find(category => category.id === selectedRecipe.categoryId)?.name || '미분류'}</span><h2>{selectedRecipe.name}</h2><section><h3><Icon name="shopping-basket" size={18} />재료</h3><p>{selectedRecipe.ingredients || '기록된 재료가 없습니다.'}</p></section><section><h3><Icon name="list-ordered" size={18} />만드는 법</h3><p>{selectedRecipe.instructions || '기록된 조리 방법이 없습니다.'}</p></section>{selectedRecipe.memo && <section><h3><Icon name="sticky-note" size={18} />메모</h3><p>{selectedRecipe.memo}</p></section>}</article>
+                    </>}
+                    {showEditor && <RecipeEditor data={data} categories={categories} defaultCategoryId={selectedCategoryId} editRecipe={editorRecipe} setData={setData} syncToCloud={syncToCloud} onClose={closeEditor} />}
                 </div>
             );
         }
@@ -3874,6 +3894,9 @@
             const [newAssetType, setNewAssetType] = useState('');
             const [assetTypeLabelDrafts, setAssetTypeLabelDrafts] = useState({});
             const [newCat, setNewCat] = useState({ name: '', type: 'Expense' });
+            const [newRecipeCategory, setNewRecipeCategory] = useState('');
+            const [editingRecipeCategoryId, setEditingRecipeCategoryId] = useState(null);
+            const [recipeCategoryDraft, setRecipeCategoryDraft] = useState('');
             const [editingAbbr, setEditingAbbr] = useState(null); // 수정 중인 약칭 email
             const [editingAsset, setEditingAsset] = useState(null);
             const [showAssetModal, setShowAssetModal] = useState(false);
@@ -4074,6 +4097,38 @@
 
             const addCat = () => { if (!newCat.name) return; const newData = { ...data, categories: [...data.categories, { ...newCat, id: Date.now().toString() }] }; setData(newData); syncToCloud(newData); setNewCat({ ...newCat, name: '' }); };
             const delCat = (id) => { if (confirm('삭제하시겠습니까?')) { const newData = { ...data, categories: data.categories.filter(c => c.id !== id) }; setData(newData); syncToCloud(newData); } };
+            const recipeCategories = getRecipeCategories(data);
+            const recipes = data.recipes || [];
+            const addRecipeCategory = () => {
+                const name = newRecipeCategory.trim();
+                if (!name) return;
+                if (recipeCategories.some(category => category.name.toLowerCase() === name.toLowerCase())) {
+                    alert('이미 등록된 레시피 분류입니다.');
+                    return;
+                }
+                const newData = { ...data, recipeCategories: [...recipeCategories, { id: `recipe-category-${Date.now()}`, name }] };
+                setData(newData);
+                syncToCloud(newData);
+                setNewRecipeCategory('');
+            };
+            const saveRecipeCategory = id => {
+                const name = recipeCategoryDraft.trim();
+                if (!name) { alert('분류명을 입력해주세요.'); return; }
+                if (recipeCategories.some(category => category.id !== id && category.name.toLowerCase() === name.toLowerCase())) { alert('이미 등록된 레시피 분류입니다.'); return; }
+                const newData = { ...data, recipeCategories: recipeCategories.map(category => category.id === id ? { ...category, name } : category) };
+                setData(newData);
+                syncToCloud(newData);
+                setEditingRecipeCategoryId(null);
+                setRecipeCategoryDraft('');
+            };
+            const deleteRecipeCategory = id => {
+                const category = recipeCategories.find(item => item.id === id);
+                if (recipes.some(recipe => recipe.categoryId === id)) { alert(`'${category?.name || '이'}' 분류를 사용하는 레시피가 있어 삭제할 수 없습니다. 레시피의 분류를 먼저 변경해주세요.`); return; }
+                if (!confirm(`'${category?.name || '이'}' 분류를 삭제하시겠습니까?`)) return;
+                const newData = { ...data, recipeCategories: recipeCategories.filter(category => category.id !== id) };
+                setData(newData);
+                syncToCloud(newData);
+            };
 
             const addAbbr = () => {
                 if (!newEmail || !newAbbr) return;
@@ -4121,7 +4176,7 @@
                 <div className="settings-page fade-in">
                     <div className="settings-shell">
                         <div className="settings-tabs">
-                            {[{ id: 'general', label: '일반/백업' }, { id: 'owners', label: '소유자' }, { id: 'groups', label: '자산 그룹' }, { id: 'assetTypes', label: '자산 유형' }, { id: 'assets', label: '자산 목록' }, { id: 'categories', label: '카테고리' }, { id: 'authors', label: '작성자 약칭' }].map(t => (
+                            {[{ id: 'general', label: '일반/백업' }, { id: 'owners', label: '소유자' }, { id: 'groups', label: '자산 그룹' }, { id: 'assetTypes', label: '자산 유형' }, { id: 'assets', label: '자산 목록' }, { id: 'categories', label: '카테고리' }, { id: 'recipeCategories', label: '레시피 분류' }, { id: 'authors', label: '작성자 약칭' }].map(t => (
                                 <button key={t.id} className={activeTab === t.id ? 'active' : ''} onClick={() => setActiveTab(t.id)}>
                                     {t.label}
                                 </button>
@@ -4343,6 +4398,23 @@ service cloud.firestore {
                                     <div>{renderCatList('Expense')}</div>
                                     <div>{renderCatList('Income')}</div>
                                     <div>{renderCatList('Transfer')}</div>
+                                </div>
+                            )}
+
+                            {activeTab === 'recipeCategories' && (
+                                <div className="settings-panel settings-section">
+                                    <h3>레시피 분류 관리</h3>
+                                    <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '1rem' }}>레시피 메뉴에 표시할 분류를 추가·수정·삭제할 수 있습니다.</p>
+                                    <div className="settings-inline-form">
+                                        <input value={newRecipeCategory} onChange={event => setNewRecipeCategory(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') addRecipeCategory(); }} placeholder="새 분류 이름" />
+                                        <button onClick={addRecipeCategory}><Icon name="plus" size={16} />추가</button>
+                                    </div>
+                                    <div className="settings-group-list">
+                                        {recipeCategories.map(category => <div className="settings-list-row" key={category.id}>
+                                            {editingRecipeCategoryId === category.id ? <><input autoFocus value={recipeCategoryDraft} onChange={event => setRecipeCategoryDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') saveRecipeCategory(category.id); }} /><div><button className="btn-small save" onClick={() => saveRecipeCategory(category.id)}>저장</button><button className="btn-small" onClick={() => { setEditingRecipeCategoryId(null); setRecipeCategoryDraft(''); }}>취소</button></div></> : <><span><Icon name="folder-open" size={17} />{category.name}<small>{recipes.filter(recipe => recipe.categoryId === category.id).length}개 레시피</small></span><div><button className="btn-small" onClick={() => { setEditingRecipeCategoryId(category.id); setRecipeCategoryDraft(category.name); }}>수정</button><button className="btn-small danger" onClick={() => deleteRecipeCategory(category.id)}>삭제</button></div></>}
+                                        </div>)}
+                                        {!recipeCategories.length && <p style={{ color: '#8b949e', fontSize: '0.85rem', padding: '12px 0' }}>등록된 레시피 분류가 없습니다.</p>}
+                                    </div>
                                 </div>
                             )}
 
@@ -4796,7 +4868,7 @@ service cloud.firestore {
                 dashboard: '대시보드',
                 plan: '계획',
                 recurring: '반복',
-                shopping: '장바구니',
+                recipes: '레시피',
                 transactions: '거래 내역',
                 assets: '자산 현황',
                 settings: '설정'
@@ -4804,10 +4876,10 @@ service cloud.firestore {
 
             return (
                 <React.Fragment>
-                    <div className={`mobile-header ${tab === 'home' ? 'home-mobile-header' : ''} ${tab === 'dashboard' ? 'dashboard-mobile-header' : ''} ${tab === 'plan' ? 'plan-mobile-header' : ''} ${tab === 'recurring' ? 'recurring-mobile-header' : ''} ${tab === 'shopping' ? 'shopping-mobile-header' : ''} ${tab === 'transactions' ? 'transactions-mobile-header' : ''} ${tab === 'assets' ? 'assets-mobile-header' : ''}`}>
+                    <div className={`mobile-header ${tab === 'home' ? 'home-mobile-header' : ''} ${tab === 'dashboard' ? 'dashboard-mobile-header' : ''} ${tab === 'plan' ? 'plan-mobile-header' : ''} ${tab === 'recurring' ? 'recurring-mobile-header' : ''} ${tab === 'recipes' ? 'recipes-mobile-header' : ''} ${tab === 'transactions' ? 'transactions-mobile-header' : ''} ${tab === 'assets' ? 'assets-mobile-header' : ''}`}>
                         <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem' }}><Icon name="menu" size={24} /></button>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                            <Icon name={tab === 'home' ? 'home' : tab === 'dashboard' ? 'layout-dashboard' : tab === 'plan' ? 'target' : tab === 'recurring' ? 'repeat' : tab === 'shopping' ? 'shopping-basket' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
+                            <Icon name={tab === 'home' ? 'home' : tab === 'dashboard' ? 'layout-dashboard' : tab === 'plan' ? 'target' : tab === 'recurring' ? 'repeat' : tab === 'recipes' ? 'utensils' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
                             <h2 style={{ fontSize: '1.2rem' }}>{tabTitles[tab] || 'Smart Finance'}</h2>
                             <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`} style={{ marginLeft: 'auto' }}>
                                 <div className="connection-dot"></div>
@@ -4831,7 +4903,7 @@ service cloud.firestore {
                         <div className={`nav-item ${tab === 'dashboard' ? 'active' : ''}`} onClick={() => menuClick('dashboard')}><Icon name="layout-dashboard" /> 대시보드</div>
                         <div className={`nav-item ${tab === 'transactions' ? 'active' : ''}`} onClick={() => menuClick('transactions')}><Icon name="list" /> 거래 내역</div>
                         <div className={`nav-item ${tab === 'assets' ? 'active' : ''}`} onClick={() => menuClick('assets')}><Icon name="wallet" /> 자산 현황</div>
-                        <div className={`nav-item ${tab === 'shopping' ? 'active' : ''}`} onClick={() => menuClick('shopping')}><Icon name="shopping-basket" /> 장바구니</div>
+                        <div className={`nav-item ${tab === 'recipes' ? 'active' : ''}`} onClick={() => menuClick('recipes')}><Icon name="utensils" /> 레시피</div>
                         <div className={`nav-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => menuClick('settings')}><Icon name="settings" /> 설정</div>
                         <div className="user-profile">{user ? <button onClick={handleSignOut} className="auth-btn" style={{ background: 'transparent', color: '#8b949e' }}><Icon name="log-out" size={16} /> 로그아웃</button> : <button className="auth-btn login" onClick={() => { if (!fbConfig) setTab('settings'); else firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()); }}><Icon name="log-in" size={16} /> 로그인</button>}</div>
                     </div>
@@ -4840,7 +4912,7 @@ service cloud.firestore {
                         {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionMonth={setTransactionMonth} authorFilter={dashboardAuthorFilter} setAuthorFilter={setDashboardAuthorFilter} />}
                         {tab === 'plan' && <PlanPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} />}
                         {tab === 'recurring' && <RecurringPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} user={user} isConnected={isConnected} />}
-                        {tab === 'shopping' && <ShoppingPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} isConnected={isConnected} />}
+                        {tab === 'recipes' && <RecipePage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} isConnected={isConnected} />}
                         {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={transactionAuthorFilter} setAuthorFilter={setTransactionAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} transactionAssetId={transactionAssetId} setTransactionAssetId={setTransactionAssetId} setTab={setTab} backTab={transactionBackTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}
                         {tab === 'assets' && <AssetManagementPage data={data} setData={setData} syncToCloud={syncToCloud} setEdit={setEdit} setShowModal={setShowModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionAssetId={setTransactionAssetId} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} hideAssetAmounts={hideAssetAmounts} />}
                         {tab === 'settings' && <Settings data={data} setData={setData} fbConfig={fbConfig} syncToCloud={syncToCloud} user={user} isConnected={isConnected} cloudDataStatus={cloudDataStatus} initializeCloudData={initializeCloudData} setTab={setTab} />}
