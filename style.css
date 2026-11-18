@@ -1270,6 +1270,19 @@ table {
   box-shadow: 0 2px 8px rgba(31, 42, 55, 0.08);
 }
 
+.dashboard-chart-flow-actions,
+.dashboard-category-detail-actions {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.dashboard-category-detail-actions .dashboard-chart-detail-button {
+  align-self: flex-end;
+}
+
 .dashboard-category-chart {
   margin-top: 0;
 }
@@ -6218,6 +6231,18 @@ textarea:focus {
   .dashboard-chart-selects select {
     max-width: none;
     flex: 1;
+  }
+
+  .dashboard-chart-flow-actions,
+  .dashboard-category-detail-actions {
+    width: 100%;
+    margin-left: 0;
+    align-items: stretch;
+  }
+
+  .dashboard-chart-flow-actions .dashboard-chart-toggle,
+  .dashboard-category-detail-actions .dashboard-chart-detail-button {
+    align-self: stretch;
   }
 
   .shopping-page {

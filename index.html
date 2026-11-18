@@ -1146,9 +1146,9 @@
             const filteredMonthTransactions = useMemo(() => data.transactions.filter(transaction => transaction.date.startsWith(selectedMonth)), [data.transactions, selectedMonth]);
             const assetById = useMemo(() => new Map(data.assets.map(asset => [asset.id, asset])), [data.assets]);
             const detailOwnerOptions = data.owners || [];
+            // 이체는 출발 자산(assetId)의 소유자를 기준으로 집계합니다.
             const matchesDetailOwner = transaction => detailOwnerId === 'ALL'
-                || assetById.get(transaction.assetId)?.ownerId === detailOwnerId
-                || assetById.get(transaction.toAssetId)?.ownerId === detailOwnerId;
+                || assetById.get(transaction.assetId)?.ownerId === detailOwnerId;
             const openDetailView = targetView => {
                 const [year, month] = selectedMonth.split('-').map(Number);
                 const start = new Date(year, month - 12, 1);
@@ -1495,7 +1495,17 @@
                         </div>
                         {renderDetailFilters()}
                         <section className="dashboard-chart-card dashboard-full-flow-card">
-                            <div className="dashboard-chart-heading"><h3>{title}</h3></div>
+                            <div className="dashboard-chart-heading">
+                                <h3>{title}</h3>
+                                {isCategoryFlow && <div className="dashboard-chart-selects">
+                                    <select value={categoryType} onChange={event => setCategoryType(event.target.value)} aria-label="카테고리 유형 선택"><option value="Expense">지출</option><option value="Income">수입</option><option value="Transfer">이체/저축</option></select>
+                                    <select value={selectedCategory} onChange={event => setSelectedCategory(event.target.value)} aria-label="카테고리 선택">{data.categories.filter(category => category.type === categoryType).map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
+                                </div>}
+                                {!isCategoryFlow && <div className="dashboard-chart-toggle">
+                                    <button className={chartType === 'income_expense' ? 'active' : ''} onClick={() => setChartType('income_expense')}>수입/지출</button>
+                                    <button className={chartType === 'savings' ? 'active' : ''} onClick={() => setChartType('savings')}>저축</button>
+                                </div>}
+                            </div>
                             <div className="dashboard-full-flow-scroll"><div><ChartBar chartId={`chart-${view}-${detailOwnerId}`} series={series} colors={colors} labels={detailFlowData.labels} height={Math.max(340, detailFlowData.labels.length * 38 + 70)} horizontal /></div></div>
                             {detailFlowData.labels.length === 0 && <p className="dashboard-flow-note">조회 기간을 선택해주세요.</p>}
                         </section>
@@ -1695,10 +1705,12 @@
                         <section className="dashboard-chart-card">
                             <div className="dashboard-chart-heading">
                                 <h3>연간 흐름</h3>
-                                <button className="dashboard-chart-detail-button" onClick={() => openDetailView('annual_flow_detail')}>자세히 보기 <Icon name="chevron-right" size={14} /></button>
-                                <div className="dashboard-chart-toggle">
-                                    <button className={chartType === 'income_expense' ? 'active' : ''} onClick={() => setChartType('income_expense')}>수입/지출</button>
-                                    <button className={chartType === 'savings' ? 'active' : ''} onClick={() => setChartType('savings')}>저축</button>
+                                <div className="dashboard-chart-flow-actions">
+                                    <div className="dashboard-chart-toggle">
+                                        <button className={chartType === 'income_expense' ? 'active' : ''} onClick={() => setChartType('income_expense')}>수입/지출</button>
+                                        <button className={chartType === 'savings' ? 'active' : ''} onClick={() => setChartType('savings')}>저축</button>
+                                    </div>
+                                    <button className="dashboard-chart-detail-button" onClick={() => openDetailView('annual_flow_detail')}>자세히 보기 <Icon name="chevron-right" size={14} /></button>
                                 </div>
                             </div>
                             {chartType === 'income_expense' ? (
@@ -1758,22 +1770,24 @@
                     <section className="dashboard-chart-card dashboard-category-chart">
                         <div className="dashboard-chart-heading">
                             <h3>카테고리별 연간 흐름</h3>
-                            <button className="dashboard-chart-detail-button" onClick={() => openDetailView('annual_category_flow_detail')}>자세히 보기 <Icon name="chevron-right" size={14} /></button>
-                            <div className="dashboard-chart-selects">
-                                <select
-                                    value={categoryType}
-                                    onChange={e => setCategoryType(e.target.value)}
-                                >
-                                    <option value="Expense">지출</option>
-                                    <option value="Income">수입</option>
-                                    <option value="Transfer">이체/저축</option>
-                                </select>
-                                <select
-                                    value={selectedCategory}
-                                    onChange={e => setSelectedCategory(e.target.value)}
-                                >
-                                    {data.categories.filter(c => c.type === categoryType).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                </select>
+                            <div className="dashboard-category-detail-actions">
+                                <div className="dashboard-chart-selects">
+                                    <select
+                                        value={categoryType}
+                                        onChange={e => setCategoryType(e.target.value)}
+                                    >
+                                        <option value="Expense">지출</option>
+                                        <option value="Income">수입</option>
+                                        <option value="Transfer">이체/저축</option>
+                                    </select>
+                                    <select
+                                        value={selectedCategory}
+                                        onChange={e => setSelectedCategory(e.target.value)}
+                                    >
+                                        {data.categories.filter(c => c.type === categoryType).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                </div>
+                                <button className="dashboard-chart-detail-button" onClick={() => openDetailView('annual_category_flow_detail')}>자세히 보기 <Icon name="chevron-right" size={14} /></button>
                             </div>
                         </div>
                         <ChartBar
