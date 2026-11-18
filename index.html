@@ -148,6 +148,13 @@
             appId: '1:450043854797:web:0e4674da8ebc1f9470ce84'
         });
         const DEFAULT_SHARED_ID = 'Ham';
+        // Firebase 공유 가계부에 연결할 수 있는 Google 계정입니다.
+        // 실제 접근 제어는 Firebase Console에 게시한 Firestore 규칙으로 적용해야 합니다.
+        const ALLOWED_SYNC_EMAILS = Object.freeze([
+            'invictus9191@gmail.com',
+            'mijit0711@gmail.com'
+        ]);
+        const isSyncUserAllowed = user => ALLOWED_SYNC_EMAILS.includes(String(user?.email || '').trim().toLowerCase());
 
         const getDataSyncDeviceId = () => {
             let deviceId = localStorage.getItem(DATA_SYNC_DEVICE_KEY);
@@ -4249,6 +4256,11 @@
                                                 <p style={{ color: '#3fb950', fontSize: '0.85rem' }}>✅ Firebase 실시간 연동 중입니다.</p>
                                             </div>
                                         )}
+                                        {user && cloudDataStatus === 'unauthorized' && (
+                                            <div style={{ background: 'rgba(218, 54, 51, 0.12)', padding: '10px', borderRadius: '6px', marginBottom: '1rem', border: '1px solid #da3633' }}>
+                                                <p style={{ color: '#ff7b72', fontSize: '0.85rem', lineHeight: 1.5 }}>이 Google 계정은 Firebase 공유 가계부 연동 권한이 없습니다. 허용된 계정으로 로그인해주세요.</p>
+                                            </div>
+                                        )}
                                         {user && cloudDataStatus === 'loading' && (
                                             <div style={{ background: 'rgba(56, 139, 253, 0.12)', padding: '10px', borderRadius: '6px', marginBottom: '1rem', border: '1px solid #388bfd' }}>
                                                 <p style={{ color: '#58a6ff', fontSize: '0.85rem' }}>Firebase 원본 데이터를 확인하고 있습니다. 확인이 끝날 때까지 저장 기능이 잠깁니다.</p>
@@ -4267,16 +4279,24 @@
                                         )}
                                         <div style={{ borderTop: '1px solid #30363d', paddingTop: '1rem' }}>
                                             <h4>🛠️ Firestore 보안 규칙 가이드</h4>
-                                            <p style={{ color: '#8b949e', fontSize: '0.8rem', marginTop: '0.5rem' }}>연동이 안 된다면 Firebase 콘솔의 Rules 탭에서 아래와 같이 설정했는지 확인하세요:</p>
+                                            <p style={{ color: '#8b949e', fontSize: '0.8rem', marginTop: '0.5rem' }}>Firebase Console의 Firestore Database → Rules에 아래 규칙을 붙여넣고 <b>게시</b>하세요. 지정된 두 Google 계정만 공유 가계부를 읽고 쓸 수 있습니다.</p>
                                             <pre style={{ background: '#0d1117', padding: '10px', borderRadius: '4px', fontSize: '0.75rem', color: '#8b949e', marginTop: '8px', overflowX: 'auto' }}>
 {`rules_version = '2';
 service cloud.firestore {
+  function isAllowedFinanceUser() {
+    return request.auth != null
+      && request.auth.token.email in [
+        'invictus9191@gmail.com',
+        'mijit0711@gmail.com'
+      ];
+  }
+
   match /databases/{database}/documents {
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
-    match /shared_data/{sharedId} {
-      allow read, write: if request.auth != null;
+    match /shared_data/Ham {
+      allow read, write: if isAllowedFinanceUser();
     }
     match /notification_subscriptions/{userId}/devices/{deviceId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
@@ -4548,7 +4568,7 @@ service cloud.firestore {
             }, [fbConfig]);
 
             const getCurrentSyncTarget = () => {
-                return user ? { kind: 'shared', id: DEFAULT_SHARED_ID } : null;
+                return isSyncUserAllowed(user) ? { kind: 'shared', id: DEFAULT_SHARED_ID } : null;
             };
 
             const getSyncDocument = () => firebase.firestore().collection('shared_data').doc(DEFAULT_SHARED_ID);
@@ -4727,6 +4747,13 @@ service cloud.firestore {
                         dataRef.current = initialData;
                         setData(initialData);
                         setCloudDataStatus('signed-out');
+                        return;
+                    }
+
+                    if (!isSyncUserAllowed(u)) {
+                        dataRef.current = initialData;
+                        setData(initialData);
+                        setCloudDataStatus('unauthorized');
                         return;
                     }
 
