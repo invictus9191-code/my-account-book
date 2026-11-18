@@ -1078,7 +1078,7 @@
             return React.createElement('div', { ref: ref, id: chartId, style: { minHeight: `${height || 280}px` } });
         }
 
-        function Dashboard({ data, setEdit, setShowModal, setEditAsset, setShowAssetModal, setTab, setSearchTerm, setTransactionMonth, authorFilter, setAuthorFilter }) {
+        function Dashboard({ data, setEdit, setShowModal, setEditAsset, setShowAssetModal, setTab, setSearchTerm, setTransactionMonth }) {
             const [categoryType, setCategoryType] = useState('Expense');
             const [selectedCategory, setSelectedCategory] = useState(() => {
                 const cats = data.categories ? data.categories.filter(c => c.type === 'Expense') : [];
@@ -1121,6 +1121,9 @@
             const [assetFlowRange, setAssetFlowRange] = useState({ startMonth: '', endMonth: '' });
             const [assetFlowRangeDraft, setAssetFlowRangeDraft] = useState({ startMonth: '', endMonth: '' });
             const [showAssetFlowRangePicker, setShowAssetFlowRangePicker] = useState(false);
+            const [detailStartMonth, setDetailStartMonth] = useState('');
+            const [detailEndMonth, setDetailEndMonth] = useState('');
+            const [detailOwnerId, setDetailOwnerId] = useState('ALL');
 
             useMobileEdgeSwipeBack(() => {
                 if (showAssetFlowRangePicker) setShowAssetFlowRangePicker(false);
@@ -1140,15 +1143,20 @@
                 return Array.from(months).sort((a, b) => b.localeCompare(a));
             }, [data.transactions, selectedMonth]);
 
-            const filteredMonthTransactions = useMemo(() => data.transactions.filter(transaction => {
-                if (!transaction.date.startsWith(selectedMonth)) return false;
-                return authorFilter === 'ALL' || transaction.authorEmail === authorFilter;
-            }), [data.transactions, selectedMonth, authorFilter]);
-
-            const authorOptions = useMemo(() => Array.from(new Set(data.transactions.map(transaction => transaction.authorEmail).filter(Boolean))), [data.transactions]);
-            const selectedAuthorLabel = authorFilter === 'ALL'
-                ? '전체'
-                : (data.authorAbbreviations || []).find(author => author.email === authorFilter)?.abbr || authorFilter.split('@')[0];
+            const filteredMonthTransactions = useMemo(() => data.transactions.filter(transaction => transaction.date.startsWith(selectedMonth)), [data.transactions, selectedMonth]);
+            const assetById = useMemo(() => new Map(data.assets.map(asset => [asset.id, asset])), [data.assets]);
+            const detailOwnerOptions = data.owners || [];
+            const matchesDetailOwner = transaction => detailOwnerId === 'ALL'
+                || assetById.get(transaction.assetId)?.ownerId === detailOwnerId
+                || assetById.get(transaction.toAssetId)?.ownerId === detailOwnerId;
+            const openDetailView = targetView => {
+                const [year, month] = selectedMonth.split('-').map(Number);
+                const start = new Date(year, month - 12, 1);
+                setDetailStartMonth(`${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`);
+                setDetailEndMonth(selectedMonth);
+                setDetailOwnerId('ALL');
+                setView(targetView);
+            };
 
             useEffect(() => {
                 if (!showMonthPicker) return;
@@ -1237,8 +1245,7 @@
                 const spending = months.map(targetMonth => data.transactions
                     .filter(transaction => transaction.type === 'Expense'
                         && transaction.assetId === selectedCardId
-                        && transaction.date.startsWith(targetMonth)
-                        && (authorFilter === 'ALL' || transaction.authorEmail === authorFilter))
+                        && transaction.date.startsWith(targetMonth))
                     .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0));
                 return {
                     selectedCard,
@@ -1246,12 +1253,15 @@
                     spending,
                     target: Number(selectedCard?.cardPerformanceTarget || 0)
                 };
-            }, [selectedMonth, selectedCardId, cardAssets, data.transactions, authorFilter]);
+            }, [selectedMonth, selectedCardId, cardAssets, data.transactions]);
 
             const fullAssetFlowData = useMemo(() => {
                 const today = formatLocalDate(new Date());
                 const endMonth = today.substring(0, 7);
-                const startedAssetMonths = data.assets
+                const eligibleAssets = detailOwnerId === 'ALL'
+                    ? data.assets
+                    : data.assets.filter(asset => asset.ownerId === detailOwnerId);
+                const startedAssetMonths = eligibleAssets
                     .map(asset => asset.startDate?.substring(0, 7))
                     .filter(month => month && month <= endMonth)
                     .sort();
@@ -1271,7 +1281,7 @@
                     const date = new Date(startYear, startMonthNumber - 1 + index, 1);
                     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
                 });
-                const assetData = months.map(month => data.assets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions, `${month}-31`, data.stockTransactions), 0));
+                const assetData = months.map(month => eligibleAssets.reduce((sum, asset) => sum + calculateAssetBalance(asset.id, data.assets, data.transactions, `${month}-31`, data.stockTransactions), 0));
                 const yearlyPoints = months.reduce((points, month, index) => {
                     const year = month.substring(0, 4);
                     points.set(year, assetData[index]);
@@ -1282,12 +1292,45 @@
                     endMonth: selectedEndMonth,
                     defaultStartMonth,
                     defaultEndMonth: endMonth,
+                    months,
                     labels: months.map(month => `${month.substring(0, 4)}.${Number(month.substring(5))}`),
                     assetData,
                     yearlyLabels: Array.from(yearlyPoints.keys()).map(year => `${year}년`),
                     yearlyAssetData: Array.from(yearlyPoints.values())
                 };
-            }, [data.assets, data.transactions, assetFlowRange]);
+            }, [data.assets, data.transactions, assetFlowRange, detailOwnerId]);
+
+            const detailMonths = useMemo(() => {
+                if (!detailStartMonth || !detailEndMonth || detailStartMonth > detailEndMonth) return [];
+                const [startYear, startMonth] = detailStartMonth.split('-').map(Number);
+                const [endYear, endMonth] = detailEndMonth.split('-').map(Number);
+                const count = (endYear - startYear) * 12 + endMonth - startMonth + 1;
+                return Array.from({ length: Math.max(0, count) }, (_, index) => {
+                    const date = new Date(startYear, startMonth - 1 + index, 1);
+                    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                });
+            }, [detailStartMonth, detailEndMonth]);
+
+            const detailFlowData = useMemo(() => {
+                const savingsCategories = data.categories.filter(category => category.name === '저축' || category.name.includes('저축')).map(category => category.id);
+                const byMonth = month => data.transactions.filter(transaction => transaction.date.startsWith(month) && matchesDetailOwner(transaction));
+                const incomeData = detailMonths.map(month => byMonth(month).filter(transaction => transaction.type === 'Income').reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0));
+                const expenseData = detailMonths.map(month => {
+                    const transactions = byMonth(month);
+                    return transactions.filter(transaction => transaction.type === 'Expense' && !savingsCategories.includes(transaction.categoryId)).reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+                });
+                const savingsData = detailMonths.map(month => byMonth(month).filter(transaction => (transaction.type === 'Expense' || transaction.type === 'Transfer') && savingsCategories.includes(transaction.categoryId)).reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount || 0)), 0));
+                const categoryData = detailMonths.map(month => byMonth(month).filter(transaction => transaction.categoryId === selectedCategory).reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount || 0)), 0));
+                return { labels: detailMonths.map(month => `${month.substring(0, 4)}.${Number(month.substring(5))}`), incomeData, expenseData, savingsData, categoryData };
+            }, [detailMonths, detailOwnerId, assetById, data.transactions, data.categories, selectedCategory]);
+
+            const renderDetailFilters = () => (
+                <section className="dashboard-flow-summary">
+                    <label><small>시작 월</small><input type="month" value={detailStartMonth} max={detailEndMonth || undefined} onChange={event => setDetailStartMonth(event.target.value)} /></label>
+                    <label><small>종료 월</small><input type="month" value={detailEndMonth} min={detailStartMonth || undefined} onChange={event => setDetailEndMonth(event.target.value)} /></label>
+                    <label><small>소유자</small><select value={detailOwnerId} onChange={event => setDetailOwnerId(event.target.value)}><option value="ALL">전체</option>{detailOwnerOptions.map(owner => <option key={owner.id} value={owner.id}>{owner.name}</option>)}</select></label>
+                </section>
+            );
 
 
 
@@ -1431,6 +1474,35 @@
                 );
             }
 
+            if (view === 'annual_flow_detail' || view === 'annual_category_flow_detail') {
+                const isCategoryFlow = view === 'annual_category_flow_detail';
+                const isSavings = chartType === 'savings';
+                const title = isCategoryFlow
+                    ? `${data.categories.find(category => category.id === selectedCategory)?.name || '카테고리'} 연간 흐름`
+                    : (isSavings ? '저축 연간 흐름' : '수입·지출 연간 흐름');
+                const series = isCategoryFlow
+                    ? [{ name: '금액', data: detailFlowData.categoryData }]
+                    : (isSavings
+                        ? [{ name: '저축', data: detailFlowData.savingsData }]
+                        : [{ name: '수입', data: detailFlowData.incomeData }, { name: '지출', data: detailFlowData.expenseData }]);
+                const colors = isCategoryFlow ? ['#8250df'] : (isSavings ? ['#0969da'] : ['#1a7f37', '#cf222e']);
+                return (
+                    <div className="fade-in page-shell dashboard-page dashboard-asset-flow-page">
+                        <div className="dashboard-detail-toolbar">
+                            <button className="transaction-round-button" onClick={() => setView('main')} aria-label="대시보드로 돌아가기"><Icon name="chevron-left" size={20} /></button>
+                            <strong>{title}</strong>
+                            <span />
+                        </div>
+                        {renderDetailFilters()}
+                        <section className="dashboard-chart-card dashboard-full-flow-card">
+                            <div className="dashboard-chart-heading"><h3>{title}</h3></div>
+                            <div className="dashboard-full-flow-scroll"><div><ChartBar chartId={`chart-${view}-${detailOwnerId}`} series={series} colors={colors} labels={detailFlowData.labels} height={Math.max(340, detailFlowData.labels.length * 38 + 70)} horizontal /></div></div>
+                            {detailFlowData.labels.length === 0 && <p className="dashboard-flow-note">조회 기간을 선택해주세요.</p>}
+                        </section>
+                    </div>
+                );
+            }
+
             if (view === 'asset_flow_detail') {
                 const firstValue = fullAssetFlowData.assetData[0] || 0;
                 const latestValue = fullAssetFlowData.assetData[fullAssetFlowData.assetData.length - 1] || 0;
@@ -1471,6 +1543,7 @@
                                 <span><small>조회 기간</small><strong>{fullAssetFlowData.startMonth.replace('-', '년 ')}월 ~ {fullAssetFlowData.endMonth.replace('-', '년 ')}월</strong></span>
                                 <Icon name="chevron-down" size={18} />
                             </button>
+                            <label><small>소유자</small><select value={detailOwnerId} onChange={event => setDetailOwnerId(event.target.value)}><option value="ALL">전체</option>{detailOwnerOptions.map(owner => <option key={owner.id} value={owner.id}>{owner.name}</option>)}</select></label>
                             <div><small>기간 증감</small><strong className={latestValue - firstValue < 0 ? 'negative' : ''}>{latestValue - firstValue >= 0 ? '+' : ''}{(latestValue - firstValue).toLocaleString()}원</strong></div>
                         </section>
                         {showAssetFlowRangePicker && (
@@ -1527,17 +1600,6 @@
                             <button className="transaction-month-control" onClick={() => setShowMonthPicker(true)} aria-haspopup="dialog" aria-expanded={showMonthPicker}>
                                 <strong>{selectedMonth.split('-')[0]}년 {Number(selectedMonth.split('-')[1])}월</strong>
                             </button>
-                            <div className="dashboard-author-filter">
-                                <Icon name="user-round" size={16} />
-                                <small>{selectedAuthorLabel}</small>
-                                <select value={authorFilter} onChange={event => setAuthorFilter(event.target.value)} aria-label="작성자 필터">
-                                    <option value="ALL">전체</option>
-                                    {authorOptions.map(email => {
-                                        const found = (data.authorAbbreviations || []).find(author => author.email === email);
-                                        return <option key={email} value={email}>{found ? found.abbr : email}</option>;
-                                    })}
-                                </select>
-                            </div>
                         </div>
                     </section>
 
@@ -1576,7 +1638,7 @@
                     <section className="dashboard-category-card">
                         <div className="dashboard-category-heading">
                             <div><small>월간 분석</small><strong>카테고리별 내역</strong></div>
-                            <span>수입·지출 비중</span>
+                            <button className="dashboard-chart-detail-button" onClick={() => openDetailView('annual_category_flow_detail')}>자세히 보기 <Icon name="chevron-right" size={14} /></button>
                         </div>
                         <div className="dashboard-category-tabs">
                             <button className={categoryType === 'Income' ? 'active income' : ''} onClick={() => setCategoryType('Income')}>
@@ -1620,7 +1682,7 @@
                             <div className="dashboard-chart-heading">
                                 <span><Icon name="landmark" size={18} /></span>
                                 <h3>연간 자산 흐름</h3>
-                                <button className="dashboard-chart-detail-button" onClick={() => setView('asset_flow_detail')}>자세히 보기 <Icon name="chevron-right" size={14} /></button>
+                                <button className="dashboard-chart-detail-button" onClick={() => { setDetailOwnerId('ALL'); setView('asset_flow_detail'); }}>자세히 보기 <Icon name="chevron-right" size={14} /></button>
                             </div>
                             <ChartBar
                                 chartId="chart-assets"
@@ -1633,6 +1695,7 @@
                         <section className="dashboard-chart-card">
                             <div className="dashboard-chart-heading">
                                 <h3>연간 흐름</h3>
+                                <button className="dashboard-chart-detail-button" onClick={() => openDetailView('annual_flow_detail')}>자세히 보기 <Icon name="chevron-right" size={14} /></button>
                                 <div className="dashboard-chart-toggle">
                                     <button className={chartType === 'income_expense' ? 'active' : ''} onClick={() => setChartType('income_expense')}>수입/지출</button>
                                     <button className={chartType === 'savings' ? 'active' : ''} onClick={() => setChartType('savings')}>저축</button>
@@ -1695,6 +1758,7 @@
                     <section className="dashboard-chart-card dashboard-category-chart">
                         <div className="dashboard-chart-heading">
                             <h3>카테고리별 연간 흐름</h3>
+                            <button className="dashboard-chart-detail-button" onClick={() => openDetailView('annual_category_flow_detail')}>자세히 보기 <Icon name="chevron-right" size={14} /></button>
                             <div className="dashboard-chart-selects">
                                 <select
                                     value={categoryType}
@@ -1742,7 +1806,6 @@
             };
 
             const homeMenuItems = [
-                { label: '예산 관리', icon: 'target', color: '#ff4051', tab: 'plan' },
                 { label: '반복', icon: 'repeat', color: '#6b7ff2', tab: 'recurring' },
                 { label: '레시피', icon: 'utensils', color: '#ee7a3a', tab: 'recipes', count: (data.recipes || []).length },
                 { label: '설정', icon: 'settings', color: '#6f7782', tab: 'settings' }
@@ -4533,7 +4596,6 @@ service cloud.firestore {
             const [edit, setEdit] = useState(null);
             
             const [transactionAuthorFilter, setTransactionAuthorFilter] = useState('ALL');
-            const [dashboardAuthorFilter, setDashboardAuthorFilter] = useState('ALL');
 
             // For Dashboard Asset editing
             const [showAssetModal, setShowAssetModal] = useState(false);
@@ -4893,7 +4955,6 @@ service cloud.firestore {
             const tabTitles = {
                 home: '홈',
                 dashboard: '대시보드',
-                plan: '계획',
                 recurring: '반복',
                 recipes: '레시피',
                 transactions: '거래 내역',
@@ -4903,10 +4964,10 @@ service cloud.firestore {
 
             return (
                 <React.Fragment>
-                    <div className={`mobile-header ${tab === 'home' ? 'home-mobile-header' : ''} ${tab === 'dashboard' ? 'dashboard-mobile-header' : ''} ${tab === 'plan' ? 'plan-mobile-header' : ''} ${tab === 'recurring' ? 'recurring-mobile-header' : ''} ${tab === 'recipes' ? 'recipes-mobile-header' : ''} ${tab === 'transactions' ? 'transactions-mobile-header' : ''} ${tab === 'assets' ? 'assets-mobile-header' : ''}`}>
+                    <div className={`mobile-header ${tab === 'home' ? 'home-mobile-header' : ''} ${tab === 'dashboard' ? 'dashboard-mobile-header' : ''} ${tab === 'recurring' ? 'recurring-mobile-header' : ''} ${tab === 'recipes' ? 'recipes-mobile-header' : ''} ${tab === 'transactions' ? 'transactions-mobile-header' : ''} ${tab === 'assets' ? 'assets-mobile-header' : ''}`}>
                         <button onClick={() => setSidebarOpen(true)} style={{ background: 'transparent', color: 'var(--text-primary)', padding: '0.4rem' }}><Icon name="menu" size={24} /></button>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                            <Icon name={tab === 'home' ? 'home' : tab === 'dashboard' ? 'layout-dashboard' : tab === 'plan' ? 'target' : tab === 'recurring' ? 'repeat' : tab === 'recipes' ? 'utensils' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
+                            <Icon name={tab === 'home' ? 'home' : tab === 'dashboard' ? 'layout-dashboard' : tab === 'recurring' ? 'repeat' : tab === 'recipes' ? 'utensils' : tab === 'transactions' ? 'list' : tab === 'assets' ? 'wallet' : 'settings'} size={24} className="mobile-hide" />
                             <h2 style={{ fontSize: '1.2rem' }}>{tabTitles[tab] || 'Smart Finance'}</h2>
                             <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`} style={{ marginLeft: 'auto' }}>
                                 <div className="connection-dot"></div>
@@ -4936,8 +4997,7 @@ service cloud.firestore {
                     </div>
                     <div className={`main-content ${tab === 'home' ? 'home-content' : ''} ${tab === 'dashboard' ? 'dashboard-content' : ''}`}><div className="container">
                         {tab === 'home' && <HomePage data={data} setTab={setTab} setEdit={setEdit} setShowModal={setShowModal} isConnected={isConnected} onNavigate={menuClick} hideAssetAmounts={hideAssetAmounts} setHideAssetAmounts={setHideAssetAmounts} />}
-                        {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionMonth={setTransactionMonth} authorFilter={dashboardAuthorFilter} setAuthorFilter={setDashboardAuthorFilter} />}
-                        {tab === 'plan' && <PlanPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} />}
+                        {tab === 'dashboard' && <Dashboard data={data} setEdit={setEdit} setShowModal={setShowModal} setEditAsset={setEditAsset} setShowAssetModal={setShowAssetModal} setTab={setTab} setSearchTerm={setSearchTerm} setTransactionMonth={setTransactionMonth} />}
                         {tab === 'recurring' && <RecurringPage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} user={user} isConnected={isConnected} />}
                         {tab === 'recipes' && <RecipePage data={data} setData={setData} syncToCloud={syncToCloud} setTab={setTab} isConnected={isConnected} />}
                         {tab === 'transactions' && <TransactionPage data={data} setData={setData} setEdit={setEdit} setShowModal={setShowModal} syncToCloud={syncToCloud} searchTerm={searchTerm} setSearchTerm={setSearchTerm} isConnected={isConnected} authorFilter={transactionAuthorFilter} setAuthorFilter={setTransactionAuthorFilter} transactionMonth={transactionMonth} setTransactionMonth={setTransactionMonth} transactionAssetId={transactionAssetId} setTransactionAssetId={setTransactionAssetId} setTab={setTab} backTab={transactionBackTab} showMobileSearch={showMobileSearch} setShowMobileSearch={setShowMobileSearch} />}

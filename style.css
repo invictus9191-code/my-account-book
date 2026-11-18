@@ -1128,7 +1128,8 @@ table {
 }
 
 .dashboard-flow-summary > div,
-.dashboard-flow-summary > button {
+.dashboard-flow-summary > button,
+.dashboard-flow-summary > label {
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -1161,6 +1162,25 @@ table {
 .dashboard-flow-summary small {
   color: #8b929b;
   font-size: 0.7rem;
+}
+
+.dashboard-flow-summary label {
+  gap: 5px;
+  color: #8b929b;
+  font-size: 0.7rem;
+}
+
+.dashboard-flow-summary label input,
+.dashboard-flow-summary label select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid #d8dee4;
+  border-radius: 8px;
+  background: #fff;
+  color: #343a40;
+  font-size: 0.8rem;
 }
 
 .dashboard-flow-summary strong {
