@@ -1648,7 +1648,7 @@
                     <section className="dashboard-category-card">
                         <div className="dashboard-category-heading">
                             <div><small>월간 분석</small><strong>카테고리별 내역</strong></div>
-                            <button className="dashboard-chart-detail-button" onClick={() => openDetailView('annual_category_flow_detail')}>자세히 보기 <Icon name="chevron-right" size={14} /></button>
+                            <button className="dashboard-chart-detail-button" aria-label="카테고리별 내역 자세히 보기" onClick={() => openDetailView('annual_category_flow_detail')}><Icon name="chevron-right" size={14} /></button>
                         </div>
                         <div className="dashboard-category-tabs">
                             <button className={categoryType === 'Income' ? 'active income' : ''} onClick={() => setCategoryType('Income')}>
@@ -1692,7 +1692,7 @@
                             <div className="dashboard-chart-heading">
                                 <span><Icon name="landmark" size={18} /></span>
                                 <h3>연간 자산 흐름</h3>
-                                <button className="dashboard-chart-detail-button" onClick={() => { setDetailOwnerId('ALL'); setView('asset_flow_detail'); }}>자세히 보기 <Icon name="chevron-right" size={14} /></button>
+                                <button className="dashboard-chart-detail-button" aria-label="연간 자산 흐름 자세히 보기" onClick={() => { setDetailOwnerId('ALL'); setView('asset_flow_detail'); }}><Icon name="chevron-right" size={14} /></button>
                             </div>
                             <ChartBar
                                 chartId="chart-assets"
@@ -1710,7 +1710,7 @@
                                         <button className={chartType === 'income_expense' ? 'active' : ''} onClick={() => setChartType('income_expense')}>수입/지출</button>
                                         <button className={chartType === 'savings' ? 'active' : ''} onClick={() => setChartType('savings')}>저축</button>
                                     </div>
-                                    <button className="dashboard-chart-detail-button" onClick={() => openDetailView('annual_flow_detail')}>자세히 보기 <Icon name="chevron-right" size={14} /></button>
+                                    <button className="dashboard-chart-detail-button" aria-label="연간 흐름 자세히 보기" onClick={() => openDetailView('annual_flow_detail')}><Icon name="chevron-right" size={14} /></button>
                                 </div>
                             </div>
                             {chartType === 'income_expense' ? (
@@ -1787,7 +1787,7 @@
                                         {data.categories.filter(c => c.type === categoryType).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                     </select>
                                 </div>
-                                <button className="dashboard-chart-detail-button" onClick={() => openDetailView('annual_category_flow_detail')}>자세히 보기 <Icon name="chevron-right" size={14} /></button>
+                                <button className="dashboard-chart-detail-button" aria-label="카테고리별 연간 흐름 자세히 보기" onClick={() => openDetailView('annual_category_flow_detail')}><Icon name="chevron-right" size={14} /></button>
                             </div>
                         </div>
                         <ChartBar
